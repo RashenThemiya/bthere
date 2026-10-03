@@ -69,19 +69,18 @@ jobs:
         run: |
           AWS_PORT="${AWS_PORT:-22}"
           APP_ENV_BASE64="$(printf '%s' "$APP_ENV" | base64 -w 0)"
+          COMPOSE_BASE64="$(base64 -w 0 docker-compose.yml)"
 
           ssh -i ~/.ssh/aws_key -p "$AWS_PORT" "$AWS_USERNAME@$AWS_HOST" \
-            "sudo install -m 700 -d /opt/jobhub && \
-             printf '%s' '$APP_ENV_BASE64' | base64 --decode | sudo tee /opt/jobhub/.env > /dev/null && \
-             sudo chmod 600 /opt/jobhub/.env"
+            "install -m 700 -d ~/jobhub && \
+             printf '%s' '$APP_ENV_BASE64' | base64 --decode > ~/jobhub/.env && \
+             printf '%s' '$COMPOSE_BASE64' | base64 --decode > ~/jobhub/docker-compose.yml && \
+             printf '%s\n' 'DOCKER_IMAGE=$IMAGE_NAME' > ~/jobhub/image.env && \
+             chmod 600 ~/jobhub/.env ~/jobhub/image.env && \
+             chmod 644 ~/jobhub/docker-compose.yml"
 
           ssh -i ~/.ssh/aws_key -p "$AWS_PORT" "$AWS_USERNAME@$AWS_HOST" \
-            "sudo docker pull '$IMAGE_NAME' && \
-             (sudo docker rm -f jobhub || true) && \
-             sudo docker run -d \
-               --name jobhub \
-               --restart unless-stopped \
-               --network distribution-system_default \
-               --env-file /opt/jobhub/.env \
-               -p 8083:8080 \
-               '$IMAGE_NAME'"
+            "cd ~/jobhub && \
+             docker compose --env-file image.env pull && \
+             (docker rm -f jobhub || true) && \
+             docker compose --env-file image.env up -d --no-build --remove-orphans"
