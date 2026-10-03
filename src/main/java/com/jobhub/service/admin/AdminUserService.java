@@ -42,7 +42,7 @@ public class AdminUserService {
         user.setEmail(email);
         user.setPhoneNumber(phoneNumber);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setEmailVerified(false);
+        user.setEmailVerified(true);
         user.setPhoneVerified(false);
         user.setStatus("ACTIVE");
         user = userRepository.saveAndFlush(user);

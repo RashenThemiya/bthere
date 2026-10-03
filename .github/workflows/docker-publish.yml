@@ -64,15 +64,24 @@ jobs:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_PORT: ${{ secrets.AWS_PORT }}
           AWS_USERNAME: ${{ secrets.AWS_USERNAME }}
+          APP_ENV: ${{ secrets.APP_ENV }}
           IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/jobhub:latest
         run: |
           AWS_PORT="${AWS_PORT:-22}"
+          APP_ENV_BASE64="$(printf '%s' "$APP_ENV" | base64 -w 0)"
+
+          ssh -i ~/.ssh/aws_key -p "$AWS_PORT" "$AWS_USERNAME@$AWS_HOST" \
+            "sudo install -m 700 -d /opt/jobhub && \
+             printf '%s' '$APP_ENV_BASE64' | base64 --decode | sudo tee /opt/jobhub/.env > /dev/null && \
+             sudo chmod 600 /opt/jobhub/.env"
+
           ssh -i ~/.ssh/aws_key -p "$AWS_PORT" "$AWS_USERNAME@$AWS_HOST" \
             "sudo docker pull '$IMAGE_NAME' && \
              (sudo docker rm -f jobhub || true) && \
              sudo docker run -d \
                --name jobhub \
                --restart unless-stopped \
+               --network distribution-system_default \
                --env-file /opt/jobhub/.env \
-               -p 8080:8080 \
+               -p 8083:8080 \
                '$IMAGE_NAME'"

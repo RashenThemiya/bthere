@@ -29,7 +29,7 @@ public record CreateAdminRequest(
         @Size(min = 12, max = 72, message = "Password must contain between 12 and 72 characters")
         String password,
 
-        @NotNull(message = "Admin role is required")
+        @NotNull(message = "Role is required")
         AdminRole role
 ) {
 }
