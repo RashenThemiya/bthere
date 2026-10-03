@@ -1,0 +1,56 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: jobhub-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: jobhub
+      MYSQL_USER: ${MYSQL_USER:-jobhub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-jobhub_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  jobhub:
+    image: ${DOCKER_IMAGE:-jobhub:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jobhub
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/jobhub?createDatabaseIfNotExist=true&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${MYSQL_USER:-jobhub}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-jobhub_password}
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-superadmin}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-superadmin@jobhub.local}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?Set SUPER_ADMIN_PASSWORD in the .env file}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the .env file}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in the .env file}
+      OTP_HASH_SECRET: ${OTP_HASH_SECRET:?Set OTP_HASH_SECRET in the .env file}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_SNS_SENDER_ID: ${AWS_SNS_SENDER_ID:-JobHub}
+      AWS_SES_FROM_EMAIL: ${AWS_SES_FROM_EMAIL:?Set AWS_SES_FROM_EMAIL in the .env file}
+      AWS_EC2_METADATA_V1_DISABLED: ${AWS_EC2_METADATA_V1_DISABLED:-true}
+      DEFAULT_MARKET_NAME: ${DEFAULT_MARKET_NAME:-Sri Lanka}
+      DEFAULT_MARKET_COUNTRY_CODE: ${DEFAULT_MARKET_COUNTRY_CODE:-LK}
+      DEFAULT_MARKET_CURRENCY: ${DEFAULT_MARKET_CURRENCY:-LKR}
+      DEFAULT_MARKET_TIMEZONE: ${DEFAULT_MARKET_TIMEZONE:-Asia/Colombo}
+      DEFAULT_MARKET_LOCALE: ${DEFAULT_MARKET_LOCALE:-en-LK}
+      DEFAULT_MARKET_PHONE_CODE: ${DEFAULT_MARKET_PHONE_CODE:-+94}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+volumes:
+  mysql_data:
