@@ -47,6 +47,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Configure SSH access
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
