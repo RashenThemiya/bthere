@@ -43,6 +43,9 @@ Markets hold country-specific configuration without duplicating global users, ro
 
 ### Authentication API
 
+Frontend developers should use the complete [Authentication API documentation](docs/AUTH_API.md).
+Profile and provider onboarding endpoints are documented in [Profile API documentation](docs/PROFILE_API.md).
+
 Log in using a username or email:
 
 ```http
@@ -180,7 +183,8 @@ Copy the example environment file and change its passwords:
 Copy-Item .env.example .env
 ```
 
-Build and start JobHub together with MySQL:
+The Compose configuration expects the existing `distribution-system_default`
+Docker network and `distribution-system-mysql-1` MySQL container. Start JobHub:
 
 ```powershell
 docker compose up -d --build
@@ -193,8 +197,6 @@ docker compose logs -f jobhub
 docker compose down
 ```
 
-MySQL data is retained in the `mysql_data` Docker volume. Use `docker compose down -v` only when you intentionally want to delete that data.
-
 ## AWS EC2 deployment
 
 After publishing the image, the same workflow connects to an EC2 instance over SSH, pulls `jobhub:latest`, and replaces the running `jobhub` container.
@@ -205,12 +207,14 @@ Add these additional GitHub Actions secrets:
 - `AWS_PORT`: the SSH port; this is optional and defaults to `22`
 - `AWS_USERNAME`: the SSH user, commonly `ubuntu` or `ec2-user`
 - `AWS_SSH_KEY`: the complete private SSH key, including its BEGIN and END lines
+- `APP_ENV`: the complete multiline production application environment
 
-Prepare the EC2 instance once by installing Docker and creating `/opt/jobhub/.env`:
+The workflow creates the deployment directory in the SSH user's home directory:
 
 ```bash
-sudo mkdir -p /opt/jobhub
-sudo nano /opt/jobhub/.env
+cd ~/jobhub
+docker compose --env-file image.env ps
+docker compose --env-file image.env logs -f jobhub
 ```
 
 The environment file should contain the production database connection:
@@ -225,8 +229,8 @@ SUPER_ADMIN_PASSWORD=replace-with-a-strong-password
 JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
 ```
 
-The EC2 security group must allow inbound SSH on port `22` from the GitHub runner or your permitted network and application traffic on port `8080` from the required clients. If the Docker Hub repository is private, log in to Docker Hub once on the EC2 instance before deploying:
+The EC2 security group must allow inbound SSH on port `22` and application traffic on port `8083` from the required clients. If the Docker Hub repository is private, log in to Docker Hub once on the EC2 instance before deploying:
 
 ```bash
-sudo docker login
+docker login
 ```

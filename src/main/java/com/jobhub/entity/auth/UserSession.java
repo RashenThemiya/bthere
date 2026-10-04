@@ -6,7 +6,13 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user_session")
+@Table(
+        name = "user_session",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_user_session_refresh_hash",
+                columnNames = "refresh_token_hash"
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor

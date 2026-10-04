@@ -18,5 +18,9 @@ public class ServiceProviderType extends AuditedEntity {
     private String description;
     private String iconUrl;
     private String status;
+    private String certificateRequirement;
+    private boolean certificateRequiresApproval;
+    private String educationRequirement;
+    private boolean educationRequiresApproval;
 }
 

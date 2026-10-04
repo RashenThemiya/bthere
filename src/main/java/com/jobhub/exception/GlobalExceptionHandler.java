@@ -12,6 +12,16 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleNotFound(ResourceNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+        problem.setTitle("Resource not found");
+        return problem;
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     public ProblemDetail handleTooManyRequests(TooManyRequestsException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(

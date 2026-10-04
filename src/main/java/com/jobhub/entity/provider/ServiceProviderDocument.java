@@ -6,7 +6,13 @@ import lombok.*;
 import java.time.*;
 
 @Entity
-@Table(name = "service_provider_document")
+@Table(
+        name = "service_provider_document",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_provider_document_type",
+                columnNames = {"service_provider_id", "document_type_id"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor

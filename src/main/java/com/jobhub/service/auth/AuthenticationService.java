@@ -12,6 +12,7 @@ import com.jobhub.dto.auth.OtpRequestResponse;
 import com.jobhub.dto.auth.OtpVerifyRequest;
 import com.jobhub.dto.auth.RegisterRequest;
 import com.jobhub.dto.auth.RegisterResponse;
+import com.jobhub.dto.auth.RefreshTokenRequest;
 import com.jobhub.entity.access.Role;
 import com.jobhub.entity.access.UserRole;
 import com.jobhub.entity.auth.User;
@@ -273,6 +274,57 @@ public class AuthenticationService {
     }
 
     @Transactional
+    public LoginResponse refresh(
+            RefreshTokenRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        String tokenHash = refreshTokenService.hash(request.refreshToken());
+        UserSession session = userSessionRepository.findByRefreshTokenHash(tokenHash)
+                .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid or expired"));
+
+        if (session.getRevokedAt() != null
+                || session.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new UnauthorizedException("Refresh token is invalid or expired");
+        }
+
+        User user = userRepository.findById(session.getUserId())
+                .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid or expired"));
+        if (!"ACTIVE".equals(user.getStatus())) {
+            throw new UnauthorizedException("User account is not active");
+        }
+
+        String newRefreshToken = refreshTokenService.generateToken();
+        session.setRefreshTokenHash(refreshTokenService.hash(newRefreshToken));
+        session.setIpAddress(httpRequest.getRemoteAddr());
+        session.setUserAgent(limit(httpRequest.getHeader("User-Agent"), 1024));
+        session.setLastUsedAt(LocalDateTime.now());
+        session.setExpiresAt(LocalDateTime.now().plusDays(refreshTokenDays));
+        userSessionRepository.save(session);
+
+        return createTokenResponse(user, newRefreshToken);
+    }
+
+    @Transactional
+    public void logout(RefreshTokenRequest request) {
+        String tokenHash = refreshTokenService.hash(request.refreshToken());
+        userSessionRepository.findByRefreshTokenHash(tokenHash).ifPresent(session -> {
+            if (session.getRevokedAt() == null) {
+                session.setRevokedAt(LocalDateTime.now());
+                userSessionRepository.save(session);
+            }
+        });
+    }
+
+    @Transactional
+    public void logoutAll(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        List<UserSession> sessions = userSessionRepository
+                .findAllByUserIdAndRevokedAtIsNull(userId);
+        sessions.forEach(session -> session.setRevokedAt(now));
+        userSessionRepository.saveAll(sessions);
+    }
+
+    @Transactional
     public LoginResponse googleLogin(
             GoogleLoginRequest request,
             HttpServletRequest httpRequest
@@ -320,8 +372,6 @@ public class AuthenticationService {
     }
 
     private LoginResponse issueTokens(User user, HttpServletRequest httpRequest) {
-        List<String> roles = userRoleRepository.findActiveRoleNamesByUserId(user.getUserId());
-        String accessToken = jwtService.createAccessToken(user, roles);
         String refreshToken = refreshTokenService.generateToken();
 
         UserSession session = new UserSession();
@@ -335,6 +385,13 @@ public class AuthenticationService {
 
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
+
+        return createTokenResponse(user, refreshToken);
+    }
+
+    private LoginResponse createTokenResponse(User user, String refreshToken) {
+        List<String> roles = userRoleRepository.findActiveRoleNamesByUserId(user.getUserId());
+        String accessToken = jwtService.createAccessToken(user, roles);
 
         CurrentUserResponse currentUser = new CurrentUserResponse(
                 user.getUserId(),
