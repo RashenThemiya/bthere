@@ -9,5 +9,9 @@ public interface DocumentTypeRepository extends JpaRepository<DocumentType, Long
 
     boolean existsByNameIgnoreCase(String name);
 
+    boolean existsByNameIgnoreCaseAndDocumentTypeIdNot(String name, Long documentTypeId);
+
     List<DocumentType> findAllByStatusOrderByNameAsc(String status);
+
+    List<DocumentType> findAllByOrderByNameAsc();
 }

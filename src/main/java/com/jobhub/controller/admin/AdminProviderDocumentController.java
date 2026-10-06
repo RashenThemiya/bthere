@@ -4,6 +4,7 @@ import com.jobhub.dto.provider.CreateDocumentTypeRequest;
 import com.jobhub.dto.provider.DocumentReviewRequest;
 import com.jobhub.dto.provider.DocumentTypeResponse;
 import com.jobhub.dto.provider.ProviderDocumentResponse;
+import com.jobhub.dto.provider.UpdateServiceStatusRequest;
 import com.jobhub.security.AuthenticatedUser;
 import com.jobhub.service.provider.ProviderDocumentService;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
 
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -41,6 +43,32 @@ public class AdminProviderDocumentController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(providerDocumentService.createDocumentType(request));
+    }
+
+    @GetMapping("/document-types")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<DocumentTypeResponse>> listAllDocumentTypes() {
+        return ResponseEntity.ok(providerDocumentService.listAllDocumentTypes());
+    }
+
+    @PutMapping("/document-types/{documentTypeId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<DocumentTypeResponse> updateDocumentType(
+            @PathVariable Long documentTypeId,
+            @Valid @RequestBody CreateDocumentTypeRequest request
+    ) {
+        return ResponseEntity.ok(providerDocumentService.updateDocumentType(
+                documentTypeId, request));
+    }
+
+    @PatchMapping("/document-types/{documentTypeId}/status")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<DocumentTypeResponse> updateDocumentTypeStatus(
+            @PathVariable Long documentTypeId,
+            @Valid @RequestBody UpdateServiceStatusRequest request
+    ) {
+        return ResponseEntity.ok(providerDocumentService.updateDocumentTypeStatus(
+                documentTypeId, request.status()));
     }
 
     @GetMapping("/provider-documents")

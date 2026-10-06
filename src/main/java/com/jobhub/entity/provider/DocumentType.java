@@ -16,7 +16,6 @@ public class DocumentType extends AuditedEntity {
     private Long documentTypeId;
     private String name;
     private String description;
-    private boolean isRequired;
     private boolean hasExpiry;
     private String status;
 }

@@ -49,6 +49,14 @@ public class ProviderDocumentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<DocumentTypeResponse> listAllDocumentTypes() {
+        return documentTypeRepository.findAllByOrderByNameAsc()
+                .stream()
+                .map(this::toTypeResponse)
+                .toList();
+    }
+
     @Transactional
     public DocumentTypeResponse createDocumentType(CreateDocumentTypeRequest request) {
         String name = request.name().trim();
@@ -59,9 +67,39 @@ public class ProviderDocumentService {
         DocumentType type = new DocumentType();
         type.setName(name);
         type.setDescription(optional(request.description()));
-        type.setRequired(request.required());
         type.setHasExpiry(request.hasExpiry());
         type.setStatus("ACTIVE");
+        return toTypeResponse(documentTypeRepository.save(type));
+    }
+
+    @Transactional
+    public DocumentTypeResponse updateDocumentType(
+            Long documentTypeId,
+            CreateDocumentTypeRequest request
+    ) {
+        DocumentType type = requireDocumentType(documentTypeId);
+        String name = request.name().trim();
+        if (documentTypeRepository.existsByNameIgnoreCaseAndDocumentTypeIdNot(
+                name, documentTypeId)) {
+            throw new ConflictException("Document type already exists");
+        }
+        type.setName(name);
+        type.setDescription(optional(request.description()));
+        type.setHasExpiry(request.hasExpiry());
+        return toTypeResponse(documentTypeRepository.save(type));
+    }
+
+    @Transactional
+    public DocumentTypeResponse updateDocumentTypeStatus(
+            Long documentTypeId,
+            String requestedStatus
+    ) {
+        String status = requestedStatus.trim().toUpperCase();
+        if (!Set.of("ACTIVE", "INACTIVE").contains(status)) {
+            throw new IllegalArgumentException("Status must be ACTIVE or INACTIVE");
+        }
+        DocumentType type = requireDocumentType(documentTypeId);
+        type.setStatus(status);
         return toTypeResponse(documentTypeRepository.save(type));
     }
 
@@ -233,10 +271,15 @@ public class ProviderDocumentService {
                 type.getDocumentTypeId(),
                 type.getName(),
                 type.getDescription(),
-                type.isRequired(),
                 type.isHasExpiry(),
                 type.getStatus()
         );
+    }
+
+    private DocumentType requireDocumentType(Long documentTypeId) {
+        return documentTypeRepository.findById(documentTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Document type was not found"));
     }
 
     private String optional(String value) {
