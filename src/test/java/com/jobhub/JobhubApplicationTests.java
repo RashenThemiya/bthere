@@ -35,11 +35,18 @@ import com.jobhub.repository.job.JobProviderAssignmentRepository;
 import com.jobhub.repository.finance.PaymentRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.servlet.MockMvc;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sesv2.SesV2Client;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration",
@@ -50,7 +57,11 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
         "app.security.otp.hash-secret=test-only-otp-secret-with-at-least-32-characters",
         "app.security.email.from=no-reply@test.example"
 })
+@AutoConfigureMockMvc
 class JobhubApplicationTests {
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @MockitoBean
     private UserRepository userRepository;
@@ -165,5 +176,22 @@ class JobhubApplicationTests {
 
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void adminLoginPreflightAllowsVercelOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                        .header("Origin", "https://bthere-admin-web.vercel.app")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Content-Type, Authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin",
+                        "https://bthere-admin-web.vercel.app"))
+                .andExpect(header().string("Access-Control-Allow-Methods",
+                        org.hamcrest.Matchers.containsString("POST")))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.containsStringIgnoringCase("Content-Type")))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.containsStringIgnoringCase("Authorization")));
     }
 }
