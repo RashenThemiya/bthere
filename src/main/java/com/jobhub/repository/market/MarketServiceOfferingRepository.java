@@ -10,4 +10,5 @@ public interface MarketServiceOfferingRepository extends JpaRepository<MarketSer
     boolean existsByMarketIdAndServiceProviderTypeId(Long marketId, Long typeId);
     Page<MarketServiceOffering> findAllByMarketId(Long marketId, Pageable pageable);
     Optional<MarketServiceOffering> findByMarketIdAndServiceProviderTypeId(Long marketId, Long typeId);
+    long countByStatus(String status);
 }

@@ -12,4 +12,5 @@ public interface JobRateRepository extends JpaRepository<JobRate, Long> {
 
     List<JobRate> findAllByMarketIdAndServiceProviderTypeIdAndServiceOptionIdAndStatus(
             Long marketId, Long serviceTypeId, Long optionId, String status);
+    long countByStatus(String status);
 }

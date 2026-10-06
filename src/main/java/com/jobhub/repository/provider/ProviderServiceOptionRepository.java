@@ -20,4 +20,5 @@ public interface ProviderServiceOptionRepository extends JpaRepository<ProviderS
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ProviderServiceOption> findByAssignmentIdAndOptionId(Long assignmentId, Long optionId);
+    long countByVerificationStatus(String status);
 }

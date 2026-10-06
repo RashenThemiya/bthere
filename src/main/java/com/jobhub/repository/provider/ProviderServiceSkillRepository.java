@@ -11,4 +11,5 @@ public interface ProviderServiceSkillRepository extends JpaRepository<ProviderSe
     List<ProviderServiceSkill> findAllByVerificationStatusOrderByCreatedAtAsc(String status);
     Page<ProviderServiceSkill> findAllByVerificationStatus(String status, Pageable pageable);
     void deleteAllByAssignmentId(Long assignmentId);
+    long countByVerificationStatus(String status);
 }

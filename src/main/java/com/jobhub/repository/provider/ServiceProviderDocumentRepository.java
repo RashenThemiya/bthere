@@ -37,4 +37,5 @@ public interface ServiceProviderDocumentRepository
     Page<ServiceProviderDocument> findAllByVerificationStatus(
             String verificationStatus, Pageable pageable
     );
+    long countByVerificationStatus(String verificationStatus);
 }

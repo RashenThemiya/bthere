@@ -104,3 +104,58 @@ Audit-log access is restricted to Super Admin.
 - `GET /api/v1/admin/provider-qualifications/education?status=PENDING&page=0&size=20`
 
 Allowed statuses are `PENDING`, `APPROVED`, and `REJECTED`.
+# Super Admin dashboard statistics
+
+```http
+GET /api/v1/admin/dashboard/statistics
+Authorization: Bearer <superadmin-or-admin-token>
+```
+
+The response preserves the original user, provider, job, and payment totals and now
+also contains:
+
+```json
+{
+  "serviceConfiguration": {
+    "totalServiceTypes": 6,
+    "activeServiceTypes": 5,
+    "inactiveServiceTypes": 1,
+    "totalOptions": 14,
+    "activeOptions": 12,
+    "inactiveOptions": 2,
+    "timeBasedOptions": 10,
+    "routeBasedOptions": 4,
+    "oneAtATimeOptions": 7,
+    "manyAtATimeOptions": 7,
+    "oneToOneOptions": 8,
+    "manyCustomersOneProviderOptions": 4,
+    "oneCustomerManyProvidersOptions": 2,
+    "providerRequirementFields": 18,
+    "bookingFields": 22,
+    "totalMarketOfferings": 8,
+    "activeMarketOfferings": 7,
+    "totalRates": 20,
+    "activeRates": 18
+  },
+  "approvalQueues": {
+    "providerServices": 3,
+    "serviceOptions": 4,
+    "documents": 5,
+    "skills": 2,
+    "certificates": 1,
+    "education": 2,
+    "customRequirements": 3,
+    "totalPending": 20
+  },
+  "bookingStatistics": {
+    "timeBased": 40,
+    "routeBased": 10,
+    "oneToOne": 35,
+    "manyCustomersOneProvider": 12,
+    "oneCustomerManyProviders": 3
+  }
+}
+```
+
+Older rows that predate scheduling/fulfillment configuration can have null values and
+are intentionally not counted in a subtype until they are updated or used in a new booking.

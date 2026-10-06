@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 public interface JobRepository extends JpaRepository<Job, Long> {
     long countByJobStatus(String status);
     List<Job> findAllByCustomerIdOrderByCreatedAtDesc(Long customerId);
+    long countBySchedulingModel(String schedulingModel);
+    long countByFulfillmentModel(String fulfillmentModel);
 
     @Query("""
             select count(j) from Job j

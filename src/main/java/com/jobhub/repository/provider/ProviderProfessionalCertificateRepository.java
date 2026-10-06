@@ -10,4 +10,5 @@ public interface ProviderProfessionalCertificateRepository extends JpaRepository
     List<ProviderProfessionalCertificate> findAllByAssignmentIdOrderByCreatedAtDesc(Long assignmentId);
     List<ProviderProfessionalCertificate> findAllByVerificationStatusOrderByCreatedAtAsc(String status);
     Page<ProviderProfessionalCertificate> findAllByVerificationStatus(String status, Pageable pageable);
+    long countByVerificationStatus(String status);
 }

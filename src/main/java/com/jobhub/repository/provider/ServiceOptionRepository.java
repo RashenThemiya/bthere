@@ -15,4 +15,8 @@ public interface ServiceOptionRepository extends JpaRepository<ServiceOption, Lo
             Collection<Long> ids, Long typeId, String status);
     boolean existsByServiceProviderTypeIdAndCodeIgnoreCase(Long typeId, String code);
     Optional<ServiceOption> findByOptionIdAndServiceProviderTypeId(Long optionId, Long typeId);
+    long countByStatus(String status);
+    long countBySchedulingModel(String schedulingModel);
+    long countByBookingMode(String bookingMode);
+    long countByFulfillmentModel(String fulfillmentModel);
 }

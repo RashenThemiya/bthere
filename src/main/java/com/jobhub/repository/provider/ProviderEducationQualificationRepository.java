@@ -10,4 +10,5 @@ public interface ProviderEducationQualificationRepository extends JpaRepository<
     List<ProviderEducationQualification> findAllByAssignmentIdOrderByCreatedAtDesc(Long assignmentId);
     List<ProviderEducationQualification> findAllByVerificationStatusOrderByCreatedAtAsc(String status);
     Page<ProviderEducationQualification> findAllByVerificationStatus(String status, Pageable pageable);
+    long countByVerificationStatus(String status);
 }

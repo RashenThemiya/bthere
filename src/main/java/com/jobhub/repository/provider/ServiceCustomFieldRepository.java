@@ -15,4 +15,5 @@ public interface ServiceCustomFieldRepository extends JpaRepository<ServiceCusto
     Optional<ServiceCustomField> findByFieldIdAndServiceProviderTypeId(Long fieldId, Long typeId);
     boolean existsByServiceProviderTypeIdAndScopeAndOptionIdAndCodeIgnoreCase(
             Long typeId, String scope, Long optionId, String code);
+    long countByScopeAndStatus(String scope, String status);
 }

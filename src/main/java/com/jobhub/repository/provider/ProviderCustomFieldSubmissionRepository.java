@@ -13,4 +13,5 @@ public interface ProviderCustomFieldSubmissionRepository
     List<ProviderCustomFieldSubmission> findAllByAssignmentId(Long assignmentId);
     Optional<ProviderCustomFieldSubmission> findByAssignmentIdAndFieldId(Long assignmentId, Long fieldId);
     Page<ProviderCustomFieldSubmission> findAllByVerificationStatus(String status, Pageable pageable);
+    long countByVerificationStatus(String status);
 }
