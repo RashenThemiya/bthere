@@ -16,9 +16,7 @@ public record OtpVerifyRequest(
         @Pattern(regexp = "^[0-9]{6}$", message = "OTP must contain six digits")
         String otp,
 
-        @NotNull(message = "OTP purpose is required")
-        OtpPurpose purpose,
-
-        RegistrationType type
+        @NotNull(message = "Account type is required")
+        RegistrationType accountType
 ) {
 }

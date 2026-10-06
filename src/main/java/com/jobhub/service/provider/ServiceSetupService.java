@@ -99,6 +99,11 @@ public class ServiceSetupService {
                 type.getDescription(),
                 type.getIconUrl(),
                 type.getStatus(),
+                type.isAvailabilityEnabled(),
+                type.isServiceAreasEnabled(),
+                type.isOptionsRequired(),
+                type.getMinimumOptionSelections(),
+                type.getMaximumOptionSelections(),
                 documents.stream().map(item -> {
                     DocumentType documentType = documentTypes.get(item.getDocumentTypeId());
                     return new ServiceSetupResponse.DocumentRequirement(
@@ -188,6 +193,21 @@ public class ServiceSetupService {
                 !"DISABLED".equals(educationLevel)
                         && request.education().requiresApproval()
         );
+        type.setAvailabilityEnabled(request.availabilityEnabled());
+        if (request.serviceAreasEnabled() != null) {
+            type.setServiceAreasEnabled(request.serviceAreasEnabled());
+        }
+        int minimum = request.minimumOptionSelections() == null
+                ? (request.optionsRequired() ? 1 : 0)
+                : request.minimumOptionSelections();
+        Integer maximum = request.maximumOptionSelections();
+        if (minimum < 0 || maximum != null && maximum < minimum) {
+            throw new IllegalArgumentException(
+                    "Option selection limits are invalid");
+        }
+        type.setOptionsRequired(request.optionsRequired());
+        type.setMinimumOptionSelections(minimum);
+        type.setMaximumOptionSelections(maximum);
     }
 
     private String validateLevel(String level) {

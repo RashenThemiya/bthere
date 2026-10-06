@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ServiceProviderDocumentRepository
         extends JpaRepository<ServiceProviderDocument, Long> {
@@ -30,5 +32,9 @@ public interface ServiceProviderDocumentRepository
 
     List<ServiceProviderDocument> findAllByVerificationStatusOrderByCreatedAtAsc(
             String verificationStatus
+    );
+
+    Page<ServiceProviderDocument> findAllByVerificationStatus(
+            String verificationStatus, Pageable pageable
     );
 }

@@ -22,6 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -41,10 +44,11 @@ public class AdminProviderDocumentController {
     }
 
     @GetMapping("/provider-documents")
-    public ResponseEntity<List<ProviderDocumentResponse>> listDocuments(
-            @RequestParam(defaultValue = "PENDING") String status
+    public ResponseEntity<Page<ProviderDocumentResponse>> listDocuments(
+            @RequestParam(defaultValue = "PENDING") String status,
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(providerDocumentService.listForReview(status));
+        return ResponseEntity.ok(providerDocumentService.listForReview(status, pageable));
     }
 
     @PatchMapping("/provider-documents/{documentId}/review")

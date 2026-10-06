@@ -17,4 +17,6 @@ public interface MarketRepository extends JpaRepository<Market, Long> {
     List<Market> findAllByOrderByNameAsc();
 
     List<Market> findAllByMarketIdInAndStatus(Collection<Long> ids, String status);
+
+    long countByStatus(String status);
 }

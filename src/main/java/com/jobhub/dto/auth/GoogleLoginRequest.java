@@ -7,7 +7,7 @@ public record GoogleLoginRequest(
         @NotBlank(message = "Google ID token is required")
         String idToken,
 
-        @NotNull(message = "Registration type is required")
-        RegistrationType type
+        @NotNull(message = "Account type is required")
+        RegistrationType accountType
 ) {
 }

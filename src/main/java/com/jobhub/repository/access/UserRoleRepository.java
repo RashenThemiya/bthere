@@ -20,4 +20,13 @@ public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
             order by role.name
             """)
     List<String> findActiveRoleNamesByUserId(@Param("userId") Long userId);
+
+    @Query("""
+            select userRole.userId
+            from UserRole userRole, Role role
+            where userRole.roleId = role.roleId
+              and upper(role.name) = upper(:role)
+              and role.status = 'ACTIVE'
+            """)
+    List<Long> findUserIdsByRoleName(@Param("role") String role);
 }

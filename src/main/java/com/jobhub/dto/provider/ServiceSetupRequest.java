@@ -18,6 +18,16 @@ public record ServiceSetupRequest(
         @Size(max = 2048, message = "Icon URL must not exceed 2048 characters")
         String iconUrl,
 
+        boolean availabilityEnabled,
+
+        Boolean serviceAreasEnabled,
+
+        boolean optionsRequired,
+
+        Integer minimumOptionSelections,
+
+        Integer maximumOptionSelections,
+
         @NotNull(message = "Document requirements are required")
         List<@Valid DocumentRequirement> documents,
 

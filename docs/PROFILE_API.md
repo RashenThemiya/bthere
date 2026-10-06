@@ -28,9 +28,18 @@ Maximum size is 10 MB. Example response:
 }
 ```
 
-Use the returned `url` as `profilePhoto` or `documentUrl` in the appropriate
-profile/document API. Configure `AWS_S3_PUBLIC_BASE_URL` when images are served
+Use the returned image `url` as `profilePhoto`. Configure
+`AWS_S3_PUBLIC_BASE_URL` when images are served
 through CloudFront or another custom public domain.
+
+Private PDFs and document images:
+
+- `POST /api/v1/uploads/documents` accepts PDF, JPG, PNG, or WebP up to 100 MB.
+- `GET /api/v1/uploads/view-url?key={objectKey}` returns a 10-minute presigned URL.
+
+Private uploads return both a relative `key` and an `s3://bucket/key` URL. Store
+the relative `key` in every document or certificate `documentKey` field. Providers can create viewing
+URLs only for their own files; authorized admins can view provider files.
 
 ## Customer profile
 
@@ -86,7 +95,7 @@ Providers list active markets with:
 GET /api/v1/markets
 ```
 
-Each market includes its country code, default currency, IANA timezone,
+Each market includes its country code, currency code, IANA timezone,
 locale, and international phone code.
 
 Providers can change their operating market later:
@@ -110,10 +119,10 @@ Super Admin manages markets with:
 {
   "name": "United Kingdom",
   "countryCode": "GB",
-  "defaultCurrency": "GBP",
+  "currencyCode": "GBP",
   "timezone": "Europe/London",
   "locale": "en-GB",
-  "phoneCountryCode": "+44"
+  "phoneCode": "+44"
 }
 ```
 
@@ -275,6 +284,59 @@ The response also contains `requiredDocumentTypeIds` and
 `missingDocumentTypeIds`, allowing the frontend to show exactly what the
 provider must upload.
 
+Service skills:
+
+- `GET /api/v1/providers/me/services/{assignmentId}/skills`
+- `PUT /api/v1/providers/me/services/{assignmentId}/skills`
+
+```json
+{
+  "skillIds": [1, 3, 4]
+}
+```
+
+Professional certificates:
+
+- `GET /api/v1/providers/me/services/{assignmentId}/certificates`
+- `POST /api/v1/providers/me/services/{assignmentId}/certificates`
+
+```json
+{
+  "name": "Caregiver NVQ Level 4",
+  "issuingOrganization": "Training Institute",
+  "certificateNumber": "CERT-1001",
+  "issuedDate": "2024-01-01",
+  "expiryDate": null,
+  "documentKey": "providers/15/documents/certificate.pdf"
+}
+```
+
+Education qualifications:
+
+- `GET /api/v1/providers/me/services/{assignmentId}/education`
+- `POST /api/v1/providers/me/services/{assignmentId}/education`
+
+```json
+{
+  "qualificationName": "Diploma in Caregiving",
+  "instituteName": "Training Institute",
+  "fieldOfStudy": "Caregiving",
+  "startDate": "2022-01-01",
+  "completionDate": "2023-01-01",
+  "result": "Distinction",
+  "documentKey": "providers/15/documents/diploma.pdf"
+}
+```
+
+Combined onboarding progress:
+
+```http
+GET /api/v1/providers/me/completion
+```
+
+The response contains the overall percentage, next step, and per-service
+document, skill, certificate, education, verification, and activation state.
+
 Read the document requirements for a service:
 
 ```http
@@ -326,13 +388,15 @@ Provider document endpoints:
   "documentTypeId": 1,
   "documentName": "NIC front",
   "documentNumber": "901234567V",
-  "documentUrl": "https://secure-storage.example.com/document.pdf",
+  "documentKey": "providers/15/documents/nic-front.pdf",
   "issuedDate": "2018-01-01",
   "expiryDate": null
 }
 ```
 
-The file must first be uploaded to secure object storage. This API stores its URL and metadata. New documents receive `PENDING` status. Approved documents cannot be deleted.
+The file must first be uploaded to secure object storage. This API stores its
+relative S3 object key and metadata. New documents receive `PENDING` status.
+Approved documents cannot be deleted.
 
 A provider stores only one current document for each document type. Posting
 the same document type again updates it and returns it to `PENDING` review.
@@ -374,3 +438,94 @@ A rejection reason is mandatory when rejecting a document.
 
 After an administrator reviews a document, the backend automatically
 recalculates the approval status of all services selected by that provider.
+
+Admin qualification-review endpoints:
+
+- `GET /api/v1/admin/provider-qualifications/skills?status=PENDING`
+- `PATCH /api/v1/admin/provider-qualifications/skills/{id}/review`
+- `GET /api/v1/admin/provider-qualifications/certificates?status=PENDING`
+- `PATCH /api/v1/admin/provider-qualifications/certificates/{id}/review`
+- `GET /api/v1/admin/provider-qualifications/education?status=PENDING`
+- `PATCH /api/v1/admin/provider-qualifications/education/{id}/review`
+
+Review requests use the same `APPROVED` or `REJECTED` body as document review.
+
+## Provider service availability
+
+Availability belongs to a provider's selected service assignment. This allows a
+provider to offer different hours and locations for different services.
+The administrator controls these features independently for every service with
+`availabilityEnabled` in the service setup and each option's `locationEnabled`
+and `deliveryModes` configuration.
+The frontend should read `GET /api/v1/provider-types/{providerTypeId}/setup`
+and only show the enabled steps.
+
+Get the weekly schedule:
+
+```http
+GET /api/v1/providers/me/services/{assignmentId}/availability
+```
+
+Replace it with selected days and hours:
+
+```http
+PUT /api/v1/providers/me/services/{assignmentId}/availability
+
+{
+  "availableAnyDay": false,
+  "availableAnyTime": false,
+  "weeklySlots": [
+    { "dayOfWeek": "MONDAY", "startTime": "08:00", "endTime": "17:00" },
+    { "dayOfWeek": "SUNDAY", "startTime": "08:00", "endTime": "17:00" }
+  ]
+}
+```
+
+For every day and every time, use both flags as `true` and send an empty
+`weeklySlots` array. If only `availableAnyTime` is true, provide the selected
+days as slots and omit their start/end times.
+
+## Specific unavailable dates
+
+```http
+GET /api/v1/providers/me/services/{assignmentId}/unavailable-dates
+POST /api/v1/providers/me/services/{assignmentId}/unavailable-dates
+DELETE /api/v1/providers/me/services/{assignmentId}/unavailable-dates/{unavailableDateId}
+```
+
+```json
+{
+  "date": "2026-10-20",
+  "reason": "Medical appointment"
+}
+```
+
+## Service locations and travel ranges
+
+Get locations:
+
+```http
+GET /api/v1/providers/me/services/{assignmentId}/options/{optionId}/delivery-modes/{deliveryMode}/service-areas
+```
+
+Replace all locations:
+
+```http
+PUT /api/v1/providers/me/services/{assignmentId}/options/{optionId}/delivery-modes/{deliveryMode}/service-areas
+
+[
+  {
+    "locationName": "Colombo base",
+    "country": "Sri Lanka",
+    "province": "Western",
+    "district": "Colombo",
+    "city": "Colombo",
+    "latitude": 6.9271,
+    "longitude": 79.8612,
+    "radiusKm": 20
+  }
+]
+```
+
+The provider can add multiple locations. Each radius is validated from 0.1 km
+to 500 km, and locations use the provider's currently selected market.

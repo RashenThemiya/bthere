@@ -17,6 +17,10 @@ public class ServiceProviderServiceArea extends AuditedEntity {
     private Long serviceAreaId;
     private Long marketId;
     private Long serviceProviderId;
+    private Long assignmentId;
+    private Long optionId;
+    private String deliveryMode;
+    private String locationName;
     private String country;
     private String province;
     private String district;
@@ -24,6 +28,7 @@ public class ServiceProviderServiceArea extends AuditedEntity {
     private BigDecimal latitude;
     private BigDecimal longitude;
     private BigDecimal radiusKm;
+    private Integer capacity;
     private String status;
 }
 

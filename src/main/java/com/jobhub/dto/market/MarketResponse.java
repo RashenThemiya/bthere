@@ -6,10 +6,10 @@ public record MarketResponse(
         Long id,
         String name,
         String countryCode,
-        String defaultCurrency,
+        String currencyCode,
         String timezone,
         String locale,
-        String phoneCountryCode,
+        String phoneCode,
         String status,
         LocalDateTime createdAt,
         LocalDateTime updatedAt

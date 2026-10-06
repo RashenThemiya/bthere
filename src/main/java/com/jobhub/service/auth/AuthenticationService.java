@@ -6,7 +6,6 @@ import com.jobhub.dto.auth.EmailVerificationRequest;
 import com.jobhub.dto.auth.GoogleLoginRequest;
 import com.jobhub.dto.auth.LoginRequest;
 import com.jobhub.dto.auth.LoginResponse;
-import com.jobhub.dto.auth.OtpPurpose;
 import com.jobhub.dto.auth.OtpRequest;
 import com.jobhub.dto.auth.OtpRequestResponse;
 import com.jobhub.dto.auth.OtpVerifyRequest;
@@ -86,18 +85,16 @@ public class AuthenticationService {
     public OtpRequestResponse requestOtp(OtpRequest request) {
         String phoneNumber = request.phoneNumber().trim();
         User existingUser = userRepository.findByPhoneNumber(phoneNumber).orElse(null);
+        boolean registration = existingUser == null;
 
-        boolean eligible = request.purpose() == OtpPurpose.REGISTER
-                ? existingUser == null
-                : existingUser != null
-                        && "ACTIVE".equals(existingUser.getStatus())
-                        && isSocialLoginUser(existingUser);
+        boolean eligible = registration || ("ACTIVE".equals(existingUser.getStatus())
+                && hasAccountType(existingUser, request.accountType()));
 
         if (!eligible) {
             return acceptedOtpResponse();
         }
 
-        String tokenType = otpTokenType(request.purpose());
+        String tokenType = otpTokenType(registration);
         LocalDateTime cooldownStart = LocalDateTime.now().minusSeconds(otpResendSeconds);
         if (verificationTokenRepository.existsByTypeAndDestinationAndCreatedAtAfter(
                 tokenType,
@@ -176,7 +173,9 @@ public class AuthenticationService {
             HttpServletRequest httpRequest
     ) {
         String phoneNumber = request.phoneNumber().trim();
-        String tokenType = otpTokenType(request.purpose());
+        User existingUser = userRepository.findByPhoneNumber(phoneNumber).orElse(null);
+        boolean registration = existingUser == null;
+        String tokenType = otpTokenType(registration);
         VerificationToken token = verificationTokenRepository
                 .findFirstByTypeAndDestinationAndUsedAtIsNullOrderByCreatedAtDesc(
                         tokenType,
@@ -204,9 +203,9 @@ public class AuthenticationService {
         token.setUsedAt(LocalDateTime.now());
         verificationTokenRepository.save(token);
 
-        User user = request.purpose() == OtpPurpose.REGISTER
+        User user = registration
                 ? createPhoneUser(phoneNumber, request)
-                : findPhoneLoginUser(phoneNumber);
+                : findPhoneLoginUser(phoneNumber, request.accountType());
 
         ensurePhoneProvider(user, phoneNumber);
         return issueTokens(user, httpRequest);
@@ -214,23 +213,22 @@ public class AuthenticationService {
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
-        String username = request.username().trim().toLowerCase(Locale.ROOT);
         String email = request.email().trim().toLowerCase(Locale.ROOT);
-        String phoneNumber = normalize(request.phoneNumber());
+        String username = generateEmailUsername(email);
 
-        validateUniqueUser(username, email, phoneNumber);
+        validateUniqueUser(username, email, null);
 
         User user = new User();
         user.setUsername(username);
         user.setEmail(email);
-        user.setPhoneNumber(phoneNumber);
+        user.setPhoneNumber(null);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setEmailVerified(false);
         user.setPhoneVerified(false);
         user.setStatus("PENDING");
         user = userRepository.saveAndFlush(user);
 
-        String roleName = request.type().name();
+        String roleName = request.accountType().name();
         Role role = roleRepository.findByName(roleName)
                 .orElseGet(() -> createRole(roleName));
 
@@ -262,7 +260,7 @@ public class AuthenticationService {
 
     @Transactional
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
-        User user = findUser(request.username().trim());
+        User user = findUser(request.identifier().trim());
 
         if (!"ACTIVE".equals(user.getStatus())
                 || user.getPasswordHash() == null
@@ -424,7 +422,7 @@ public class AuthenticationService {
         user.setStatus("ACTIVE");
         user = userRepository.saveAndFlush(user);
 
-        String roleName = request.type().name();
+        String roleName = request.accountType().name();
         Role role = roleRepository.findByName(roleName)
                 .orElseGet(() -> createRole(roleName));
 
@@ -461,11 +459,6 @@ public class AuthenticationService {
     }
 
     private User createPhoneUser(String phoneNumber, OtpVerifyRequest request) {
-        if (request.type() == null) {
-            throw new IllegalArgumentException(
-                    "Registration type is required when registering by phone"
-            );
-        }
         if (userRepository.existsByPhoneNumber(phoneNumber)) {
             throw new ConflictException("Phone number is already registered");
         }
@@ -479,7 +472,7 @@ public class AuthenticationService {
         user.setStatus("ACTIVE");
         user = userRepository.saveAndFlush(user);
 
-        String roleName = request.type().name();
+        String roleName = request.accountType().name();
         Role role = roleRepository.findByName(roleName)
                 .orElseGet(() -> createRole(roleName));
 
@@ -490,13 +483,13 @@ public class AuthenticationService {
         return user;
     }
 
-    private User findPhoneLoginUser(String phoneNumber) {
+    private User findPhoneLoginUser(String phoneNumber, com.jobhub.dto.auth.RegistrationType accountType) {
         User user = userRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new UnauthorizedException("OTP is invalid or expired"));
         if (!"ACTIVE".equals(user.getStatus())) {
             throw new UnauthorizedException("User account is not active");
         }
-        if (!isSocialLoginUser(user)) {
+        if (!hasAccountType(user, accountType)) {
             throw new UnauthorizedException(
                     "Phone OTP login is not available for administrative accounts"
             );
@@ -511,6 +504,14 @@ public class AuthenticationService {
     private boolean isSocialLoginUser(User user) {
         List<String> roles = userRoleRepository.findActiveRoleNamesByUserId(user.getUserId());
         return !roles.isEmpty() && roles.stream().allMatch(SOCIAL_LOGIN_ROLES::contains);
+    }
+
+    private boolean hasAccountType(
+            User user,
+            com.jobhub.dto.auth.RegistrationType accountType
+    ) {
+        return userRoleRepository.findActiveRoleNamesByUserId(user.getUserId())
+                .contains(accountType.name());
     }
 
     private void ensurePhoneProvider(User user, String phoneNumber) {
@@ -566,10 +567,24 @@ public class AuthenticationService {
         return String.format(Locale.ROOT, "%06d", secureRandom.nextInt(1_000_000));
     }
 
-    private String otpTokenType(OtpPurpose purpose) {
-        return purpose == OtpPurpose.REGISTER
+    private String otpTokenType(boolean registration) {
+        return registration
                 ? "PHONE_REGISTER_OTP"
                 : "PHONE_LOGIN_OTP";
+    }
+
+    private String generateEmailUsername(String email) {
+        String localPart = email.substring(0, email.indexOf('@'))
+                .replaceAll("[^a-z0-9._-]", "");
+        String base = localPart.length() >= 3 ? localPart : "user";
+        base = base.substring(0, Math.min(base.length(), 40));
+        String username = base;
+        int counter = 1;
+        while (userRepository.existsByUsername(username)) {
+            String suffix = "-" + counter++;
+            username = base.substring(0, Math.min(base.length(), 50 - suffix.length())) + suffix;
+        }
+        return username;
     }
 
     private OtpRequestResponse acceptedOtpResponse() {
@@ -611,10 +626,6 @@ public class AuthenticationService {
         role.setDescription(roleName.replace('_', ' ') + " account");
         role.setStatus("ACTIVE");
         return roleRepository.saveAndFlush(role);
-    }
-
-    private String normalize(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private String limit(String value, int maximumLength) {

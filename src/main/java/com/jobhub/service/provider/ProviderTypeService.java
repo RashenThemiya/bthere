@@ -7,6 +7,7 @@ import com.jobhub.dto.provider.ProviderTypeResponse;
 import com.jobhub.dto.provider.ServiceDocumentRequirementResponse;
 import com.jobhub.dto.provider.UpdateProviderTypesRequest;
 import com.jobhub.dto.provider.UpdateServiceDocumentRequirementsRequest;
+import com.jobhub.dto.provider.EmergencyApprovalRequest;
 import com.jobhub.entity.provider.DocumentType;
 import com.jobhub.entity.provider.ServiceProvider;
 import com.jobhub.entity.provider.ServiceProviderType;
@@ -27,6 +28,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.LocalDateTime;
+import com.jobhub.service.audit.AuditService;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,7 @@ public class ProviderTypeService {
     private final ServiceTypeDocumentRequirementRepository requirementRepository;
     private final DocumentTypeRepository documentTypeRepository;
     private final ProviderServiceApprovalService approvalService;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public List<ProviderTypeResponse> listActiveTypes() {
@@ -224,6 +228,42 @@ public class ProviderTypeService {
         return responseForAssignment(assignment);
     }
 
+    @Transactional
+    public ProviderTypeAssignmentResponse applyEmergencyOverride(
+            Long actorId, Long assignmentId, EmergencyApprovalRequest request) {
+        ServiceProviderTypeAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Provider service assignment was not found"));
+        assignment.setEmergencyOverride(true);
+        assignment.setEmergencyOverrideReason(request.reason().trim());
+        assignment.setEmergencyOverrideBy(actorId);
+        assignment.setEmergencyOverrideAt(LocalDateTime.now());
+        assignment.setEmergencyOverrideExpiresAt(request.expiresAt());
+        assignment.setVerificationStatus("APPROVED");
+        assignmentRepository.save(assignment);
+        auditService.record(actorId, "EMERGENCY_SERVICE_APPROVAL", "PROVIDER_SERVICE",
+                assignmentId, null, java.util.Map.of("reason", request.reason()));
+        return responseForAssignment(assignment);
+    }
+
+    @Transactional
+    public ProviderTypeAssignmentResponse revokeEmergencyOverride(Long actorId, Long assignmentId) {
+        ServiceProviderTypeAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Provider service assignment was not found"));
+        assignment.setEmergencyOverride(false);
+        assignment.setEmergencyOverrideReason(null);
+        assignment.setEmergencyOverrideBy(null);
+        assignment.setEmergencyOverrideAt(null);
+        assignment.setEmergencyOverrideExpiresAt(null);
+        assignmentRepository.save(assignment);
+        approvalService.refreshProviderApprovals(assignment.getServiceProviderId());
+        assignment = assignmentRepository.findById(assignmentId).orElse(assignment);
+        auditService.record(actorId, "EMERGENCY_SERVICE_APPROVAL_REVOKED",
+                "PROVIDER_SERVICE", assignmentId, null, null);
+        return responseForAssignment(assignment);
+    }
+
     @Transactional(readOnly = true)
     public List<ServiceDocumentRequirementResponse> getDocumentRequirements(
             Long providerTypeId
@@ -333,6 +373,9 @@ public class ProviderTypeService {
                 normalizedStatus(assignment.getProviderStatus()),
                 normalizedStatus(assignment.getAdminStatus()),
                 assignment.getVerificationStatus(),
+                assignment.isEmergencyOverride(),
+                assignment.getEmergencyOverrideReason(),
+                assignment.getEmergencyOverrideExpiresAt(),
                 required.stream().sorted().toList(),
                 missing
         );

@@ -15,7 +15,7 @@ public record CreateMarketRequest(
 
         @NotBlank(message = "Currency is required")
         @Pattern(regexp = "^[A-Z]{3}$", message = "Currency must use ISO format")
-        String defaultCurrency,
+        String currencyCode,
 
         @NotBlank(message = "Timezone is required")
         String timezone,
@@ -25,6 +25,6 @@ public record CreateMarketRequest(
 
         @NotBlank(message = "Phone country code is required")
         @Pattern(regexp = "^\\+[1-9][0-9]{0,3}$", message = "Phone country code must start with +")
-        String phoneCountryCode
+        String phoneCode
 ) {
 }

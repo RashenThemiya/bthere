@@ -10,7 +10,7 @@ public record ProviderDocumentResponse(
         String documentTypeName,
         String documentName,
         String documentNumber,
-        String documentUrl,
+        String documentKey,
         LocalDate issuedDate,
         LocalDate expiryDate,
         String verificationStatus,

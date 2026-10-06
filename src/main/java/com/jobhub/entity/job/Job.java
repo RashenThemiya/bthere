@@ -20,7 +20,14 @@ public class Job extends AuditedEntity {
     private String currencyCode;
     private Long customerId;
     private Long serviceProviderTypeId;
+    private Long serviceOptionId;
     private Long assignedServiceProviderId;
+    private String fulfillmentModel;
+    private Integer capacityUsed;
+    private Long providerLocationId;
+    private String deliveryMode;
+    private String schedulingModel;
+    private String meetingPointName;
     private Long rateId;
     private LocalDateTime startDatetime;
     private LocalDateTime expectedEndDatetime;
@@ -36,8 +43,15 @@ public class Job extends AuditedEntity {
     private String province;
     private String postalCode;
     private String country;
+    private BigDecimal destinationLatitude;
+    private BigDecimal destinationLongitude;
+    private String destinationAddress;
+    private BigDecimal estimatedDistanceKm;
+    private Integer estimatedDurationMinutes;
     @Column(columnDefinition = "TEXT")
     private String customerNote;
+    @Column(length = 1000)
+    private String locationInstructions;
     private BigDecimal expectedAmount;
     private BigDecimal actualAmount;
     private BigDecimal discountAmount;

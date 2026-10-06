@@ -1,7 +1,7 @@
 package com.jobhub.dto.auth;
 
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 public record OtpRequest(
@@ -12,7 +12,7 @@ public record OtpRequest(
         )
         String phoneNumber,
 
-        @NotNull(message = "OTP purpose is required")
-        OtpPurpose purpose
+        @NotNull(message = "Account type is required")
+        RegistrationType accountType
 ) {
 }

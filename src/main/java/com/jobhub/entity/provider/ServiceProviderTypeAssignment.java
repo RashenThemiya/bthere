@@ -28,5 +28,12 @@ public class ServiceProviderTypeAssignment extends AuditedEntity {
     private String providerStatus;
     private String adminStatus;
     private String verificationStatus;
+    private boolean availableAnyDay;
+    private boolean availableAnyTime;
+    private boolean emergencyOverride;
+    private String emergencyOverrideReason;
+    private Long emergencyOverrideBy;
+    private java.time.LocalDateTime emergencyOverrideAt;
+    private java.time.LocalDateTime emergencyOverrideExpiresAt;
 }
 

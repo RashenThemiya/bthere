@@ -31,4 +31,6 @@ public interface ServiceProviderTypeAssignmentRepository
             Long assignmentId,
             Long serviceProviderId
     );
+
+    long countByVerificationStatus(String status);
 }

@@ -7,6 +7,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sesv2.SesV2Client;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Configuration
 public class AwsSnsConfig {
@@ -34,6 +35,15 @@ public class AwsSnsConfig {
             @Value("${app.storage.s3.region}") String region
     ) {
         return S3Client.builder()
+                .region(Region.of(region))
+                .build();
+    }
+
+    @Bean
+    public S3Presigner s3Presigner(
+            @Value("${app.storage.s3.region}") String region
+    ) {
+        return S3Presigner.builder()
                 .region(Region.of(region))
                 .build();
     }

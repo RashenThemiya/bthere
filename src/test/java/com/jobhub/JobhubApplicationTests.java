@@ -16,12 +16,30 @@ import com.jobhub.repository.provider.ServiceProviderTypeAssignmentRepository;
 import com.jobhub.repository.provider.ServiceProviderTypeRepository;
 import com.jobhub.repository.provider.ServiceTypeDocumentRequirementRepository;
 import com.jobhub.repository.provider.ServiceTypeSkillRepository;
+import com.jobhub.repository.provider.ProviderServiceSkillRepository;
+import com.jobhub.repository.provider.ProviderProfessionalCertificateRepository;
+import com.jobhub.repository.provider.ProviderEducationQualificationRepository;
+import com.jobhub.repository.provider.ServiceProviderAvailabilityRepository;
+import com.jobhub.repository.provider.ServiceProviderServiceAreaRepository;
+import com.jobhub.repository.provider.ServiceOptionRepository;
+import com.jobhub.repository.provider.ProviderServiceOptionRepository;
+import com.jobhub.repository.provider.ProviderServiceLanguageRepository;
+import com.jobhub.repository.provider.ServiceCustomFieldRepository;
+import com.jobhub.repository.provider.ProviderCustomFieldSubmissionRepository;
+import com.jobhub.repository.audit.AuditLogRepository;
+import com.jobhub.repository.market.MarketServiceOfferingRepository;
+import com.jobhub.repository.job.JobRateRepository;
+import com.jobhub.repository.job.JobRepository;
+import com.jobhub.repository.job.JobCustomFieldAnswerRepository;
+import com.jobhub.repository.job.JobProviderAssignmentRepository;
+import com.jobhub.repository.finance.PaymentRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sesv2.SesV2Client;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration",
@@ -62,6 +80,9 @@ class JobhubApplicationTests {
     private S3Client s3Client;
 
     @MockitoBean
+    private S3Presigner s3Presigner;
+
+    @MockitoBean
     private MarketRepository marketRepository;
 
     @MockitoBean
@@ -90,6 +111,57 @@ class JobhubApplicationTests {
 
     @MockitoBean
     private ServiceTypeSkillRepository skillRepository;
+
+    @MockitoBean
+    private ProviderServiceSkillRepository providerSkillRepository;
+
+    @MockitoBean
+    private ProviderProfessionalCertificateRepository certificateRepository;
+
+    @MockitoBean
+    private ProviderEducationQualificationRepository educationRepository;
+
+    @MockitoBean
+    private ServiceProviderAvailabilityRepository availabilityRepository;
+
+    @MockitoBean
+    private ServiceProviderServiceAreaRepository serviceAreaRepository;
+
+    @MockitoBean
+    private ServiceOptionRepository serviceOptionRepository;
+
+    @MockitoBean
+    private ProviderServiceOptionRepository providerServiceOptionRepository;
+
+    @MockitoBean
+    private ProviderServiceLanguageRepository providerServiceLanguageRepository;
+
+    @MockitoBean
+    private ServiceCustomFieldRepository serviceCustomFieldRepository;
+
+    @MockitoBean
+    private ProviderCustomFieldSubmissionRepository providerCustomFieldSubmissionRepository;
+
+    @MockitoBean
+    private AuditLogRepository auditLogRepository;
+
+    @MockitoBean
+    private MarketServiceOfferingRepository marketServiceOfferingRepository;
+
+    @MockitoBean
+    private JobRateRepository jobRateRepository;
+
+    @MockitoBean
+    private JobRepository jobRepository;
+
+    @MockitoBean
+    private JobCustomFieldAnswerRepository jobCustomFieldAnswerRepository;
+
+    @MockitoBean
+    private JobProviderAssignmentRepository jobProviderAssignmentRepository;
+
+    @MockitoBean
+    private PaymentRepository paymentRepository;
 
     @Test
     void contextLoads() {

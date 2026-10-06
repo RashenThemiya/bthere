@@ -11,6 +11,9 @@ public record ProviderTypeAssignmentResponse(
         String providerStatus,
         String adminStatus,
         String verificationStatus,
+        boolean emergencyOverride,
+        String emergencyOverrideReason,
+        java.time.LocalDateTime emergencyOverrideExpiresAt,
         java.util.List<Long> requiredDocumentTypeIds,
         java.util.List<Long> missingDocumentTypeIds
 ) {

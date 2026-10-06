@@ -22,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -77,6 +79,12 @@ public class ProviderDocumentService {
             Long userId,
             ProviderDocumentRequest request
     ) {
+        String expectedPrefix = "providers/" + userId + "/documents/";
+        if (!request.documentKey().startsWith(expectedPrefix)) {
+            throw new IllegalArgumentException(
+                    "Document key does not belong to this provider"
+            );
+        }
         ServiceProvider provider = providerProfileService.findByUserId(userId);
         DocumentType type = documentTypeRepository.findById(request.documentTypeId())
                 .filter(value -> "ACTIVE".equals(value.getStatus()))
@@ -103,7 +111,7 @@ public class ProviderDocumentService {
         document.setDocumentTypeId(type.getDocumentTypeId());
         document.setDocumentName(request.documentName().trim());
         document.setDocumentNumber(optional(request.documentNumber()));
-        document.setDocumentUrl(request.documentUrl().trim());
+        document.setDocumentUrl(request.documentKey().trim());
         document.setIssuedDate(request.issuedDate());
         document.setExpiryDate(request.expiryDate());
         document.setVerificationStatus("PENDING");
@@ -134,15 +142,19 @@ public class ProviderDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProviderDocumentResponse> listForReview(String status) {
+    public Page<ProviderDocumentResponse> listForReview(String status, Pageable pageable) {
         String normalized = status.trim().toUpperCase();
         if (!REVIEW_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException(
                     "Document status must be PENDING, APPROVED or REJECTED"
             );
         }
-        return toResponses(documentRepository
-                .findAllByVerificationStatusOrderByCreatedAtAsc(normalized));
+        return documentRepository.findAllByVerificationStatus(normalized, pageable)
+                .map(document -> {
+                    DocumentType type = documentTypeRepository
+                            .findById(document.getDocumentTypeId()).orElse(null);
+                    return toResponse(document, type == null ? null : type.getName());
+                });
     }
 
     @Transactional
@@ -205,7 +217,7 @@ public class ProviderDocumentService {
                 typeName,
                 document.getDocumentName(),
                 document.getDocumentNumber(),
-                document.getDocumentUrl(),
+                normalizeStoredDocumentKey(document.getDocumentUrl()),
                 document.getIssuedDate(),
                 document.getExpiryDate(),
                 document.getVerificationStatus(),
@@ -229,5 +241,13 @@ public class ProviderDocumentService {
 
     private String optional(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeStoredDocumentKey(String value) {
+        if (value == null || !value.startsWith("s3://")) {
+            return value;
+        }
+        int keyStart = value.indexOf('/', "s3://".length());
+        return keyStart < 0 ? value : value.substring(keyStart + 1);
     }
 }

@@ -16,9 +16,16 @@ public class ServiceProviderAvailability extends AuditedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long availabilityId;
     private Long serviceProviderId;
+    private Long assignmentId;
+    private String scheduleType;
+    @Enumerated(EnumType.STRING)
+    private DayOfWeek dayOfWeek;
     private LocalDate availableDate;
     private LocalTime startTime;
     private LocalTime endTime;
+    private boolean allDay;
+    @Column(length = 500)
+    private String reason;
     private String status;
 }
 

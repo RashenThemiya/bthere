@@ -25,7 +25,7 @@ public class MarketService {
     @Transactional
     public MarketResponse create(CreateMarketRequest request) {
         String countryCode = request.countryCode().trim().toUpperCase();
-        String currencyCode = request.defaultCurrency().trim().toUpperCase();
+        String currencyCode = request.currencyCode().trim().toUpperCase();
 
         if (marketRepository.existsByCountryCode(countryCode)) {
             throw new ConflictException("A market for this country already exists");
@@ -40,7 +40,7 @@ public class MarketService {
         market.setDefaultCurrency(currencyCode);
         market.setTimezone(request.timezone().trim());
         market.setLocale(request.locale().trim());
-        market.setPhoneCountryCode(request.phoneCountryCode().trim());
+        market.setPhoneCountryCode(request.phoneCode().trim());
         market.setStatus("ACTIVE");
 
         return toResponse(marketRepository.saveAndFlush(market));
@@ -66,7 +66,7 @@ public class MarketService {
     public MarketResponse update(Long marketId, CreateMarketRequest request) {
         Market market = requireMarket(marketId);
         String countryCode = request.countryCode().trim().toUpperCase();
-        String currencyCode = request.defaultCurrency().trim().toUpperCase();
+        String currencyCode = request.currencyCode().trim().toUpperCase();
         if (marketRepository.existsByCountryCodeAndMarketIdNot(countryCode, marketId)) {
             throw new ConflictException("A market for this country already exists");
         }
@@ -77,7 +77,7 @@ public class MarketService {
         market.setDefaultCurrency(currencyCode);
         market.setTimezone(request.timezone().trim());
         market.setLocale(request.locale().trim());
-        market.setPhoneCountryCode(request.phoneCountryCode().trim());
+        market.setPhoneCountryCode(request.phoneCode().trim());
         return toResponse(marketRepository.save(market));
     }
 

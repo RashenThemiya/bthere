@@ -8,4 +8,6 @@ import java.util.Optional;
 public interface ServiceProviderRepository extends JpaRepository<ServiceProvider, Long> {
 
     Optional<ServiceProvider> findByUserId(Long userId);
+
+    long countByVerificationStatus(String status);
 }

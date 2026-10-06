@@ -19,9 +19,17 @@ public class JobRate extends AuditedEntity {
     private Long marketId;
     private String currencyCode;
     private Long serviceProviderTypeId;
+    private Long serviceOptionId;
     private String billingType;
     private Integer durationMinutes;
     private BigDecimal rate;
+    private BigDecimal baseFare;
+    private BigDecimal pricePerKm;
+    private BigDecimal minimumFare;
+    private String geographicalAreaName;
+    private BigDecimal areaLatitude;
+    private BigDecimal areaLongitude;
+    private BigDecimal areaRadiusKm;
     private LocalDateTime effectiveFrom;
     private LocalDateTime effectiveTo;
     private String status;

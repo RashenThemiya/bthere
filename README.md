@@ -45,15 +45,16 @@ Markets hold country-specific configuration without duplicating global users, ro
 
 Frontend developers should use the complete [Authentication API documentation](docs/AUTH_API.md).
 Profile and provider onboarding endpoints are documented in [Profile API documentation](docs/PROFILE_API.md).
+Administration endpoints are documented in [Administration API documentation](docs/ADMIN_API.md).
 
-Log in using a username or email:
+Log in using a username or email as the identifier:
 
 ```http
 POST /api/v1/auth/login
 Content-Type: application/json
 
 {
-  "username": "superadmin",
+  "identifier": "superadmin",
   "password": "your-password"
 }
 ```
@@ -73,11 +74,13 @@ Content-Type: application/json
 
 {
   "idToken": "<google-id-token>",
-  "type": "CUSTOMER"
+  "accountType": "CUSTOMER"
 }
 ```
 
-For a new Google account, `type` may be `CUSTOMER` or `SERVICE_PROVIDER`. Existing linked accounts keep their current roles. JobHub verifies Google's signature, issuer, expiration, audience, and verified-email claim before creating or linking the account.
+For a new Google account, `accountType` may be `CUSTOMER` or `SERVICE_PROVIDER`.
+Existing linked accounts keep their current roles. JobHub verifies Google's signature,
+issuer, expiration, audience, and verified-email claim before creating or linking the account.
 
 Google and phone OTP authentication are restricted to accounts whose active roles are only `CUSTOMER` and/or `SERVICE_PROVIDER`. Administrative accounts must use username/password login and cannot link Google or use phone OTP.
 
@@ -105,7 +108,7 @@ Content-Type: application/json
 
 {
   "phoneNumber": "+94771234567",
-  "purpose": "REGISTER"
+  "accountType": "CUSTOMER"
 }
 ```
 
@@ -118,12 +121,13 @@ Content-Type: application/json
 {
   "phoneNumber": "+94771234567",
   "otp": "123456",
-  "purpose": "REGISTER",
-  "type": "CUSTOMER"
+  "accountType": "CUSTOMER"
 }
 ```
 
-For login, use `purpose: LOGIN`; `type` is then optional. Successful verification returns the normal JobHub access and refresh tokens.
+The backend automatically registers a new phone number or logs in an existing
+matching account. Successful verification returns the normal JobHub access and
+refresh tokens.
 
 Configure `OTP_HASH_SECRET`, `AWS_REGION`, and optionally `AWS_SNS_SENDER_ID`. On EC2, attach an instance IAM role that permits `sns:Publish`; do not store permanent AWS keys in the repository. The AWS SDK uses its default credential chain, including EC2 instance-role credentials. New AWS SNS SMS accounts may initially be in the SMS sandbox, where destination numbers must be verified before messages can be sent.
 

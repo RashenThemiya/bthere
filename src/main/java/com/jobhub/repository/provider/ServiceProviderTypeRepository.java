@@ -16,4 +16,6 @@ public interface ServiceProviderTypeRepository extends JpaRepository<ServiceProv
             Collection<Long> ids,
             String status
     );
+
+    long countByStatus(String status);
 }

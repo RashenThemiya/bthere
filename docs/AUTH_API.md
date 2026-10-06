@@ -51,27 +51,23 @@ No authentication is required.
 
 ```json
 {
-  "username": "customer01",
   "email": "customer@example.com",
-  "phoneNumber": "+94771234567",
   "password": "StrongPassword123",
-  "type": "CUSTOMER"
+  "accountType": "CUSTOMER"
 }
 ```
 
-`phoneNumber` is optional. Omit it or send `null` when it is not collected.
+The backend generates a unique username from the email address.
 
 ### Validation
 
 | Field | Rules |
 |---|---|
-| `username` | Required; 3-50 characters; letters, numbers, `.`, `_`, and `-` only |
 | `email` | Required; valid email; maximum 254 characters |
-| `phoneNumber` | Optional; E.164 format, such as `+94771234567` |
 | `password` | Required; 10-72 characters |
-| `type` | Required; `CUSTOMER` or `SERVICE_PROVIDER` |
+| `accountType` | Required; `CUSTOMER` or `SERVICE_PROVIDER` |
 
-Usernames and emails are normalized to lowercase. Username, email, and phone number must be unique.
+Emails are normalized to lowercase and must be unique.
 
 ### Success: `201 Created`
 
@@ -80,7 +76,7 @@ Usernames and emails are normalized to lowercase. Username, email, and phone num
   "id": 25,
   "username": "customer01",
   "email": "customer@example.com",
-  "phoneNumber": "+94771234567",
+  "phoneNumber": null,
   "status": "PENDING",
   "emailVerified": false,
   "phoneVerified": false,
@@ -95,7 +91,7 @@ The backend sends a six-digit OTP to the email address. The user cannot log in u
 ### Common errors
 
 - `400 Bad Request`: invalid fields.
-- `409 Conflict`: username, email, or phone number is already registered.
+- `409 Conflict`: email is already registered.
 - `429 Too Many Requests`: an OTP was requested again before the resend cooldown ended.
 - `500 Internal Server Error`: email delivery/configuration failed.
 
@@ -187,20 +183,20 @@ POST /api/v1/auth/login
 
 No authentication is required. OTP is not required for normal login after email verification.
 
-### Request using username
+### Request using username or email
 
 ```json
 {
-  "username": "customer01",
+  "identifier": "customer01",
   "password": "StrongPassword123"
 }
 ```
 
-The `username` field also accepts an email:
+The `identifier` field accepts an email too:
 
 ```json
 {
-  "username": "customer@example.com",
+  "identifier": "customer@example.com",
   "password": "StrongPassword123"
 }
 ```
@@ -227,7 +223,7 @@ The `username` field also accepts an email:
 
 ### Errors
 
-- `400 Bad Request`: username/email or password is blank.
+- `400 Bad Request`: identifier or password is blank.
 - `401 Unauthorized`: credentials are incorrect or the account is not `ACTIVE`.
 
 For security, the backend returns the same message for an unknown account and an incorrect password:
@@ -286,11 +282,12 @@ The frontend obtains a Google ID token using Google Identity Services and sends 
 ```json
 {
   "idToken": "google-id-token",
-  "type": "CUSTOMER"
+  "accountType": "CUSTOMER"
 }
 ```
 
-`type` is currently required on every request. It is used when creating a new account; an existing linked account retains its saved role.
+`accountType` is required on every request. It is used when creating a new account;
+an existing linked account retains its saved role.
 
 ### Success: `200 OK`
 
@@ -300,7 +297,7 @@ The backend verifies the Google signature, issuer, expiry, audience, and verifie
 
 ### Errors
 
-- `400 Bad Request`: ID token or type is missing.
+- `400 Bad Request`: ID token or account type is missing.
 - `401 Unauthorized`: invalid Google token, inactive account, broken link, or an administrative account attempted Google login.
 
 ## 7. Phone OTP registration/login
@@ -313,21 +310,12 @@ Phone OTP authentication is intended only for `CUSTOMER` and `SERVICE_PROVIDER` 
 POST /api/v1/auth/otp/request
 ```
 
-Registration request:
+The same request is used for registration and login:
 
 ```json
 {
   "phoneNumber": "+94771234567",
-  "purpose": "REGISTER"
-}
-```
-
-Login request:
-
-```json
-{
-  "phoneNumber": "+94771234567",
-  "purpose": "LOGIN"
+  "accountType": "SERVICE_PROVIDER"
 }
 ```
 
@@ -342,7 +330,7 @@ Login request:
 
 The response is intentionally generic to prevent phone-number discovery.
 
-### Verify an OTP and register
+### Verify an OTP
 
 ```http
 POST /api/v1/auth/otp/verify
@@ -352,24 +340,13 @@ POST /api/v1/auth/otp/verify
 {
   "phoneNumber": "+94771234567",
   "otp": "123456",
-  "purpose": "REGISTER",
-  "type": "SERVICE_PROVIDER"
+  "accountType": "SERVICE_PROVIDER"
 }
 ```
 
-`type` is required for phone registration.
-
-### Verify an OTP and log in
-
-```json
-{
-  "phoneNumber": "+94771234567",
-  "otp": "123456",
-  "purpose": "LOGIN"
-}
-```
-
-`type` is optional for phone login.
+`accountType` is always required. If the phone number does not exist, the backend
+registers it with that account type. If it exists and its account type matches,
+the backend logs it in. The generic OTP-request response prevents account discovery.
 
 ### Success: `200 OK`
 
@@ -394,7 +371,7 @@ Authorization: Bearer <super-admin-access-token>
   "email": "customer02@example.com",
   "phoneNumber": "+94771234568",
   "password": "StrongPassword123",
-  "role": "CUSTOMER"
+  "accountType": "CUSTOMER"
 }
 ```
 
@@ -406,7 +383,7 @@ Authorization: Bearer <super-admin-access-token>
   "email": "provider02@example.com",
   "phoneNumber": "+94771234569",
   "password": "StrongPassword123",
-  "role": "SERVICE_PROVIDER"
+  "accountType": "SERVICE_PROVIDER"
 }
 ```
 
