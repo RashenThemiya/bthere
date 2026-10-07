@@ -51,6 +51,14 @@ public class ProviderTypeService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ProviderTypeResponse> listAllTypes() {
+        return providerTypeRepository.findAllByOrderByNameAsc()
+                .stream()
+                .map(this::toTypeResponse)
+                .toList();
+    }
+
     @Transactional
     public ProviderTypeResponse createType(CreateProviderTypeRequest request) {
         String name = request.name().trim();

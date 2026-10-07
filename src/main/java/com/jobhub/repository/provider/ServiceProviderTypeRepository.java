@@ -12,6 +12,8 @@ public interface ServiceProviderTypeRepository extends JpaRepository<ServiceProv
 
     List<ServiceProviderType> findAllByStatusOrderByNameAsc(String status);
 
+    List<ServiceProviderType> findAllByOrderByNameAsc();
+
     List<ServiceProviderType> findAllByServiceProviderTypeIdInAndStatus(
             Collection<Long> ids,
             String status
