@@ -20,5 +20,6 @@ public record CreateServiceOptionRequest(
         @Min(1) Integer requiredProviderCount,
         String bookingMode,
         String providerSelectionMode,
-        String pricingOwner
+        String pricingOwner,
+        Set<@NotBlank String> allowedPaymentMethods
 ) {}

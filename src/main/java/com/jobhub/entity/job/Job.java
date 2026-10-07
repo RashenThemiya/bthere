@@ -59,6 +59,7 @@ public class Job extends AuditedEntity {
     private BigDecimal platformFee;
     private BigDecimal totalAmount;
     private String jobStatus;
+    private String paymentMethod;
     private String paymentStatus;
 }
 

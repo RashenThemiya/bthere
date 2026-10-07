@@ -69,6 +69,7 @@ public class CustomerBookingService {
         if (!option.getDeliveryModes().contains(mode)) {
             throw new IllegalArgumentException("Delivery mode is not enabled for this option");
         }
+        String paymentMethod = resolvePaymentMethod(option, request.paymentMethod());
 
         BookingTime time = resolveTime(option, request);
         Location location = resolveLocation(assignment, option, mode, request);
@@ -126,6 +127,7 @@ public class CustomerBookingService {
         job.setTotalAmount(price.amount());
         job.setCustomerNote(trim(request.customerNote()));
         job.setJobStatus("PENDING");
+        job.setPaymentMethod(paymentMethod);
         job.setPaymentStatus("PENDING");
         job = jobRepository.save(job);
         saveProviderAssignments(job.getJobId(), providerIds);
@@ -478,7 +480,28 @@ public class CustomerBookingService {
                 job.getDestinationLatitude(), job.getDestinationLongitude(),
                 job.getDestinationAddress(), job.getEstimatedDistanceKm(),
                 job.getEstimatedDurationMinutes(), job.getRateId(), job.getCurrencyCode(),
-                job.getExpectedAmount(), job.getJobStatus(), answers);
+                job.getExpectedAmount(), job.getPaymentMethod(), job.getPaymentStatus(),
+                job.getJobStatus(), answers);
+    }
+
+    static String resolvePaymentMethod(ServiceOption option, String requestedMethod) {
+        Set<String> allowed = option.getAllowedPaymentMethods();
+        if (allowed == null || allowed.isEmpty()) {
+            allowed = Set.of(
+                    "CASH", "CARD", "BANK_TRANSFER", "WALLET", "EZ_CASH", "KOKO");
+        }
+        if (requestedMethod == null || requestedMethod.isBlank()) {
+            if (allowed.contains("CASH")) return "CASH";
+            throw new IllegalArgumentException(
+                    "Select a payment method allowed for this service option");
+        }
+        String normalized = requestedMethod.trim().toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", "_");
+        if (!allowed.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "Payment method is not allowed for this service option");
+        }
+        return normalized;
     }
 
     private void require(boolean valid, ServiceCustomField field) {

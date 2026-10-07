@@ -27,7 +27,8 @@ public record CreateBookingRequest(
         Long providerLocationId,
         @Valid MeetingPoint meetingPoint,
         @Size(max = 4000) String customerNote,
-        List<@Valid Answer> answers
+        List<@Valid Answer> answers,
+        String paymentMethod
 ) {
     public record Answer(@NotNull Long fieldId, @NotNull JsonNode value) {}
 

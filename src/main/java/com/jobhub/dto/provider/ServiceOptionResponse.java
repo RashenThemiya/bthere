@@ -21,6 +21,7 @@ public record ServiceOptionResponse(
         String bookingMode,
         String providerSelectionMode,
         String pricingOwner,
+        Set<String> allowedPaymentMethods,
         List<DeliveryModeConfiguration> deliveryModeConfigurations
 ) {
     public record DeliveryModeConfiguration(

@@ -30,6 +30,8 @@ public record BookingResponse(
         Long rateId,
         String currencyCode,
         BigDecimal expectedAmount,
+        String paymentMethod,
+        String paymentStatus,
         String status,
         Map<String, JsonNode> answers
 ) {}

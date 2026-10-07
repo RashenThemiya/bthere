@@ -36,6 +36,13 @@ public class ServiceOption extends AuditedEntity {
     private String pricingOwner = "ADMIN";
 
     @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "service_option_payment_method",
+            joinColumns = @JoinColumn(name = "option_id"))
+    @Column(name = "payment_method", nullable = false, length = 30)
+    private Set<String> allowedPaymentMethods = new LinkedHashSet<>(Set.of(
+            "CASH", "CARD", "BANK_TRANSFER", "WALLET", "EZ_CASH", "KOKO"));
+
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "service_option_delivery_mode",
             joinColumns = @JoinColumn(name = "option_id"))
     @Column(name = "delivery_mode", nullable = false, length = 40)

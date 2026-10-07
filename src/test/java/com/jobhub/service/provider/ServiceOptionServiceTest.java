@@ -79,6 +79,33 @@ class ServiceOptionServiceTest {
     }
 
     @Test
+    void defaultsToAllPaymentMethodsWhenOmitted() {
+        stubSave();
+        ServiceOptionResponse response = service.create(1L, request(null, null, null));
+
+        assertThat(response.allowedPaymentMethods()).containsExactlyInAnyOrder(
+                "CASH", "CARD", "BANK_TRANSFER", "WALLET", "EZ_CASH", "KOKO");
+    }
+
+    @Test
+    void acceptsConfiguredPaymentMethods() {
+        stubSave();
+        ServiceOptionResponse response = service.create(
+                1L, request(null, null, Set.of("cash", "card")));
+
+        assertThat(response.allowedPaymentMethods()).containsExactlyInAnyOrder("CASH", "CARD");
+    }
+
+    @Test
+    void rejectsUnsupportedPaymentMethod() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.create(
+                        1L, request(null, null, Set.of("CRYPTO"))))
+                .withMessage("Payment method must be CASH, CARD, BANK_TRANSFER, WALLET, "
+                        + "EZ_CASH or KOKO");
+    }
+
+    @Test
     void rejectsUnsupportedPricingOwner() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> service.create(1L, request(null, "CUSTOMER")))
@@ -98,9 +125,16 @@ class ServiceOptionServiceTest {
 
     private CreateServiceOptionRequest request(
             String providerSelectionMode, String pricingOwner) {
+        return request(providerSelectionMode, pricingOwner, null);
+    }
+
+    private CreateServiceOptionRequest request(
+            String providerSelectionMode, String pricingOwner,
+            Set<String> allowedPaymentMethods) {
         return new CreateServiceOptionRequest("HOME_CARE", "Home Care", null, 1,
                 "TIME_BASED", null, true, Set.of("PROVIDER_TO_CUSTOMER"),
-                "ONE_TO_ONE", 1, 1, "ONE_AT_A_TIME", providerSelectionMode, pricingOwner);
+                "ONE_TO_ONE", 1, 1, "ONE_AT_A_TIME", providerSelectionMode, pricingOwner,
+                allowedPaymentMethods);
     }
 
     private void stubSave() {

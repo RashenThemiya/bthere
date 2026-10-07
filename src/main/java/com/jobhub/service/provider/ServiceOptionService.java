@@ -27,6 +27,8 @@ public class ServiceOptionService {
     private static final Set<String> PROVIDER_SELECTION_MODES = Set.of(
             "OPEN_REQUEST", "DIRECT_REQUEST");
     private static final Set<String> PRICING_OWNERS = Set.of("ADMIN", "PROVIDER");
+    private static final Set<String> PAYMENT_METHODS = Set.of(
+            "CASH", "CARD", "BANK_TRANSFER", "WALLET", "EZ_CASH", "KOKO");
 
     private static final Set<String> LANGUAGES = Set.of("SINHALA", "ENGLISH", "TAMIL");
 
@@ -298,6 +300,16 @@ public class ServiceOptionService {
             throw new IllegalArgumentException("Pricing owner must be ADMIN or PROVIDER");
         }
         option.setPricingOwner(pricingOwner);
+        Set<String> paymentMethods = request.allowedPaymentMethods() == null
+                || request.allowedPaymentMethods().isEmpty()
+                ? PAYMENT_METHODS : request.allowedPaymentMethods().stream()
+                .map(this::normalizeCode)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (!PAYMENT_METHODS.containsAll(paymentMethods)) {
+            throw new IllegalArgumentException(
+                    "Payment method must be CASH, CARD, BANK_TRANSFER, WALLET, EZ_CASH or KOKO");
+        }
+        option.setAllowedPaymentMethods(paymentMethods);
     }
 
     private String normalizeCode(String value) {
@@ -322,6 +334,8 @@ public class ServiceOptionService {
                         ? "OPEN_REQUEST" : item.getProviderSelectionMode(),
                 item.getPricingOwner() == null || item.getPricingOwner().isBlank()
                         ? "ADMIN" : item.getPricingOwner(),
+                item.getAllowedPaymentMethods() == null || item.getAllowedPaymentMethods().isEmpty()
+                        ? PAYMENT_METHODS : Set.copyOf(item.getAllowedPaymentMethods()),
                 item.getDeliveryModes().stream().sorted().map(mode -> deliveryConfiguration(
                         mode, item.isLocationEnabled())).toList());
     }
