@@ -194,4 +194,21 @@ class JobhubApplicationTests {
                 .andExpect(header().string("Access-Control-Allow-Headers",
                         org.hamcrest.Matchers.containsStringIgnoringCase("Authorization")));
     }
+
+    @Test
+    void adminLoginPreflightAllowsLocalDevelopmentOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/auth/login")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Content-Type, Authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin",
+                        "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Allow-Methods",
+                        org.hamcrest.Matchers.containsString("POST")))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.containsStringIgnoringCase("Content-Type")))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.containsStringIgnoringCase("Authorization")));
+    }
 }
