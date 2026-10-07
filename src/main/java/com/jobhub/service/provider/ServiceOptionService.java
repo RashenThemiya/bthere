@@ -24,6 +24,8 @@ public class ServiceOptionService {
     private static final Set<String> FULFILLMENT_MODELS = Set.of(
             "ONE_TO_ONE", "MANY_CUSTOMERS_ONE_PROVIDER", "ONE_CUSTOMER_MANY_PROVIDERS");
     private static final Set<String> BOOKING_MODES = Set.of("ONE_AT_A_TIME", "MANY_AT_A_TIME");
+    private static final Set<String> PROVIDER_SELECTION_MODES = Set.of(
+            "OPEN_REQUEST", "DIRECT_REQUEST");
 
     private static final Set<String> LANGUAGES = Set.of("SINHALA", "ENGLISH", "TAMIL");
 
@@ -281,6 +283,14 @@ public class ServiceOptionService {
                     "Booking mode must be ONE_AT_A_TIME or MANY_AT_A_TIME");
         }
         option.setBookingMode(bookingMode);
+        String providerSelectionMode = request.providerSelectionMode() == null
+                || request.providerSelectionMode().isBlank()
+                ? "OPEN_REQUEST" : normalizeCode(request.providerSelectionMode());
+        if (!PROVIDER_SELECTION_MODES.contains(providerSelectionMode)) {
+            throw new IllegalArgumentException(
+                    "Provider selection mode must be OPEN_REQUEST or DIRECT_REQUEST");
+        }
+        option.setProviderSelectionMode(providerSelectionMode);
     }
 
     private String normalizeCode(String value) {
@@ -301,6 +311,8 @@ public class ServiceOptionService {
                 item.getDefaultCapacity() == null ? 1 : item.getDefaultCapacity(),
                 item.getRequiredProviderCount() == null ? 1 : item.getRequiredProviderCount(),
                 item.getBookingMode() == null ? "MANY_AT_A_TIME" : item.getBookingMode(),
+                item.getProviderSelectionMode() == null || item.getProviderSelectionMode().isBlank()
+                        ? "OPEN_REQUEST" : item.getProviderSelectionMode(),
                 item.getDeliveryModes().stream().sorted().map(mode -> deliveryConfiguration(
                         mode, item.isLocationEnabled())).toList());
     }

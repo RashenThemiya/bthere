@@ -19,6 +19,7 @@ public record ServiceOptionResponse(
         Integer defaultCapacity,
         Integer requiredProviderCount,
         String bookingMode,
+        String providerSelectionMode,
         List<DeliveryModeConfiguration> deliveryModeConfigurations
 ) {
     public record DeliveryModeConfiguration(

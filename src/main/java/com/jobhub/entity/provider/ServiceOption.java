@@ -30,6 +30,8 @@ public class ServiceOption extends AuditedEntity {
     private Integer defaultCapacity = 1;
     private Integer requiredProviderCount = 1;
     private String bookingMode = "MANY_AT_A_TIME";
+    @Column(nullable = false, length = 30)
+    private String providerSelectionMode = "OPEN_REQUEST";
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "service_option_delivery_mode",
