@@ -57,22 +57,50 @@ class ServiceOptionServiceTest {
     @Test
     void acceptsDirectRequestMode() {
         stubSave();
-        ServiceOptionResponse response = service.create(1L, request("direct_request"));
+        ServiceOptionResponse response = service.create(1L, request("direct_request", null));
 
         assertThat(response.providerSelectionMode()).isEqualTo("DIRECT_REQUEST");
     }
 
     @Test
+    void defaultsPricingOwnerToAdminWhenOmitted() {
+        stubSave();
+        ServiceOptionResponse response = service.create(1L, request(null, null));
+
+        assertThat(response.pricingOwner()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void acceptsProviderPricingOwner() {
+        stubSave();
+        ServiceOptionResponse response = service.create(1L, request(null, "provider"));
+
+        assertThat(response.pricingOwner()).isEqualTo("PROVIDER");
+    }
+
+    @Test
+    void rejectsUnsupportedPricingOwner() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.create(1L, request(null, "CUSTOMER")))
+                .withMessage("Pricing owner must be ADMIN or PROVIDER");
+    }
+
+    @Test
     void rejectsUnsupportedProviderSelectionMode() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> service.create(1L, request("BOTH")))
+                .isThrownBy(() -> service.create(1L, request("BOTH", null)))
                 .withMessage("Provider selection mode must be OPEN_REQUEST or DIRECT_REQUEST");
     }
 
     private CreateServiceOptionRequest request(String providerSelectionMode) {
+        return request(providerSelectionMode, null);
+    }
+
+    private CreateServiceOptionRequest request(
+            String providerSelectionMode, String pricingOwner) {
         return new CreateServiceOptionRequest("HOME_CARE", "Home Care", null, 1,
                 "TIME_BASED", null, true, Set.of("PROVIDER_TO_CUSTOMER"),
-                "ONE_TO_ONE", 1, 1, "ONE_AT_A_TIME", providerSelectionMode);
+                "ONE_TO_ONE", 1, 1, "ONE_AT_A_TIME", providerSelectionMode, pricingOwner);
     }
 
     private void stubSave() {

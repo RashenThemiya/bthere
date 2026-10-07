@@ -19,5 +19,6 @@ public record CreateServiceOptionRequest(
         @Min(1) Integer defaultCapacity,
         @Min(1) Integer requiredProviderCount,
         String bookingMode,
-        String providerSelectionMode
+        String providerSelectionMode,
+        String pricingOwner
 ) {}

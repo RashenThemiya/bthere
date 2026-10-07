@@ -26,6 +26,7 @@ public class ServiceOptionService {
     private static final Set<String> BOOKING_MODES = Set.of("ONE_AT_A_TIME", "MANY_AT_A_TIME");
     private static final Set<String> PROVIDER_SELECTION_MODES = Set.of(
             "OPEN_REQUEST", "DIRECT_REQUEST");
+    private static final Set<String> PRICING_OWNERS = Set.of("ADMIN", "PROVIDER");
 
     private static final Set<String> LANGUAGES = Set.of("SINHALA", "ENGLISH", "TAMIL");
 
@@ -291,6 +292,12 @@ public class ServiceOptionService {
                     "Provider selection mode must be OPEN_REQUEST or DIRECT_REQUEST");
         }
         option.setProviderSelectionMode(providerSelectionMode);
+        String pricingOwner = request.pricingOwner() == null || request.pricingOwner().isBlank()
+                ? "ADMIN" : normalizeCode(request.pricingOwner());
+        if (!PRICING_OWNERS.contains(pricingOwner)) {
+            throw new IllegalArgumentException("Pricing owner must be ADMIN or PROVIDER");
+        }
+        option.setPricingOwner(pricingOwner);
     }
 
     private String normalizeCode(String value) {
@@ -313,6 +320,8 @@ public class ServiceOptionService {
                 item.getBookingMode() == null ? "MANY_AT_A_TIME" : item.getBookingMode(),
                 item.getProviderSelectionMode() == null || item.getProviderSelectionMode().isBlank()
                         ? "OPEN_REQUEST" : item.getProviderSelectionMode(),
+                item.getPricingOwner() == null || item.getPricingOwner().isBlank()
+                        ? "ADMIN" : item.getPricingOwner(),
                 item.getDeliveryModes().stream().sorted().map(mode -> deliveryConfiguration(
                         mode, item.isLocationEnabled())).toList());
     }

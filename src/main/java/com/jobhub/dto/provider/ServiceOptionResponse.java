@@ -20,6 +20,7 @@ public record ServiceOptionResponse(
         Integer requiredProviderCount,
         String bookingMode,
         String providerSelectionMode,
+        String pricingOwner,
         List<DeliveryModeConfiguration> deliveryModeConfigurations
 ) {
     public record DeliveryModeConfiguration(

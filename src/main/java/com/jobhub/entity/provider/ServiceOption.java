@@ -32,6 +32,8 @@ public class ServiceOption extends AuditedEntity {
     private String bookingMode = "MANY_AT_A_TIME";
     @Column(nullable = false, length = 30)
     private String providerSelectionMode = "OPEN_REQUEST";
+    @Column(nullable = false, length = 20)
+    private String pricingOwner = "ADMIN";
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "service_option_delivery_mode",
