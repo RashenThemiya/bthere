@@ -4,6 +4,8 @@ import com.jobhub.dto.upload.FileUploadResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -37,11 +39,21 @@ public class S3ImageUploadService {
     @Value("${app.storage.s3.public-base-url:}")
     private String publicBaseUrl;
 
-    public FileUploadResponse uploadProviderImage(Long userId, MultipartFile file) {
+    public FileUploadResponse uploadImage(String keyPrefix, MultipartFile file) {
         validate(file);
         String contentType = file.getContentType().toLowerCase();
-        String key = "providers/" + userId + "/images/"
-                + UUID.randomUUID() + EXTENSIONS.get(contentType);
+        String key = keyPrefix + "/" + UUID.randomUUID() + EXTENSIONS.get(contentType);
+
+        byte[] imageBytes;
+        try {
+            imageBytes = file.getBytes();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not read the uploaded image", exception);
+        }
+        if (!matchesContentType(imageBytes, contentType)) {
+            throw new IllegalArgumentException(
+                    "Image content does not match its JPG, PNG or WebP content type");
+        }
 
         PutObjectRequest request = PutObjectRequest.builder()
                 .bucket(requireBucket())
@@ -49,14 +61,7 @@ public class S3ImageUploadService {
                 .contentType(contentType)
                 .contentLength(file.getSize())
                 .build();
-        try {
-            s3Client.putObject(
-                    request,
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize())
-            );
-        } catch (IOException exception) {
-            throw new IllegalStateException("Could not read the uploaded image", exception);
-        }
+        s3Client.putObject(request, RequestBody.fromBytes(imageBytes));
 
         return new FileUploadResponse(
                 key,
@@ -71,12 +76,34 @@ public class S3ImageUploadService {
             throw new IllegalArgumentException("Image file is required");
         }
         if (file.getSize() > MAX_IMAGE_BYTES) {
-            throw new IllegalArgumentException("Image must not exceed 10 MB");
+            throw new ResponseStatusException(
+                    HttpStatus.PAYLOAD_TOO_LARGE,
+                    "Image must not exceed 10 MB");
         }
         String contentType = file.getContentType();
         if (contentType == null || !EXTENSIONS.containsKey(contentType.toLowerCase())) {
             throw new IllegalArgumentException("Only JPG, PNG and WebP images are allowed");
         }
+    }
+
+    private boolean matchesContentType(byte[] bytes, String contentType) {
+        return switch (contentType) {
+            case "image/jpeg" -> bytes.length >= 3
+                    && (bytes[0] & 0xff) == 0xff
+                    && (bytes[1] & 0xff) == 0xd8
+                    && (bytes[2] & 0xff) == 0xff;
+            case "image/png" -> bytes.length >= 8
+                    && (bytes[0] & 0xff) == 0x89
+                    && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47
+                    && bytes[4] == 0x0d && bytes[5] == 0x0a
+                    && bytes[6] == 0x1a && bytes[7] == 0x0a;
+            case "image/webp" -> bytes.length >= 12
+                    && bytes[0] == 'R' && bytes[1] == 'I'
+                    && bytes[2] == 'F' && bytes[3] == 'F'
+                    && bytes[8] == 'W' && bytes[9] == 'E'
+                    && bytes[10] == 'B' && bytes[11] == 'P';
+            default -> false;
+        };
     }
 
     private String requireBucket() {

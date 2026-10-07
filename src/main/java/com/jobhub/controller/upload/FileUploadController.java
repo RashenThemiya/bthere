@@ -7,6 +7,7 @@ import com.jobhub.service.upload.S3ImageUploadService;
 import com.jobhub.service.upload.S3PrivateDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,9 +34,11 @@ public class FileUploadController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @RequestPart("file") MultipartFile file
     ) {
-        return ResponseEntity.ok(
-                imageUploadService.uploadProviderImage(user.id(), file)
-        );
+        String keyPrefix = user.roles().contains("SUPER_ADMIN")
+                ? "service-icons"
+                : "providers/" + user.id() + "/images";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(imageUploadService.uploadImage(keyPrefix, file));
     }
 
     @PostMapping(
