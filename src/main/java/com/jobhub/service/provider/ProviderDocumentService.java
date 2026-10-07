@@ -67,6 +67,7 @@ public class ProviderDocumentService {
         DocumentType type = new DocumentType();
         type.setName(name);
         type.setDescription(optional(request.description()));
+        type.setRequired(false);
         type.setHasExpiry(request.hasExpiry());
         type.setStatus("ACTIVE");
         return toTypeResponse(documentTypeRepository.save(type));
