@@ -352,7 +352,17 @@ the backend logs it in. The generic OTP-request response prevents account discov
 
 Returns the standard `LoginResponse`.
 
-Phone OTP is unavailable until AWS SNS SMS is configured and approved for the destination country.
+Phone OTP is unavailable until Text.lk is enabled with a valid API token and sender ID. Initial values can be supplied through `TEXTLK_API_TOKEN` and `TEXTLK_SENDER_ID`. A `SUPER_ADMIN` can update them through `PUT /api/v1/admin/settings/sms`:
+
+```json
+{
+  "apiToken": "new-token-or-omit-to-keep-current",
+  "senderId": "CareHub",
+  "enabled": true
+}
+```
+
+`GET /api/v1/admin/settings/sms` returns the current sender and enabled state, but only a masked version of the API token.
 
 ## 8. Super Admin creates an account without OTP
 

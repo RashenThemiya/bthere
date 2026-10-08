@@ -96,9 +96,9 @@ Content-Type: application/json
 }
 ```
 
-Resend with `POST /api/v1/auth/email/resend` and an `email` field. Configure a verified SES sender using `AWS_SES_FROM_EMAIL`. The EC2 IAM role requires `ses:SendEmail` in addition to `sns:Publish`. While SES is in its sandbox, recipient addresses must also be verified.
+Resend with `POST /api/v1/auth/email/resend` and an `email` field. Configure a verified SES sender using `AWS_SES_FROM_EMAIL`. The EC2 IAM role requires `ses:SendEmail`. While SES is in its sandbox, recipient addresses must also be verified.
 
-### Phone OTP authentication with AWS SNS
+### Phone OTP authentication with Text.lk
 
 Request an OTP for registration or login:
 
@@ -129,7 +129,7 @@ The backend automatically registers a new phone number or logs in an existing
 matching account. Successful verification returns the normal JobHub access and
 refresh tokens.
 
-Configure `OTP_HASH_SECRET`, `AWS_REGION`, and optionally `AWS_SNS_SENDER_ID`. On EC2, attach an instance IAM role that permits `sns:Publish`; do not store permanent AWS keys in the repository. The AWS SDK uses its default credential chain, including EC2 instance-role credentials. New AWS SNS SMS accounts may initially be in the SMS sandbox, where destination numbers must be verified before messages can be sent.
+Configure `OTP_HASH_SECRET`, `TEXTLK_API_TOKEN`, and `TEXTLK_SENDER_ID`. On first startup, the Text.lk values are copied into the database. A `SUPER_ADMIN` can later read or update the active configuration through `GET` or `PUT /api/v1/admin/settings/sms`; omit `apiToken` in a `PUT` request to retain the existing token. The token is masked in API responses.
 
 ### Database schema
 

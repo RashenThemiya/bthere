@@ -100,19 +100,19 @@ public class MarketServiceOfferingService {
 
     @Transactional
     public JobRateResponse updateRate(Long actorId, Long offeringId, Long rateId,
-                                      CreateJobRateRequest request) {
+                                      UpdateJobRateRequest request) {
         MarketServiceOffering offering = requireOffering(offeringId);
         JobRate rate = requireRate(offering, rateId);
-        ServiceOption option = validateRate(offering, request);
-        if (request.effectiveFrom() != null && request.effectiveTo() != null
+        ServiceOption option = validateUpdateRate(offering, request);
+        if (request.effectiveTo() != null
                 && request.effectiveTo().isBefore(request.effectiveFrom()))
             throw new IllegalArgumentException("Effective-to cannot be before effective-from");
         var old = rateResponse(rate);
         rate.setBillingType(request.billingType().trim().toUpperCase());
-        rate.setServiceOptionId(option == null ? rate.getServiceOptionId() : option.getOptionId());
+        rate.setServiceOptionId(option == null ? null : option.getOptionId());
         rate.setDurationMinutes(request.durationMinutes()); rate.setRate(request.rate());
         applyPricing(rate, request);
-        rate.setEffectiveFrom(request.effectiveFrom() == null ? rate.getEffectiveFrom() : request.effectiveFrom());
+        rate.setEffectiveFrom(request.effectiveFrom());
         rate.setEffectiveTo(request.effectiveTo()); rateRepository.save(rate);
         auditService.record(actorId, "JOB_RATE_UPDATED", "JOB_RATE", rateId, old, rateResponse(rate));
         return rateResponse(rate);
@@ -179,7 +179,87 @@ public class MarketServiceOfferingService {
                     "Geographical override requires area name, latitude, longitude and radius");
         return option;
     }
+
+    private ServiceOption validateUpdateRate(
+            MarketServiceOffering offering,
+            UpdateJobRateRequest request
+    ) {
+        String billingType = request.billingType().trim().toUpperCase();
+        ServiceOption option = null;
+        String schedulingModel = "TIME_BASED";
+
+        if (request.optionId() != null) {
+            option = optionRepository.findByOptionIdAndServiceProviderTypeId(
+                            request.optionId(), offering.getServiceProviderTypeId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Service option was not found"));
+            schedulingModel = option.getSchedulingModel() == null
+                    ? "TIME_BASED"
+                    : option.getSchedulingModel();
+        }
+
+        if ("ROUTE_BASED".equals(schedulingModel)) {
+            if (!"ROUTE_BASED".equals(billingType)
+                    || request.baseFare() == null
+                    || request.pricePerKm() == null
+                    || request.minimumFare() == null) {
+                throw new IllegalArgumentException(
+                        "ROUTE_BASED pricing requires billingType ROUTE_BASED, "
+                                + "baseFare, pricePerKm and minimumFare");
+            }
+            if (request.rate() != null || request.durationMinutes() != null) {
+                throw new IllegalArgumentException(
+                        "ROUTE_BASED pricing does not accept rate or durationMinutes");
+            }
+        } else {
+            if (!Set.of("HOURLY", "DAILY", "FIXED").contains(billingType)
+                    || request.rate() == null) {
+                throw new IllegalArgumentException(
+                        "TIME_BASED pricing requires billingType HOURLY, DAILY or FIXED and rate");
+            }
+            if (request.baseFare() != null
+                    || request.pricePerKm() != null
+                    || request.minimumFare() != null) {
+                throw new IllegalArgumentException(
+                        "TIME_BASED pricing does not accept route pricing fields");
+            }
+        }
+
+        validateGeographicalArea(
+                request.geographicalAreaName(),
+                request.areaLatitude(),
+                request.areaLongitude(),
+                request.areaRadiusKm()
+        );
+        return option;
+    }
+
+    private void validateGeographicalArea(
+            String name,
+            java.math.BigDecimal latitude,
+            java.math.BigDecimal longitude,
+            java.math.BigDecimal radiusKm
+    ) {
+        boolean anyArea = name != null || latitude != null || longitude != null || radiusKm != null;
+        boolean completeArea = name != null && !name.isBlank()
+                && latitude != null && longitude != null && radiusKm != null;
+        if (anyArea && !completeArea) {
+            throw new IllegalArgumentException(
+                    "Geographical override requires area name, latitude, longitude and radius");
+        }
+    }
     private void applyPricing(JobRate rate, CreateJobRateRequest request) {
+        rate.setBaseFare(request.baseFare());
+        rate.setPricePerKm(request.pricePerKm());
+        rate.setMinimumFare(request.minimumFare());
+        rate.setGeographicalAreaName(request.geographicalAreaName() == null
+                ? null : request.geographicalAreaName().trim());
+        rate.setAreaLatitude(request.areaLatitude());
+        rate.setAreaLongitude(request.areaLongitude());
+        rate.setAreaRadiusKm(request.areaRadiusKm());
+    }
+
+    private void applyPricing(JobRate rate, UpdateJobRateRequest request) {
         rate.setBaseFare(request.baseFare());
         rate.setPricePerKm(request.pricePerKm());
         rate.setMinimumFare(request.minimumFare());

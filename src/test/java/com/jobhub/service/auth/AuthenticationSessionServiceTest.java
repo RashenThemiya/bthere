@@ -45,7 +45,7 @@ class AuthenticationSessionServiceTest {
     @Mock private GoogleIdTokenVerifier googleIdTokenVerifier;
     @Mock private RefreshTokenService refreshTokenService;
     @Mock private OtpHashService otpHashService;
-    @Mock private AwsSnsSmsService smsService;
+    @Mock private TextLkSmsService smsService;
     @Mock private AwsSesEmailService emailService;
     @Mock private HttpServletRequest httpRequest;
 

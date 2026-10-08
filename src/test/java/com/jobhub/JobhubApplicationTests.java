@@ -6,6 +6,7 @@ import com.jobhub.repository.auth.UserAuthProviderRepository;
 import com.jobhub.repository.auth.UserRepository;
 import com.jobhub.repository.auth.UserSessionRepository;
 import com.jobhub.repository.auth.VerificationTokenRepository;
+import com.jobhub.repository.auth.SmsGatewaySettingsRepository;
 import com.jobhub.repository.market.MarketRepository;
 import com.jobhub.repository.customer.CustomerRepository;
 import com.jobhub.repository.provider.DocumentTypeRepository;
@@ -39,7 +40,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MockMvc;
-import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sesv2.SesV2Client;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -82,10 +82,10 @@ class JobhubApplicationTests {
     private VerificationTokenRepository verificationTokenRepository;
 
     @MockitoBean
-    private SnsClient snsClient;
+    private SesV2Client sesV2Client;
 
     @MockitoBean
-    private SesV2Client sesV2Client;
+    private SmsGatewaySettingsRepository smsGatewaySettingsRepository;
 
     @MockitoBean
     private S3Client s3Client;

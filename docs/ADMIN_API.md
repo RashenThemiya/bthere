@@ -159,3 +159,44 @@ also contains:
 
 Older rows that predate scheduling/fulfillment configuration can have null values and
 are intentionally not counted in a subtype until they are updated or used in a new booking.
+
+## Replace a market service rate
+
+```http
+PUT /api/v1/admin/market-services/{offeringId}/rates/{rateId}
+Authorization: Bearer <superadmin-token>
+Content-Type: application/json
+```
+
+This is a complete replacement of the rate's editable pricing fields. Omitted fields
+and fields explicitly set to `null` have the same meaning. `billingType` and
+`effectiveFrom` are always required. `effectiveTo: null` makes the rate open-ended,
+and `optionId: null` selects legacy service-level pricing.
+
+Time-based and legacy service-level pricing require `billingType` to be `HOURLY`,
+`DAILY`, or `FIXED`, and require `rate`. They reject `baseFare`, `pricePerKm`, and
+`minimumFare`. Route-based options require `billingType: ROUTE_BASED`, `baseFare`,
+`pricePerKm`, and `minimumFare`; they reject `rate` and `durationMinutes`.
+
+The four geographical override fields are optional, but must either all be null or
+all be supplied. `effectiveTo`, when supplied, cannot be before `effectiveFrom`.
+
+```json
+{
+  "billingType": "HOURLY",
+  "durationMinutes": 60,
+  "rate": 2500.00,
+  "effectiveFrom": "2026-10-09T08:00:00",
+  "effectiveTo": null,
+  "optionId": 12,
+  "baseFare": null,
+  "pricePerKm": null,
+  "minimumFare": null,
+  "geographicalAreaName": null,
+  "areaLatitude": null,
+  "areaLongitude": null,
+  "areaRadiusKm": null
+}
+```
+
+The update does not change the rate ID, market, service type, currency, or status.

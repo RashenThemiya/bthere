@@ -61,7 +61,7 @@ public class AdminMarketServiceController {
     public ResponseEntity<JobRateResponse> updateRate(
             @AuthenticationPrincipal AuthenticatedUser actor,
             @PathVariable Long offeringId, @PathVariable Long rateId,
-            @Valid @RequestBody CreateJobRateRequest request) {
+            @Valid @RequestBody UpdateJobRateRequest request) {
         return ResponseEntity.ok(service.updateRate(actor.id(), offeringId, rateId, request));
     }
 

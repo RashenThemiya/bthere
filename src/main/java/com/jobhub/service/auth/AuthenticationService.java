@@ -65,7 +65,7 @@ public class AuthenticationService {
     private final GoogleIdTokenVerifier googleIdTokenVerifier;
     private final RefreshTokenService refreshTokenService;
     private final OtpHashService otpHashService;
-    private final AwsSnsSmsService smsService;
+    private final TextLkSmsService smsService;
     private final AwsSesEmailService emailService;
     private final SecureRandom secureRandom = new SecureRandom();
 
