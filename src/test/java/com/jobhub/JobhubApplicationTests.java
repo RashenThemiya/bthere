@@ -29,6 +29,8 @@ import com.jobhub.repository.provider.ServiceCustomFieldRepository;
 import com.jobhub.repository.provider.ProviderCustomFieldSubmissionRepository;
 import com.jobhub.repository.audit.AuditLogRepository;
 import com.jobhub.repository.market.MarketServiceOfferingRepository;
+import com.jobhub.repository.market.RefundPolicyRepository;
+import com.jobhub.repository.market.RefundPolicyTierRepository;
 import com.jobhub.repository.job.JobRateRepository;
 import com.jobhub.repository.job.JobRepository;
 import com.jobhub.repository.job.JobCustomFieldAnswerRepository;
@@ -158,6 +160,12 @@ class JobhubApplicationTests {
 
     @MockitoBean
     private MarketServiceOfferingRepository marketServiceOfferingRepository;
+
+    @MockitoBean
+    private RefundPolicyRepository refundPolicyRepository;
+
+    @MockitoBean
+    private RefundPolicyTierRepository refundPolicyTierRepository;
 
     @MockitoBean
     private JobRateRepository jobRateRepository;
