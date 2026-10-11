@@ -496,4 +496,9 @@ After every successful login or verification:
 3. Use the returned `user.roles` to choose the customer, provider, or admin interface.
 4. Call `GET /api/v1/users/me` when restoring an existing session.
 
+The `user` object returned by login, verification, refresh, and
+`GET /api/v1/users/me` includes `marketId`. For a `SERVICE_PROVIDER`, this is the
+active selected market ID; it is `null` until a market has been selected. It is also
+`null` for customer and administrative accounts.
+
 Do not grant frontend access based only on hidden buttons or local role state. The backend remains responsible for authorization.

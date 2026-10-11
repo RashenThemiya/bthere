@@ -14,6 +14,7 @@ import com.jobhub.security.GoogleIdTokenVerifier;
 import com.jobhub.security.JwtService;
 import com.jobhub.security.OtpHashService;
 import com.jobhub.security.RefreshTokenService;
+import com.jobhub.service.provider.ProviderMarketLookupService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +48,7 @@ class AuthenticationSessionServiceTest {
     @Mock private OtpHashService otpHashService;
     @Mock private TextLkSmsService smsService;
     @Mock private AwsSesEmailService emailService;
+    @Mock private ProviderMarketLookupService providerMarketLookupService;
     @Mock private HttpServletRequest httpRequest;
 
     @InjectMocks

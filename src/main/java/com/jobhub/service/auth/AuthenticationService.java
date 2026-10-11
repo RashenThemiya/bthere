@@ -32,6 +32,7 @@ import com.jobhub.security.GoogleIdTokenVerifier;
 import com.jobhub.security.GoogleIdentity;
 import com.jobhub.security.RefreshTokenService;
 import com.jobhub.security.OtpHashService;
+import com.jobhub.service.provider.ProviderMarketLookupService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,6 +68,7 @@ public class AuthenticationService {
     private final OtpHashService otpHashService;
     private final TextLkSmsService smsService;
     private final AwsSesEmailService emailService;
+    private final ProviderMarketLookupService providerMarketLookupService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${app.security.refresh-token-days}")
@@ -396,6 +398,9 @@ public class AuthenticationService {
                 user.getUsername(),
                 user.getEmail(),
                 user.getStatus(),
+                roles.contains("SERVICE_PROVIDER")
+                        ? providerMarketLookupService.findActiveMarketId(user.getUserId())
+                        : null,
                 List.copyOf(roles)
         );
 
