@@ -22,7 +22,11 @@ public record ServiceOptionResponse(
         String providerSelectionMode,
         String pricingOwner,
         Set<String> allowedPaymentMethods,
-        List<DeliveryModeConfiguration> deliveryModeConfigurations
+        List<DeliveryModeConfiguration> deliveryModeConfigurations,
+        ServiceMediaPayload icon,
+        ServiceMediaPayload coverImage,
+        List<ServiceMediaPayload> gallery,
+        List<ServiceResponsibilityPayload> responsibilities
 ) {
     public record DeliveryModeConfiguration(
             String code,

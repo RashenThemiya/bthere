@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -134,7 +135,7 @@ class ServiceOptionServiceTest {
         return new CreateServiceOptionRequest("HOME_CARE", "Home Care", null, 1,
                 "TIME_BASED", null, true, Set.of("PROVIDER_TO_CUSTOMER"),
                 "ONE_TO_ONE", 1, 1, "ONE_AT_A_TIME", providerSelectionMode, pricingOwner,
-                allowedPaymentMethods);
+                allowedPaymentMethods, null, null, List.of(), List.of());
     }
 
     private void stubSave() {

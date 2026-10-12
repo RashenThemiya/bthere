@@ -284,6 +284,35 @@ The response also contains `requiredDocumentTypeIds` and
 `missingDocumentTypeIds`, allowing the frontend to show exactly what the
 provider must upload.
 
+Reusable document requirements can be service-wide or option-specific. In the
+service setup `documents` collection, omit `optionId` (or send `null`) for a
+service-wide requirement, or provide an active option ID for a requirement
+that applies only when the provider selects that option:
+
+```json
+{
+  "documents": [
+    {
+      "documentTypeId": 1,
+      "optionId": null,
+      "required": true,
+      "requiresApproval": true
+    },
+    {
+      "documentTypeId": 5,
+      "optionId": 12,
+      "required": true,
+      "requiresApproval": true
+    }
+  ]
+}
+```
+
+The provider uploads a document once against its `documentTypeId`. Any
+service-wide or selected-option requirement using that type reuses the same
+valid document and its existing approval. Selecting an option recalculates
+`requiredDocumentTypeIds`, `missingDocumentTypeIds`, and service approval.
+
 Service skills:
 
 - `GET /api/v1/providers/me/services/{assignmentId}/skills`

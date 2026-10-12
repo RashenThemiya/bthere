@@ -8,6 +8,7 @@ import java.util.List;
 public record ServiceCustomFieldRequest(
         Long optionId,
         @NotBlank String scope,
+        String reuseScope,
         @NotBlank @Size(max = 100) String code,
         @NotBlank @Size(max = 200) String label,
         @Size(max = 1000) String description,

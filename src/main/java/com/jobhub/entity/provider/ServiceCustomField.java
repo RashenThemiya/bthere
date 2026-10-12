@@ -17,6 +17,7 @@ public class ServiceCustomField extends AuditedEntity {
     private Long serviceProviderTypeId;
     private Long optionId;
     private String scope;
+    private String reuseScope;
     private String code;
     private String label;
     @Column(length = 1000)

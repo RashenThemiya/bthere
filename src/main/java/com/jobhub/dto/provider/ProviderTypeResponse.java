@@ -5,6 +5,10 @@ public record ProviderTypeResponse(
         String name,
         String description,
         String iconUrl,
-        String status
+        String status,
+        ServiceMediaPayload icon,
+        ServiceMediaPayload coverImage,
+        java.util.List<ServiceMediaPayload> gallery,
+        java.util.List<ServiceResponsibilityPayload> responsibilities
 ) {
 }

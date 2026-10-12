@@ -11,6 +11,29 @@ booking schemas without backend code changes.
 Leaving `optionId` null applies a field to the complete service. Supplying an
 option ID applies it only to that service option.
 
+## Reusing provider answers
+
+Provider requirements accept `reuseScope`:
+
+- `ASSIGNMENT`: answer separately for each provider-service registration. This
+  is the default and preserves existing behavior.
+- `SERVICE`: reuse an approved answer with the same field `code` and
+  `fieldType` across options belonging to the same service.
+- `PROVIDER`: reuse an approved answer with the same field `code` and
+  `fieldType` across all services belonging to the provider.
+
+`BOOKING_FIELD` definitions must use `ASSIGNMENT`. Reuse is only available for
+`PROVIDER_REQUIREMENT` fields. Reusable definitions must use the same stable
+`code` and compatible `fieldType`, for example `DRIVING_EXPERIENCE` and
+`NUMBER`. Changing the label does not prevent reuse.
+
+When the provider submissions endpoint returns an inherited answer, it uses
+the target field ID and contains `"reused": true`, the configured
+`reuseScope`, and `sourceAssignmentId`. The provider does not submit or verify
+that value again. Submitting a new value for the target field creates an
+assignment-specific replacement and restarts approval when approval is
+required.
+
 ## Admin APIs
 
 - `POST /api/v1/admin/provider-types/{serviceTypeId}/custom-fields`
@@ -28,6 +51,7 @@ Example provider image requirement:
 {
   "optionId": 2,
   "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "SERVICE",
   "code": "VEHICLE_PHOTOS",
   "label": "Vehicle photos",
   "description": "Upload front, rear and side photos",
@@ -50,6 +74,7 @@ Example Hospital Care booking field:
 {
   "optionId": 2,
   "scope": "BOOKING_FIELD",
+  "reuseScope": "ASSIGNMENT",
   "code": "HOSPITAL_NAME",
   "label": "Hospital name",
   "fieldType": "TEXT",
@@ -65,6 +90,7 @@ Example conditional provider field:
 {
   "optionId": null,
   "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "PROVIDER",
   "code": "VEHICLE_REGISTRATION",
   "label": "Vehicle registration",
   "fieldType": "TEXT",

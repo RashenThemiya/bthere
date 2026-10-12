@@ -14,5 +14,8 @@ public record ProviderCustomSubmissionResponse(
         String verificationStatus,
         Long reviewedBy,
         LocalDateTime reviewedAt,
-        String reviewNote
+        String reviewNote,
+        String reuseScope,
+        boolean reused,
+        Long sourceAssignmentId
 ) {}

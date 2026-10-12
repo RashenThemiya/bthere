@@ -47,13 +47,8 @@ public class ProviderServiceApprovalService {
             if (assignment.isEmergencyOverride()) {
                 assignment.setEmergencyOverride(false);
             }
-            Set<Long> required = requiredDocumentTypeIds(
-                    assignment.getServiceProviderTypeId()
-            );
-            Set<Long> satisfied = satisfiedDocumentTypeIds(
-                    providerId,
-                    assignment.getServiceProviderTypeId()
-            );
+            Set<Long> required = requiredDocumentTypeIds(assignment);
+            Set<Long> satisfied = satisfiedDocumentTypeIds(providerId, assignment);
             boolean complete = satisfied.containsAll(required)
                     && skillsComplete(assignment)
                     && certificatesComplete(assignment)
@@ -71,6 +66,18 @@ public class ProviderServiceApprovalService {
         return requirementRepository.findAllByServiceProviderTypeId(providerTypeId)
                 .stream()
                 .filter(ServiceTypeDocumentRequirement::isMandatory)
+                .filter(item -> item.getOptionId() == null)
+                .map(ServiceTypeDocumentRequirement::getDocumentTypeId)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    public Set<Long> requiredDocumentTypeIds(ServiceProviderTypeAssignment assignment) {
+        Set<Long> selectedOptions = selectedOptionIds(assignment.getAssignmentId());
+        return requirementRepository.findAllByServiceProviderTypeId(
+                        assignment.getServiceProviderTypeId()).stream()
+                .filter(ServiceTypeDocumentRequirement::isMandatory)
+                .filter(item -> item.getOptionId() == null
+                        || selectedOptions.contains(item.getOptionId()))
                 .map(ServiceTypeDocumentRequirement::getDocumentTypeId)
                 .collect(java.util.stream.Collectors.toSet());
     }
@@ -95,7 +102,7 @@ public class ProviderServiceApprovalService {
         Set<Long> result = new HashSet<>();
         for (ServiceTypeDocumentRequirement requirement : requirementRepository
                 .findAllByServiceProviderTypeId(providerTypeId)) {
-            if (!requirement.isMandatory()) {
+            if (!requirement.isMandatory() || requirement.getOptionId() != null) {
                 continue;
             }
             documents.stream()
@@ -111,10 +118,50 @@ public class ProviderServiceApprovalService {
         return result;
     }
 
+    public Set<Long> satisfiedDocumentTypeIds(
+            Long providerId, ServiceProviderTypeAssignment assignment) {
+        Set<Long> required = requiredDocumentTypeIds(assignment);
+        return approvedOrAcceptedDocumentTypeIds(providerId, assignment, required);
+    }
+
+    private Set<Long> approvedOrAcceptedDocumentTypeIds(
+            Long providerId, ServiceProviderTypeAssignment assignment, Set<Long> requiredIds) {
+        List<ServiceTypeDocumentRequirement> requirements = requirementRepository
+                .findAllByServiceProviderTypeId(assignment.getServiceProviderTypeId());
+        Set<Long> selectedOptions = selectedOptionIds(assignment.getAssignmentId());
+        List<ServiceProviderDocument> documents = documentRepository
+                .findAllByServiceProviderIdOrderByCreatedAtDesc(providerId);
+        Set<Long> result = new HashSet<>();
+        List<ServiceTypeDocumentRequirement> applicable = requirements.stream()
+                .filter(ServiceTypeDocumentRequirement::isMandatory)
+                .filter(item -> item.getOptionId() == null
+                        || selectedOptions.contains(item.getOptionId()))
+                .toList();
+        requiredIds.forEach(documentTypeId -> {
+            boolean requiresApproval = applicable.stream()
+                    .filter(item -> item.getDocumentTypeId().equals(documentTypeId))
+                    .anyMatch(ServiceTypeDocumentRequirement::isRequiresApproval);
+            documents.stream()
+                        .filter(document -> document.getDocumentTypeId().equals(documentTypeId))
+                        .filter(document -> document.getExpiryDate() == null
+                                || !document.getExpiryDate().isBefore(LocalDate.now()))
+                        .filter(document -> !requiresApproval
+                                || "APPROVED".equals(document.getVerificationStatus()))
+                        .findFirst()
+                        .ifPresent(document -> result.add(document.getDocumentTypeId()));
+        });
+        return result;
+    }
+
     public boolean documentsComplete(ServiceProviderTypeAssignment assignment) {
-        return satisfiedDocumentTypeIds(
-                assignment.getServiceProviderId(), assignment.getServiceProviderTypeId())
-                .containsAll(requiredDocumentTypeIds(assignment.getServiceProviderTypeId()));
+        return satisfiedDocumentTypeIds(assignment.getServiceProviderId(), assignment)
+                .containsAll(requiredDocumentTypeIds(assignment));
+    }
+
+    private Set<Long> selectedOptionIds(Long assignmentId) {
+        return providerOptionRepository.findAllByAssignmentId(assignmentId).stream()
+                .map(ProviderServiceOption::getOptionId)
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     public boolean skillsComplete(ServiceProviderTypeAssignment assignment) {
@@ -216,16 +263,37 @@ public class ProviderServiceApprovalService {
                 .filter(ServiceCustomField::isRequired)
                 .filter(field -> field.getOptionId() == null
                         || selectedOptions.contains(field.getOptionId()))
-                .filter(field -> conditionApplies(field, byCode, submissions))
+                .filter(field -> conditionApplies(
+                        assignment, field, byCode, submissions))
                 .allMatch(field -> {
                     ProviderCustomFieldSubmission submission = submissions.get(field.getFieldId());
+                    if (submission == null) {
+                        submission = reusableSubmission(assignment, field).orElse(null);
+                    }
                     return submission != null && (!field.isRequiresApproval()
                             || "APPROVED".equals(submission.getVerificationStatus()));
                 });
     }
 
+    private java.util.Optional<ProviderCustomFieldSubmission> reusableSubmission(
+            ServiceProviderTypeAssignment assignment, ServiceCustomField field) {
+        String reuseScope = field.getReuseScope() == null
+                ? "ASSIGNMENT" : field.getReuseScope();
+        if ("ASSIGNMENT".equals(reuseScope)) return java.util.Optional.empty();
+        return customSubmissionRepository
+                .findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
+                        assignment.getServiceProviderId(), field.getCode(), "APPROVED")
+                .stream()
+                .filter(item -> field.getFieldType().equals(item.getReusableFieldType()))
+                .filter(item -> "PROVIDER".equals(reuseScope)
+                        || assignment.getServiceProviderTypeId()
+                        .equals(item.getServiceProviderTypeId()))
+                .findFirst();
+    }
+
     private boolean conditionApplies(
-            ServiceCustomField field, Map<String, ServiceCustomField> byCode,
+            ServiceProviderTypeAssignment assignment, ServiceCustomField field,
+            Map<String, ServiceCustomField> byCode,
             Map<Long, ProviderCustomFieldSubmission> submissions) {
         if (field.getConditionJson() == null || field.getConditionJson().isBlank()) return true;
         try {
@@ -235,6 +303,9 @@ public class ProviderServiceApprovalService {
             ServiceCustomField parent = byCode.get(code);
             ProviderCustomFieldSubmission submission = parent == null
                     ? null : submissions.get(parent.getFieldId());
+            if (submission == null && parent != null) {
+                submission = reusableSubmission(assignment, parent).orElse(null);
+            }
             if (submission == null) return false;
             JsonNode actual = objectMapper.readTree(submission.getValueJson());
             if (actual.has("value")) actual = actual.get("value");

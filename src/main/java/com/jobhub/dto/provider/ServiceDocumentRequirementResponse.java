@@ -5,6 +5,7 @@ public record ServiceDocumentRequirementResponse(
         String documentTypeName,
         String description,
         boolean hasExpiry,
+        Long optionId,
         boolean required,
         boolean requiresApproval
 ) {

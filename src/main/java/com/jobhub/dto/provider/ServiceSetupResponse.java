@@ -16,11 +16,16 @@ public record ServiceSetupResponse(
         List<DocumentRequirement> documents,
         List<SkillRequirement> skills,
         SectionRequirement certificates,
-        SectionRequirement education
+        SectionRequirement education,
+        ServiceMediaPayload icon,
+        ServiceMediaPayload coverImage,
+        List<ServiceMediaPayload> gallery,
+        List<ServiceResponsibilityPayload> responsibilities
 ) {
     public record DocumentRequirement(
             Long documentTypeId,
             String documentTypeName,
+            Long optionId,
             boolean required,
             boolean requiresApproval
     ) {

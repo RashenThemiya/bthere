@@ -11,7 +11,10 @@ import java.util.Optional;
 public interface ProviderCustomFieldSubmissionRepository
         extends JpaRepository<ProviderCustomFieldSubmission, Long> {
     List<ProviderCustomFieldSubmission> findAllByAssignmentId(Long assignmentId);
+    List<ProviderCustomFieldSubmission> findAllByFieldId(Long fieldId);
     Optional<ProviderCustomFieldSubmission> findByAssignmentIdAndFieldId(Long assignmentId, Long fieldId);
+    List<ProviderCustomFieldSubmission> findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
+            Long providerId, String reusableCode, String verificationStatus);
     Page<ProviderCustomFieldSubmission> findAllByVerificationStatus(String status, Pageable pageable);
     long countByVerificationStatus(String status);
 }

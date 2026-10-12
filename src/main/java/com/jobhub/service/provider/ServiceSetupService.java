@@ -10,6 +10,7 @@ import com.jobhub.exception.ConflictException;
 import com.jobhub.exception.ResourceNotFoundException;
 import com.jobhub.repository.provider.DocumentTypeRepository;
 import com.jobhub.repository.provider.ServiceProviderTypeRepository;
+import com.jobhub.repository.provider.ServiceOptionRepository;
 import com.jobhub.repository.provider.ServiceTypeDocumentRequirementRepository;
 import com.jobhub.repository.provider.ServiceTypeSkillRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class ServiceSetupService {
     private final DocumentTypeRepository documentTypeRepository;
     private final ServiceTypeDocumentRequirementRepository requirementRepository;
     private final ServiceTypeSkillRepository skillRepository;
+    private final ServiceOptionRepository optionRepository;
 
     @Transactional
     public ServiceSetupResponse create(ServiceSetupRequest request) {
@@ -46,6 +48,7 @@ public class ServiceSetupService {
         type.setIconUrl(optional(request.iconUrl()));
         type.setStatus("ACTIVE");
         applySectionConfiguration(type, request);
+        applyContent(type, request);
         type = providerTypeRepository.save(type);
         replaceRequirements(type.getServiceProviderTypeId(), request);
         return get(type.getServiceProviderTypeId());
@@ -64,6 +67,7 @@ public class ServiceSetupService {
         type.setDescription(optional(request.description()));
         type.setIconUrl(optional(request.iconUrl()));
         applySectionConfiguration(type, request);
+        applyContent(type, request);
         providerTypeRepository.save(type);
         replaceRequirements(serviceTypeId, request);
         return get(serviceTypeId);
@@ -109,6 +113,7 @@ public class ServiceSetupService {
                     return new ServiceSetupResponse.DocumentRequirement(
                             item.getDocumentTypeId(),
                             documentType == null ? null : documentType.getName(),
+                            item.getOptionId(),
                             item.isMandatory(),
                             item.isRequiresApproval()
                     );
@@ -129,21 +134,36 @@ public class ServiceSetupService {
                 new ServiceSetupResponse.SectionRequirement(
                         normalizedLevel(type.getEducationRequirement()),
                         type.isEducationRequiresApproval()
-                )
+                ),
+                ServiceContentSupport.icon(type.getMedia()),
+                ServiceContentSupport.cover(type.getMedia()),
+                ServiceContentSupport.gallery(type.getMedia()),
+                ServiceContentSupport.responsibilities(type.getResponsibilities())
         );
     }
 
     private void replaceRequirements(Long serviceTypeId, ServiceSetupRequest request) {
         Set<Long> documentIds = new HashSet<>();
+        Set<String> documentScopes = new HashSet<>();
+        Set<Long> optionIds = new HashSet<>();
         for (ServiceSetupRequest.DocumentRequirement item : request.documents()) {
-            if (!documentIds.add(item.documentTypeId())) {
+            documentIds.add(item.documentTypeId());
+            String scope = item.documentTypeId() + ":" + item.optionId();
+            if (!documentScopes.add(scope)) {
                 throw new IllegalArgumentException("Document requirements cannot contain duplicates");
             }
+            if (item.optionId() != null) optionIds.add(item.optionId());
         }
         List<DocumentType> documentTypes = documentTypeRepository.findAllById(documentIds);
         if (documentTypes.size() != documentIds.size()
                 || documentTypes.stream().anyMatch(item -> !"ACTIVE".equals(item.getStatus()))) {
             throw new IllegalArgumentException("One or more document types are invalid or inactive");
+        }
+        if (!optionIds.isEmpty() && optionRepository
+                .findAllByOptionIdInAndServiceProviderTypeIdAndStatus(
+                        optionIds, serviceTypeId, "ACTIVE").size() != optionIds.size()) {
+            throw new IllegalArgumentException(
+                    "One or more document requirement options are invalid or inactive");
         }
 
         Set<String> skillNames = new HashSet<>();
@@ -159,6 +179,7 @@ public class ServiceSetupService {
             ServiceTypeDocumentRequirement requirement = new ServiceTypeDocumentRequirement();
             requirement.setServiceProviderTypeId(serviceTypeId);
             requirement.setDocumentTypeId(item.documentTypeId());
+            requirement.setOptionId(item.optionId());
             requirement.setMandatory(item.required());
             requirement.setRequiresApproval(item.requiresApproval());
             requirementRepository.save(requirement);
@@ -208,6 +229,16 @@ public class ServiceSetupService {
         type.setOptionsRequired(request.optionsRequired());
         type.setMinimumOptionSelections(minimum);
         type.setMaximumOptionSelections(maximum);
+    }
+
+    private void applyContent(ServiceProviderType type, ServiceSetupRequest request) {
+        ServiceContentSupport.replaceMedia(type.getMedia(), request.icon(),
+                request.coverImage(), request.gallery());
+        ServiceContentSupport.replaceResponsibilities(type.getResponsibilities(),
+                request.responsibilities());
+        if (request.icon() != null) {
+            type.setIconUrl(request.icon().url().trim());
+        }
     }
 
     private String validateLevel(String level) {

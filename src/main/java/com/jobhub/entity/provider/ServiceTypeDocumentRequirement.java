@@ -16,7 +16,7 @@ import lombok.Setter;
         name = "service_type_document_requirement",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_service_type_document_requirement",
-                columnNames = {"service_provider_type_id", "document_type_id"}
+                columnNames = {"service_provider_type_id", "document_type_id", "option_id"}
         )
 )
 @Getter
@@ -31,6 +31,9 @@ public class ServiceTypeDocumentRequirement extends AuditedEntity {
     private Long serviceProviderTypeId;
 
     private Long documentTypeId;
+
+    /** Null means the requirement applies to the complete service. */
+    private Long optionId;
 
     private boolean mandatory;
 

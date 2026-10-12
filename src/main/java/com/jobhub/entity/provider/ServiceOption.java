@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.LinkedHashSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -35,16 +37,28 @@ public class ServiceOption extends AuditedEntity {
     @Column(nullable = false, length = 20)
     private String pricingOwner = "ADMIN";
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection
     @CollectionTable(name = "service_option_payment_method",
             joinColumns = @JoinColumn(name = "option_id"))
     @Column(name = "payment_method", nullable = false, length = 30)
     private Set<String> allowedPaymentMethods = new LinkedHashSet<>(Set.of(
             "CASH", "CARD", "BANK_TRANSFER", "WALLET", "EZ_CASH", "KOKO"));
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection
     @CollectionTable(name = "service_option_delivery_mode",
             joinColumns = @JoinColumn(name = "option_id"))
     @Column(name = "delivery_mode", nullable = false, length = 40)
     private Set<String> deliveryModes = new LinkedHashSet<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "service_option_media",
+            joinColumns = @JoinColumn(name = "option_id"))
+    @OrderBy("displayOrder ASC")
+    private List<ServiceMediaValue> media = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "service_option_responsibility",
+            joinColumns = @JoinColumn(name = "option_id"))
+    @OrderBy("displayOrder ASC")
+    private List<ServiceResponsibilityValue> responsibilities = new ArrayList<>();
 }

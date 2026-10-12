@@ -24,6 +24,7 @@ public class ServiceCustomFieldService {
     public static final String PROVIDER_REQUIREMENT = "PROVIDER_REQUIREMENT";
     public static final String BOOKING_FIELD = "BOOKING_FIELD";
     private static final Set<String> SCOPES = Set.of(PROVIDER_REQUIREMENT, BOOKING_FIELD);
+    private static final Set<String> REUSE_SCOPES = Set.of("ASSIGNMENT", "SERVICE", "PROVIDER");
     private static final Set<String> FIELD_TYPES = Set.of(
             "TEXT", "TEXTAREA", "NUMBER", "BOOLEAN", "DATE", "TIME", "PHONE", "EMAIL",
             "SELECT", "MULTI_SELECT", "IMAGE_UPLOAD", "DOCUMENT_UPLOAD", "FILE_UPLOAD");
@@ -69,7 +70,9 @@ public class ServiceCustomFieldService {
             throw new ConflictException("Custom field code already exists in this scope");
         }
         apply(item, request, definition);
-        return response(fieldRepository.save(item));
+        item = fieldRepository.save(item);
+        synchronizeExistingSubmissionIdentity(item);
+        return response(item);
     }
 
     @Transactional
@@ -150,6 +153,11 @@ public class ServiceCustomFieldService {
                     .orElseGet(ProviderCustomFieldSubmission::new);
             submission.setAssignmentId(assignmentId);
             submission.setFieldId(field.getFieldId());
+            submission.setProviderId(assignment.getServiceProviderId());
+            submission.setServiceProviderTypeId(assignment.getServiceProviderTypeId());
+            submission.setReusableCode(field.getCode());
+            submission.setReusableFieldType(field.getFieldType());
+            submission.setReuseScope(normalizedReuseScope(field));
             submission.setValueJson(write(entry.value()));
             submission.setVerificationStatus(field.isRequiresApproval() ? "PENDING" : "APPROVED");
             submission.setReviewedBy(null);
@@ -158,13 +166,12 @@ public class ServiceCustomFieldService {
             submissionRepository.save(submission);
         }
         approvalService.refreshProviderApprovals(assignment.getServiceProviderId());
-        return providerSubmissions(assignmentId);
+        return providerSubmissions(assignment);
     }
 
     @Transactional(readOnly = true)
     public List<ProviderCustomSubmissionResponse> getSubmissions(Long userId, Long assignmentId) {
-        ownedAssignment(userId, assignmentId);
-        return providerSubmissions(assignmentId);
+        return providerSubmissions(ownedAssignment(userId, assignmentId));
     }
 
     @Transactional(readOnly = true)
@@ -275,13 +282,23 @@ public class ServiceCustomFieldService {
                 || request.options().isEmpty())) {
             throw new IllegalArgumentException("Select fields require a non-empty options array");
         }
-        return new ValidatedDefinition(scope, normalizeCode(request.code()), fieldType);
+        String reuseScope = request.reuseScope() == null || request.reuseScope().isBlank()
+                ? "ASSIGNMENT" : request.reuseScope().trim().toUpperCase(Locale.ROOT);
+        if (!REUSE_SCOPES.contains(reuseScope)) {
+            throw new IllegalArgumentException(
+                    "Reuse scope must be ASSIGNMENT, SERVICE or PROVIDER");
+        }
+        if (BOOKING_FIELD.equals(scope) && !"ASSIGNMENT".equals(reuseScope)) {
+            throw new IllegalArgumentException("Booking fields must use ASSIGNMENT reuse scope");
+        }
+        return new ValidatedDefinition(scope, normalizeCode(request.code()), fieldType, reuseScope);
     }
 
     private void apply(ServiceCustomField item, ServiceCustomFieldRequest request,
                        ValidatedDefinition definition) {
         item.setOptionId(request.optionId());
         item.setScope(definition.scope());
+        item.setReuseScope(definition.reuseScope());
         item.setCode(definition.code());
         item.setLabel(request.label().trim());
         item.setDescription(trim(request.description()));
@@ -298,22 +315,58 @@ public class ServiceCustomFieldService {
         item.setDisplayOrder(request.displayOrder() == null ? 0 : request.displayOrder());
     }
 
-    private List<ProviderCustomSubmissionResponse> providerSubmissions(Long assignmentId) {
-        return submissionRepository.findAllByAssignmentId(assignmentId)
-                .stream().map(this::submissionResponse).toList();
+    private List<ProviderCustomSubmissionResponse> providerSubmissions(
+            ServiceProviderTypeAssignment assignment) {
+        List<ProviderCustomFieldSubmission> exact = submissionRepository
+                .findAllByAssignmentId(assignment.getAssignmentId());
+        Map<Long, ProviderCustomFieldSubmission> byField = new HashMap<>();
+        exact.forEach(item -> byField.put(item.getFieldId(), item));
+        Set<Long> selectedOptions = providerOptionRepository
+                .findAllByAssignmentId(assignment.getAssignmentId()).stream()
+                .map(ProviderServiceOption::getOptionId)
+                .collect(java.util.stream.Collectors.toSet());
+        List<ServiceCustomField> fields = fieldRepository
+                .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                        assignment.getServiceProviderTypeId(), PROVIDER_REQUIREMENT, "ACTIVE")
+                .stream().filter(field -> field.getOptionId() == null
+                        || selectedOptions.contains(field.getOptionId())).toList();
+        List<ProviderCustomSubmissionResponse> result = new ArrayList<>();
+        for (ServiceCustomField field : fields) {
+            ProviderCustomFieldSubmission own = byField.remove(field.getFieldId());
+            if (own != null) {
+                result.add(submissionResponse(own, field, false,
+                        assignment.getAssignmentId(), own.getAssignmentId()));
+                continue;
+            }
+            findReusableSubmission(assignment, field).ifPresent(source ->
+                    result.add(submissionResponse(source, field, true,
+                            assignment.getAssignmentId(), source.getAssignmentId())));
+        }
+        byField.values().stream().map(this::submissionResponse).forEach(result::add);
+        return result;
     }
 
     private ProviderCustomSubmissionResponse submissionResponse(ProviderCustomFieldSubmission item) {
         ServiceCustomField field = fieldRepository.findById(item.getFieldId()).orElse(null);
-        return new ProviderCustomSubmissionResponse(item.getSubmissionId(), item.getAssignmentId(),
-                item.getFieldId(), field == null ? null : field.getCode(),
-                field == null ? null : field.getLabel(), read(item.getValueJson()),
-                item.getVerificationStatus(), item.getReviewedBy(), item.getReviewedAt(), item.getReviewNote());
+        return submissionResponse(item, field, false,
+                item.getAssignmentId(), item.getAssignmentId());
+    }
+
+    private ProviderCustomSubmissionResponse submissionResponse(
+            ProviderCustomFieldSubmission item, ServiceCustomField targetField,
+            boolean reused, Long targetAssignmentId, Long sourceAssignmentId) {
+        return new ProviderCustomSubmissionResponse(item.getSubmissionId(), targetAssignmentId,
+                targetField == null ? item.getFieldId() : targetField.getFieldId(),
+                targetField == null ? null : targetField.getCode(),
+                targetField == null ? null : targetField.getLabel(), read(item.getValueJson()),
+                item.getVerificationStatus(), item.getReviewedBy(), item.getReviewedAt(), item.getReviewNote(),
+                targetField == null ? normalizedReuseScope(item) : normalizedReuseScope(targetField),
+                reused, sourceAssignmentId);
     }
 
     private ServiceCustomFieldResponse response(ServiceCustomField item) {
         return new ServiceCustomFieldResponse(item.getFieldId(), item.getServiceProviderTypeId(),
-                item.getOptionId(), item.getScope(), item.getCode(), item.getLabel(),
+                item.getOptionId(), item.getScope(), normalizedReuseScope(item), item.getCode(), item.getLabel(),
                 item.getDescription(), item.getFieldType(), item.isRequired(),
                 item.isRequiresApproval(), item.getMinimumFiles(), item.getMaximumFiles(),
                 item.getMaximumFileSizeMb(), readStringList(item.getAllowedFileTypesJson()),
@@ -372,5 +425,45 @@ public class ServiceCustomFieldService {
 
     private String trim(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
-    private record ValidatedDefinition(String scope, String code, String fieldType) {}
+    private Optional<ProviderCustomFieldSubmission> findReusableSubmission(
+            ServiceProviderTypeAssignment assignment, ServiceCustomField field) {
+        String reuseScope = normalizedReuseScope(field);
+        if ("ASSIGNMENT".equals(reuseScope)) return Optional.empty();
+        return submissionRepository
+                .findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
+                        assignment.getServiceProviderId(), field.getCode(), "APPROVED")
+                .stream()
+                .filter(item -> field.getFieldType().equals(item.getReusableFieldType()))
+                .filter(item -> "PROVIDER".equals(reuseScope)
+                        || assignment.getServiceProviderTypeId()
+                        .equals(item.getServiceProviderTypeId()))
+                .findFirst();
+    }
+
+    private void synchronizeExistingSubmissionIdentity(ServiceCustomField field) {
+        List<ProviderCustomFieldSubmission> submissions = submissionRepository
+                .findAllByFieldId(field.getFieldId());
+        for (ProviderCustomFieldSubmission submission : submissions) {
+            ServiceProviderTypeAssignment assignment = assignmentRepository
+                    .findById(submission.getAssignmentId()).orElse(null);
+            if (assignment == null) continue;
+            submission.setProviderId(assignment.getServiceProviderId());
+            submission.setServiceProviderTypeId(assignment.getServiceProviderTypeId());
+            submission.setReusableCode(field.getCode());
+            submission.setReusableFieldType(field.getFieldType());
+            submission.setReuseScope(normalizedReuseScope(field));
+        }
+        submissionRepository.saveAll(submissions);
+    }
+
+    private String normalizedReuseScope(ServiceCustomField field) {
+        return field.getReuseScope() == null ? "ASSIGNMENT" : field.getReuseScope();
+    }
+
+    private String normalizedReuseScope(ProviderCustomFieldSubmission submission) {
+        return submission.getReuseScope() == null ? "ASSIGNMENT" : submission.getReuseScope();
+    }
+
+    private record ValidatedDefinition(
+            String scope, String code, String fieldType, String reuseScope) {}
 }

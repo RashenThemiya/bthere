@@ -90,7 +90,7 @@ public class ProviderTypeService {
                         types,
                         approvalService.satisfiedDocumentTypeIds(
                                 provider.getServiceProviderId(),
-                                assignment.getServiceProviderTypeId()
+                                assignment
                         )
                 ))
                 .toList();
@@ -154,7 +154,7 @@ public class ProviderTypeService {
                         types,
                         approvalService.satisfiedDocumentTypeIds(
                                 provider.getServiceProviderId(),
-                                assignment.getServiceProviderTypeId()
+                                assignment
                         )
                 ))
                 .toList();
@@ -194,7 +194,7 @@ public class ProviderTypeService {
                 Map.of(type.getServiceProviderTypeId(), type),
                 approvalService.satisfiedDocumentTypeIds(
                         provider.getServiceProviderId(),
-                        type.getServiceProviderTypeId()
+                        assignment
                 )
         );
     }
@@ -293,6 +293,7 @@ public class ProviderTypeService {
                             type.getName(),
                             type.getDescription(),
                             type.isHasExpiry(),
+                            requirement.getOptionId(),
                             requirement.isMandatory(),
                             requirement.isRequiresApproval()
                     );
@@ -365,9 +366,7 @@ public class ProviderTypeService {
             Set<Long> approvedDocuments
     ) {
         ServiceProviderType type = types.get(assignment.getServiceProviderTypeId());
-        Set<Long> required = approvalService.requiredDocumentTypeIds(
-                assignment.getServiceProviderTypeId()
-        );
+        Set<Long> required = approvalService.requiredDocumentTypeIds(assignment);
         List<Long> missing = required.stream()
                 .filter(id -> !approvedDocuments.contains(id))
                 .sorted()
@@ -400,7 +399,7 @@ public class ProviderTypeService {
                 Map.of(type.getServiceProviderTypeId(), type),
                 approvalService.satisfiedDocumentTypeIds(
                         assignment.getServiceProviderId(),
-                        assignment.getServiceProviderTypeId()
+                        assignment
                 )
         );
     }
@@ -443,7 +442,11 @@ public class ProviderTypeService {
                 type.getName(),
                 type.getDescription(),
                 type.getIconUrl(),
-                type.getStatus()
+                type.getStatus(),
+                ServiceContentSupport.icon(type.getMedia()),
+                ServiceContentSupport.cover(type.getMedia()),
+                ServiceContentSupport.gallery(type.getMedia()),
+                ServiceContentSupport.responsibilities(type.getResponsibilities())
         );
     }
 

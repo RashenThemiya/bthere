@@ -310,6 +310,10 @@ public class ServiceOptionService {
                     "Payment method must be CASH, CARD, BANK_TRANSFER, WALLET, EZ_CASH or KOKO");
         }
         option.setAllowedPaymentMethods(paymentMethods);
+        ServiceContentSupport.replaceMedia(option.getMedia(), request.icon(),
+                request.coverImage(), request.gallery());
+        ServiceContentSupport.replaceResponsibilities(option.getResponsibilities(),
+                request.responsibilities());
     }
 
     private String normalizeCode(String value) {
@@ -337,7 +341,11 @@ public class ServiceOptionService {
                 item.getAllowedPaymentMethods() == null || item.getAllowedPaymentMethods().isEmpty()
                         ? PAYMENT_METHODS : Set.copyOf(item.getAllowedPaymentMethods()),
                 item.getDeliveryModes().stream().sorted().map(mode -> deliveryConfiguration(
-                        mode, item.isLocationEnabled())).toList());
+                        mode, item.isLocationEnabled())).toList(),
+                ServiceContentSupport.icon(item.getMedia()),
+                ServiceContentSupport.cover(item.getMedia()),
+                ServiceContentSupport.gallery(item.getMedia()),
+                ServiceContentSupport.responsibilities(item.getResponsibilities()));
     }
 
     private ServiceOptionResponse.DeliveryModeConfiguration deliveryConfiguration(

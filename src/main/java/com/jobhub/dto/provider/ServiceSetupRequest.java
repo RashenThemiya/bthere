@@ -38,10 +38,21 @@ public record ServiceSetupRequest(
         @Valid SectionRequirement certificates,
 
         @NotNull(message = "Education configuration is required")
-        @Valid SectionRequirement education
+        @Valid SectionRequirement education,
+
+        @Valid ServiceMediaPayload icon,
+
+        @Valid ServiceMediaPayload coverImage,
+
+        @NotNull(message = "Gallery is required")
+        List<@Valid ServiceMediaPayload> gallery,
+
+        @NotNull(message = "Responsibilities are required")
+        List<@Valid ServiceResponsibilityPayload> responsibilities
 ) {
     public record DocumentRequirement(
             @NotNull(message = "Document type ID is required") Long documentTypeId,
+            Long optionId,
             boolean required,
             boolean requiresApproval
     ) {

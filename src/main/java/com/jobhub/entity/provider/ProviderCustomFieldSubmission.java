@@ -17,6 +17,11 @@ public class ProviderCustomFieldSubmission extends AuditedEntity {
     private Long submissionId;
     private Long assignmentId;
     private Long fieldId;
+    private Long providerId;
+    private Long serviceProviderTypeId;
+    private String reusableCode;
+    private String reusableFieldType;
+    private String reuseScope;
     @Column(columnDefinition = "LONGTEXT", nullable = false)
     private String valueJson;
     private String verificationStatus;
