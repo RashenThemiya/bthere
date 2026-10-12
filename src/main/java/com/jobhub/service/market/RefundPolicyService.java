@@ -70,6 +70,14 @@ public class RefundPolicyService {
         }
         validateRequest(marketId, request);
         RefundPolicyResponse old = response(policy);
+
+        // Flush orphan removals before inserting replacement tiers. Without this
+        // explicit boundary Hibernate may insert a replacement threshold (for
+        // example, 0 minutes) before deleting the old row with the same
+        // (policy_id, minimum_minutes_before_start) unique key.
+        policy.replaceTiers(List.of());
+        policyRepository.flush();
+
         apply(policy, market, request);
         policy = policyRepository.save(policy);
         RefundPolicyResponse updated = response(policy);

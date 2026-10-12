@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -115,6 +116,31 @@ class RefundPolicyServiceTest {
         when(policyRepository.findAllByMarketIdAndStatus(1L, "ACTIVE"))
                 .thenReturn(List.of());
         assertThrows(ResourceNotFoundException.class, () -> service.resolve(1L, null));
+    }
+
+    @Test
+    void flushesRemovedTiersBeforeSavingDraftReplacement() {
+        RefundPolicy draft = policy(7L, 1L, null, "DRAFT",
+                Instant.parse("2026-11-01T00:00:00Z"), null);
+        var oldTier = new com.jobhub.entity.market.RefundPolicyTier();
+        oldTier.setTierId(70L);
+        oldTier.setPolicy(draft);
+        oldTier.setName("Old late cancellation");
+        oldTier.setMinimumMinutesBeforeStart(0);
+        oldTier.setRefundPercentage(percent(0));
+        oldTier.setCancellationFee(BigDecimal.ZERO);
+        oldTier.setPriority(1);
+        draft.getTiers().add(oldTier);
+        when(policyRepository.findByPolicyIdAndMarketId(7L, 1L))
+                .thenReturn(Optional.of(draft));
+        when(policyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.update(9L, 1L, 7L, request(null));
+
+        assertEquals(3, result.tiers().size());
+        InOrder order = inOrder(policyRepository);
+        order.verify(policyRepository).flush();
+        order.verify(policyRepository).save(draft);
     }
 
     private RefundPolicyRequest request(Long offeringId) {
