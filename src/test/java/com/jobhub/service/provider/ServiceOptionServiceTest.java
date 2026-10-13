@@ -34,6 +34,7 @@ class ServiceOptionServiceTest {
     @Mock private ServiceProviderTypeAssignmentRepository assignmentRepository;
     @Mock private ProviderProfileService profileService;
     @Mock private ProviderServiceApprovalService approvalService;
+    @Mock private ServiceCustomFieldService customFieldService;
 
     private ServiceOptionService service;
 
@@ -41,7 +42,7 @@ class ServiceOptionServiceTest {
     void setUp() {
         service = new ServiceOptionService(typeRepository, optionRepository,
                 providerOptionRepository, languageRepository, assignmentRepository,
-                profileService, approvalService);
+                profileService, approvalService, customFieldService);
         when(typeRepository.findById(1L)).thenReturn(Optional.of(new ServiceProviderType()));
         when(optionRepository.existsByServiceProviderTypeIdAndCodeIgnoreCase(1L, "HOME_CARE"))
                 .thenReturn(false);
@@ -135,7 +136,7 @@ class ServiceOptionServiceTest {
         return new CreateServiceOptionRequest("HOME_CARE", "Home Care", null, 1,
                 "TIME_BASED", null, true, Set.of("PROVIDER_TO_CUSTOMER"),
                 "ONE_TO_ONE", 1, 1, "ONE_AT_A_TIME", providerSelectionMode, pricingOwner,
-                allowedPaymentMethods, null, null, List.of(), List.of());
+                allowedPaymentMethods, null, null, List.of(), List.of(), null);
     }
 
     private void stubSave() {

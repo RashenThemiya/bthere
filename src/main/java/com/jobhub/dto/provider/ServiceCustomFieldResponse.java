@@ -8,6 +8,7 @@ public record ServiceCustomFieldResponse(
         Long fieldId,
         Long serviceTypeId,
         Long optionId,
+        List<Long> optionIds,
         String scope,
         String reuseScope,
         String code,

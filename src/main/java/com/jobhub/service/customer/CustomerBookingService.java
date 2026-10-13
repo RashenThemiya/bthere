@@ -197,7 +197,7 @@ public class CustomerBookingService {
         List<ServiceCustomField> applicable = customFieldRepository
                 .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
                         serviceTypeId, "BOOKING_FIELD", "ACTIVE").stream()
-                .filter(field -> field.getOptionId() == null || optionId.equals(field.getOptionId()))
+                .filter(field -> field.appliesToOptions(Set.of(optionId)))
                 .toList();
         Map<Long, ServiceCustomField> byId = new HashMap<>();
         Map<String, ServiceCustomField> byCode = new HashMap<>();

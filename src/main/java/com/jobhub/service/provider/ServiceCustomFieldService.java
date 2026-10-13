@@ -44,10 +44,7 @@ public class ServiceCustomFieldService {
     public ServiceCustomFieldResponse create(Long serviceTypeId, ServiceCustomFieldRequest request) {
         requireType(serviceTypeId);
         ValidatedDefinition definition = validateDefinition(serviceTypeId, null, request);
-        if (fieldRepository.existsByServiceProviderTypeIdAndScopeAndOptionIdAndCodeIgnoreCase(
-                serviceTypeId, definition.scope(), request.optionId(), definition.code())) {
-            throw new ConflictException("Custom field code already exists in this scope");
-        }
+        validateUniqueCode(serviceTypeId, null, definition);
         ServiceCustomField item = new ServiceCustomField();
         item.setServiceProviderTypeId(serviceTypeId);
         item.setVersion(1);
@@ -61,14 +58,7 @@ public class ServiceCustomFieldService {
             Long serviceTypeId, Long fieldId, ServiceCustomFieldRequest request) {
         ServiceCustomField item = requireField(serviceTypeId, fieldId);
         ValidatedDefinition definition = validateDefinition(serviceTypeId, item, request);
-        boolean identityChanged = !item.getScope().equals(definition.scope())
-                || !Objects.equals(item.getOptionId(), request.optionId())
-                || !item.getCode().equalsIgnoreCase(definition.code());
-        if (identityChanged && fieldRepository
-                .existsByServiceProviderTypeIdAndScopeAndOptionIdAndCodeIgnoreCase(
-                        serviceTypeId, definition.scope(), request.optionId(), definition.code())) {
-            throw new ConflictException("Custom field code already exists in this scope");
-        }
+        validateUniqueCode(serviceTypeId, fieldId, definition);
         apply(item, request, definition);
         item = fieldRepository.save(item);
         synchronizeExistingSubmissionIdentity(item);
@@ -96,6 +86,45 @@ public class ServiceCustomFieldService {
     }
 
     @Transactional(readOnly = true)
+    public List<ServiceCustomFieldResponse> listForOption(
+            Long serviceTypeId, Long optionId, boolean includeInactive) {
+        return fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(serviceTypeId)
+                .stream().filter(field -> includeInactive || "ACTIVE".equals(field.getStatus()))
+                .filter(field -> field.appliesToOptions(Set.of(optionId)))
+                .map(this::response).toList();
+    }
+
+    @Transactional
+    public void saveForOption(Long serviceTypeId, Long optionId,
+                              List<OptionDynamicFieldRequest> requests) {
+        if (requests == null) return;
+        Set<Long> updatedIds = new HashSet<>();
+        for (OptionDynamicFieldRequest entry : requests) {
+            ServiceCustomFieldRequest definition = entry.definition();
+            ServiceCustomField existing = null;
+            if (entry.fieldId() != null) {
+                if (!updatedIds.add(entry.fieldId())) {
+                    throw new IllegalArgumentException("Dynamic fields cannot contain duplicate field IDs");
+                }
+                existing = requireField(serviceTypeId, entry.fieldId());
+                if (!existing.appliesToOptions(Set.of(optionId))) {
+                    throw new IllegalArgumentException("Dynamic field does not belong to this option");
+                }
+            }
+            if (definition.optionId() == null && definition.optionIds() == null) {
+                definition = definition.withOptionIds(existing == null
+                        ? List.of(optionId) : List.copyOf(existing.effectiveOptionIds()));
+            }
+            Set<Long> targetOptions = requestedOptionIds(definition);
+            if (!targetOptions.isEmpty() && !targetOptions.contains(optionId)) {
+                throw new IllegalArgumentException("Dynamic field must apply to the edited option");
+            }
+            if (existing == null) create(serviceTypeId, definition);
+            else update(serviceTypeId, entry.fieldId(), definition);
+        }
+    }
+
+    @Transactional(readOnly = true)
     public ServiceDynamicSchemaResponse schema(Long serviceTypeId, String scope) {
         return schema(serviceTypeId, scope, null);
     }
@@ -109,7 +138,7 @@ public class ServiceCustomFieldService {
                 .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
                         serviceTypeId, normalizedScope, "ACTIVE");
         List<ServiceCustomFieldResponse> common = fields.stream()
-                .filter(item -> item.getOptionId() == null).map(this::response).toList();
+                .filter(item -> item.effectiveOptionIds().isEmpty()).map(this::response).toList();
         List<ServiceDynamicSchemaResponse.OptionSchema> optionSchemas = optionRepository
                 .findAllByServiceProviderTypeIdAndStatusOrderByDisplayOrderAscNameAsc(
                         serviceTypeId, "ACTIVE").stream()
@@ -117,7 +146,7 @@ public class ServiceCustomFieldService {
                         || selectedOptionId.equals(option.getOptionId()))
                 .map(option -> new ServiceDynamicSchemaResponse.OptionSchema(
                         option.getOptionId(), option.getCode(), option.getName(),
-                        fields.stream().filter(field -> option.getOptionId().equals(field.getOptionId()))
+                        fields.stream().filter(field -> field.effectiveOptionIds().contains(option.getOptionId()))
                                 .map(this::response).toList()))
                 .toList();
         if (selectedOptionId != null && optionSchemas.isEmpty()) {
@@ -213,7 +242,7 @@ public class ServiceCustomFieldService {
                 || !"ACTIVE".equals(field.getStatus())) {
             throw new IllegalArgumentException("Custom field is not available for this provider service");
         }
-        if (field.getOptionId() != null && !selectedOptionIds.contains(field.getOptionId())) {
+        if (!field.appliesToOptions(selectedOptionIds)) {
             throw new IllegalArgumentException("Select the related service option before submitting this field");
         }
         validateValue(userId, field, value);
@@ -264,9 +293,13 @@ public class ServiceCustomFieldService {
         if (!FIELD_TYPES.contains(fieldType)) {
             throw new IllegalArgumentException("Unsupported custom field type");
         }
-        if (request.optionId() != null) {
-            optionRepository.findByOptionIdAndServiceProviderTypeId(request.optionId(), serviceTypeId)
+        Set<Long> optionIds = requestedOptionIds(request);
+        for (Long optionId : optionIds) {
+            ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId)
                     .orElseThrow(() -> new IllegalArgumentException("Service option is invalid"));
+            if (!"ACTIVE".equals(option.getStatus())) {
+                throw new IllegalArgumentException("Service option must be active");
+            }
         }
         boolean upload = fieldType.endsWith("UPLOAD");
         if (upload) {
@@ -291,12 +324,14 @@ public class ServiceCustomFieldService {
         if (BOOKING_FIELD.equals(scope) && !"ASSIGNMENT".equals(reuseScope)) {
             throw new IllegalArgumentException("Booking fields must use ASSIGNMENT reuse scope");
         }
-        return new ValidatedDefinition(scope, normalizeCode(request.code()), fieldType, reuseScope);
+        return new ValidatedDefinition(scope, normalizeCode(request.code()), fieldType, reuseScope, optionIds);
     }
 
     private void apply(ServiceCustomField item, ServiceCustomFieldRequest request,
                        ValidatedDefinition definition) {
-        item.setOptionId(request.optionId());
+        item.setOptionIds(new LinkedHashSet<>(definition.optionIds()));
+        item.setOptionId(definition.optionIds().size() == 1
+                ? definition.optionIds().iterator().next() : null);
         item.setScope(definition.scope());
         item.setReuseScope(definition.reuseScope());
         item.setCode(definition.code());
@@ -328,8 +363,7 @@ public class ServiceCustomFieldService {
         List<ServiceCustomField> fields = fieldRepository
                 .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
                         assignment.getServiceProviderTypeId(), PROVIDER_REQUIREMENT, "ACTIVE")
-                .stream().filter(field -> field.getOptionId() == null
-                        || selectedOptions.contains(field.getOptionId())).toList();
+                .stream().filter(field -> field.appliesToOptions(selectedOptions)).toList();
         List<ProviderCustomSubmissionResponse> result = new ArrayList<>();
         for (ServiceCustomField field : fields) {
             ProviderCustomFieldSubmission own = byField.remove(field.getFieldId());
@@ -366,7 +400,7 @@ public class ServiceCustomFieldService {
 
     private ServiceCustomFieldResponse response(ServiceCustomField item) {
         return new ServiceCustomFieldResponse(item.getFieldId(), item.getServiceProviderTypeId(),
-                item.getOptionId(), item.getScope(), normalizedReuseScope(item), item.getCode(), item.getLabel(),
+                item.getOptionId(), List.copyOf(item.effectiveOptionIds()), item.getScope(), normalizedReuseScope(item), item.getCode(), item.getLabel(),
                 item.getDescription(), item.getFieldType(), item.isRequired(),
                 item.isRequiresApproval(), item.getMinimumFiles(), item.getMaximumFiles(),
                 item.getMaximumFileSizeMb(), readStringList(item.getAllowedFileTypesJson()),
@@ -464,6 +498,29 @@ public class ServiceCustomFieldService {
         return submission.getReuseScope() == null ? "ASSIGNMENT" : submission.getReuseScope();
     }
 
+    private Set<Long> requestedOptionIds(ServiceCustomFieldRequest request) {
+        if (request.optionId() != null && request.optionIds() != null) {
+            throw new IllegalArgumentException("Provide optionIds or optionId, not both");
+        }
+        List<Long> ids = request.optionIds() != null ? request.optionIds()
+                : request.optionId() == null ? List.of() : List.of(request.optionId());
+        Set<Long> result = new LinkedHashSet<>(ids);
+        if (result.size() != ids.size() || result.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("Option IDs must be positive and unique");
+        }
+        return result;
+    }
+
+    private void validateUniqueCode(Long serviceTypeId, Long fieldId, ValidatedDefinition definition) {
+        boolean conflict = fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(serviceTypeId)
+                .stream().filter(field -> !Objects.equals(fieldId, field.getFieldId()))
+                .filter(field -> definition.scope().equals(field.getScope())
+                        && definition.code().equalsIgnoreCase(field.getCode()))
+                .anyMatch(field -> field.effectiveOptionIds().isEmpty() || definition.optionIds().isEmpty()
+                        || field.effectiveOptionIds().stream().anyMatch(definition.optionIds()::contains));
+        if (conflict) throw new ConflictException("Custom field code already exists for these options");
+    }
+
     private record ValidatedDefinition(
-            String scope, String code, String fieldType, String reuseScope) {}
+            String scope, String code, String fieldType, String reuseScope, Set<Long> optionIds) {}
 }

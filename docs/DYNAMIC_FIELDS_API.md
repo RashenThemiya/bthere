@@ -8,8 +8,32 @@ booking schemas without backend code changes.
 - `PROVIDER_REQUIREMENT`: completed by a provider and optionally reviewed.
 - `BOOKING_FIELD`: completed by a customer for each job (job submission is a later module).
 
-Leaving `optionId` null applies a field to the complete service. Supplying an
-option ID applies it only to that service option.
+Use `optionIds` to apply one field to multiple options of the same service:
+
+```json
+{
+  "optionIds": [12, 13],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "ASSIGNMENT",
+  "code": "DRIVING_EXPERIENCE",
+  "label": "Driving experience in years",
+  "fieldType": "NUMBER",
+  "required": true,
+  "requiresApproval": false,
+  "displayOrder": 1
+}
+```
+
+POST creates one field ID; PUT replaces the field's complete option list.
+An empty or omitted `optionIds` applies the field to the complete service.
+Every ID must be unique and identify an active option of that service.
+The legacy `optionId` is still supported, but do not send both properties.
+Responses include `optionIds`, including for existing single-option fields.
+
+The same field appears under each configured option in the schema. Selecting
+any configured option makes it applicable; selecting several still requires
+only one answer per provider-service registration. `reuseScope` controls reuse
+between separate field definitions or registrations, not which options apply.
 
 ## Reusing provider answers
 
@@ -114,6 +138,54 @@ The response also includes `serviceSetup`, containing standard document and
 skill requirements, availability/location switches, certificate/education
 rules, and option-selection limits. This lets the frontend build complete
 onboarding from one response.
+
+## Dynamic fields in option APIs
+
+Both option list endpoints include `dynamicFields` on each option:
+
+- `GET /api/v1/provider-types/{serviceTypeId}/options` returns active fields.
+- `GET /api/v1/admin/provider-types/{serviceTypeId}/options` also includes inactive fields.
+
+The list includes fields assigned to the option and common service-wide fields,
+with their `fieldId`, `optionIds`, `scope`, `reuseScope`, and complete definition.
+
+Super Admin can create or edit dynamic fields in the same option request:
+
+- `POST /api/v1/admin/provider-types/{serviceTypeId}/options`
+- `PUT /api/v1/admin/provider-types/{serviceTypeId}/options/{optionId}`
+
+Add this property alongside the usual option properties:
+
+```json
+{
+  "dynamicFields": [
+    {
+      "fieldId": 25,
+      "definition": {
+        "scope": "PROVIDER_REQUIREMENT",
+        "reuseScope": "ASSIGNMENT",
+        "code": "DRIVING_EXPERIENCE",
+        "label": "Driving experience in years",
+        "fieldType": "NUMBER",
+        "required": true,
+        "requiresApproval": false,
+        "displayOrder": 1
+      }
+    }
+  ]
+}
+```
+
+Omit `fieldId` to create a new field. Include it to update an existing field
+that applies to this option. Each `definition` is a full custom-field request.
+Omitting option IDs assigns new fields to the current option and preserves
+existing fields' option assignments. Explicit `optionIds` replaces those
+assignments and must include the current option; `[]` makes the field common.
+Editing a shared or common definition changes it for every option using it.
+
+Omitted, null, or empty `dynamicFields` leaves existing fields unchanged;
+fields omitted from the array are also preserved. Use the custom-field status
+API to deactivate a field. Option and field changes are saved in one transaction.
 
 ## Provider submissions
 

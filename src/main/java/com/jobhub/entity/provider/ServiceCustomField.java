@@ -16,6 +16,21 @@ public class ServiceCustomField extends AuditedEntity {
     private Long fieldId;
     private Long serviceProviderTypeId;
     private Long optionId;
+    @ElementCollection
+    @CollectionTable(name = "service_custom_field_option", joinColumns = @JoinColumn(name = "field_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"field_id", "option_id"}))
+    @Column(name = "option_id", nullable = false)
+    private java.util.Set<Long> optionIds = new java.util.LinkedHashSet<>();
+
+    public java.util.Set<Long> effectiveOptionIds() {
+        if (optionIds != null && !optionIds.isEmpty()) return optionIds;
+        return optionId == null ? java.util.Set.of() : java.util.Set.of(optionId);
+    }
+
+    public boolean appliesToOptions(java.util.Set<Long> selectedOptions) {
+        return effectiveOptionIds().isEmpty()
+                || effectiveOptionIds().stream().anyMatch(selectedOptions::contains);
+    }
     private String scope;
     private String reuseScope;
     private String code;

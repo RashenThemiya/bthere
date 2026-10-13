@@ -39,6 +39,7 @@ public class ServiceOptionService {
     private final ServiceProviderTypeAssignmentRepository assignmentRepository;
     private final ProviderProfileService profileService;
     private final ProviderServiceApprovalService approvalService;
+    private final ServiceCustomFieldService customFieldService;
 
     @Transactional
     public ServiceOptionResponse create(Long serviceTypeId, CreateServiceOptionRequest request) {
@@ -51,7 +52,9 @@ public class ServiceOptionService {
         option.setServiceProviderTypeId(serviceTypeId);
         apply(option, request);
         option.setStatus("ACTIVE");
-        return response(optionRepository.save(option));
+        option = optionRepository.save(option);
+        customFieldService.saveForOption(serviceTypeId, option.getOptionId(), request.dynamicFields());
+        return response(option);
     }
 
     @Transactional
@@ -65,7 +68,9 @@ public class ServiceOptionService {
             throw new ConflictException("Service option code already exists");
         }
         apply(option, request);
-        return response(optionRepository.save(option));
+        option = optionRepository.save(option);
+        customFieldService.saveForOption(serviceTypeId, optionId, request.dynamicFields());
+        return response(option);
     }
 
     @Transactional
@@ -87,7 +92,7 @@ public class ServiceOptionService {
                 ? optionRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscNameAsc(serviceTypeId)
                 : optionRepository.findAllByServiceProviderTypeIdAndStatusOrderByDisplayOrderAscNameAsc(
                         serviceTypeId, "ACTIVE");
-        return options.stream().map(this::response).toList();
+        return options.stream().map(option -> response(option, includeInactive)).toList();
     }
 
     @Transactional
@@ -325,6 +330,10 @@ public class ServiceOptionService {
     private String trim(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
     private ServiceOptionResponse response(ServiceOption item) {
+        return response(item, true);
+    }
+
+    private ServiceOptionResponse response(ServiceOption item, boolean includeInactiveFields) {
         return new ServiceOptionResponse(item.getOptionId(), item.getServiceProviderTypeId(),
                 item.getCode(), item.getName(), item.getDescription(), item.getDisplayOrder(),
                 item.getStatus(), item.getSchedulingModel() == null
@@ -345,7 +354,9 @@ public class ServiceOptionService {
                 ServiceContentSupport.icon(item.getMedia()),
                 ServiceContentSupport.cover(item.getMedia()),
                 ServiceContentSupport.gallery(item.getMedia()),
-                ServiceContentSupport.responsibilities(item.getResponsibilities()));
+                ServiceContentSupport.responsibilities(item.getResponsibilities()),
+                customFieldService.listForOption(item.getServiceProviderTypeId(),
+                        item.getOptionId(), includeInactiveFields));
     }
 
     private ServiceOptionResponse.DeliveryModeConfiguration deliveryConfiguration(

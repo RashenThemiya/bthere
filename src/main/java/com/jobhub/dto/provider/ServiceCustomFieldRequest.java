@@ -7,6 +7,7 @@ import java.util.List;
 
 public record ServiceCustomFieldRequest(
         Long optionId,
+        List<@NotNull @Positive Long> optionIds,
         @NotBlank String scope,
         String reuseScope,
         @NotBlank @Size(max = 100) String code,
@@ -22,4 +23,10 @@ public record ServiceCustomFieldRequest(
         JsonNode options,
         JsonNode condition,
         @Min(0) Integer displayOrder
-) {}
+) {
+    public ServiceCustomFieldRequest withOptionIds(List<Long> ids) {
+        return new ServiceCustomFieldRequest(null, ids, scope, reuseScope, code, label,
+                description, fieldType, required, requiresApproval, minimumFiles, maximumFiles,
+                maximumFileSizeMb, allowedFileTypes, options, condition, displayOrder);
+    }
+}

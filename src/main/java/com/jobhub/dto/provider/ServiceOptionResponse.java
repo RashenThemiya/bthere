@@ -26,7 +26,8 @@ public record ServiceOptionResponse(
         ServiceMediaPayload icon,
         ServiceMediaPayload coverImage,
         List<ServiceMediaPayload> gallery,
-        List<ServiceResponsibilityPayload> responsibilities
+        List<ServiceResponsibilityPayload> responsibilities,
+        List<ServiceCustomFieldResponse> dynamicFields
 ) {
     public record DeliveryModeConfiguration(
             String code,

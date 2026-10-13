@@ -29,5 +29,6 @@ public record CreateServiceOptionRequest(
         @Valid ServiceMediaPayload coverImage,
         @NotNull(message = "Gallery is required") List<@Valid ServiceMediaPayload> gallery,
         @NotNull(message = "Responsibilities are required")
-        List<@Valid ServiceResponsibilityPayload> responsibilities
+        List<@Valid ServiceResponsibilityPayload> responsibilities,
+        List<@NotNull @Valid OptionDynamicFieldRequest> dynamicFields
 ) {}

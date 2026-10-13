@@ -261,8 +261,7 @@ public class ProviderServiceApprovalService {
 
         return fields.stream()
                 .filter(ServiceCustomField::isRequired)
-                .filter(field -> field.getOptionId() == null
-                        || selectedOptions.contains(field.getOptionId()))
+                .filter(field -> field.appliesToOptions(selectedOptions))
                 .filter(field -> conditionApplies(
                         assignment, field, byCode, submissions))
                 .allMatch(field -> {

@@ -385,6 +385,111 @@ PUT /api/v1/admin/provider-types/{providerTypeId}/document-requirements
 This request replaces that service's requirement list. An empty list means
 the service requires no documents.
 
+## Dynamic provider requirements for multiple options
+
+Super Admin can create one dynamic requirement for several service options:
+
+```http
+POST /api/v1/admin/provider-types/{providerTypeId}/custom-fields
+```
+
+```json
+{
+  "optionIds": [12, 13],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "ASSIGNMENT",
+  "code": "DRIVING_EXPERIENCE",
+  "label": "Driving experience in years",
+  "fieldType": "NUMBER",
+  "required": true,
+  "requiresApproval": false,
+  "displayOrder": 1
+}
+```
+
+The provider answers this field once when any listed option is selected.
+Use `optionIds: []` for a service-wide requirement. PUT to
+`/api/v1/admin/provider-types/{providerTypeId}/custom-fields/{fieldId}`
+replaces the option list. Read the form from
+`GET /api/v1/provider-types/{providerTypeId}/onboarding-schema`.
+See [DYNAMIC_FIELDS_API.md](DYNAMIC_FIELDS_API.md) for submission and reuse rules.
+
+Option GET responses now include `dynamicFields` with the full definitions
+applicable to each option, including common service-wide fields. Super Admin
+can also send `dynamicFields` in the option POST or PUT API to create or edit
+fields in the same transaction. Each entry contains an optional `fieldId`
+(omit to create) and a `definition` containing the custom-field request.
+See [option API examples](DYNAMIC_FIELDS_API.md#dynamic-fields-in-option-apis).
+
+### Create an option with dynamic fields
+
+Super Admin creates the option and its fields together in one request:
+
+```http
+POST /api/v1/admin/provider-types/{providerTypeId}/options
+Authorization: Bearer <super-admin-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "code": "HOME_CARE",
+  "name": "Home Care",
+  "description": "Care provided at the customer's home",
+  "displayOrder": 1,
+  "schedulingModel": "TIME_BASED",
+  "locationEnabled": true,
+  "deliveryModes": ["PROVIDER_TO_CUSTOMER"],
+  "fulfillmentModel": "ONE_TO_ONE",
+  "defaultCapacity": 1,
+  "requiredProviderCount": 1,
+  "bookingMode": "MANY_AT_A_TIME",
+  "providerSelectionMode": "OPEN_REQUEST",
+  "pricingOwner": "ADMIN",
+  "allowedPaymentMethods": ["CASH", "CARD"],
+  "icon": null,
+  "coverImage": null,
+  "gallery": [],
+  "responsibilities": [],
+  "dynamicFields": [
+    {
+      "definition": {
+        "scope": "PROVIDER_REQUIREMENT",
+        "reuseScope": "ASSIGNMENT",
+        "code": "CARE_EXPERIENCE",
+        "label": "Care experience in years",
+        "fieldType": "NUMBER",
+        "required": true,
+        "requiresApproval": false,
+        "displayOrder": 1
+      }
+    },
+    {
+      "definition": {
+        "scope": "BOOKING_FIELD",
+        "code": "CARE_NOTES",
+        "label": "Care instructions",
+        "fieldType": "TEXTAREA",
+        "required": false,
+        "requiresApproval": false,
+        "displayOrder": 2
+      }
+    }
+  ]
+}
+```
+
+Omit `fieldId` to create each new field. Omit `optionId` and `optionIds`
+inside its definition: the backend assigns it to the newly created option.
+The response includes the new `optionId` and `dynamicFields` containing their
+generated `fieldId` and `optionIds`. Providers complete `PROVIDER_REQUIREMENT`
+fields; customers complete `BOOKING_FIELD` fields when booking.
+
+To edit the option and a field together, send the option properties to
+`PUT /api/v1/admin/provider-types/{providerTypeId}/options/{optionId}` and
+include that field's returned `fieldId` alongside its full `definition`.
+Omitted dynamic fields remain unchanged.
+
 ## Document types and provider documents
 
 List active document types:
