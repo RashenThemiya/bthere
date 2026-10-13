@@ -1,7 +1,9 @@
 package com.jobhub.exception;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,13 +26,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(TooManyRequestsException.class)
-    public ProblemDetail handleTooManyRequests(TooManyRequestsException exception) {
+    public ResponseEntity<ProblemDetail> handleTooManyRequests(TooManyRequestsException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.TOO_MANY_REQUESTS,
                 exception.getMessage()
         );
         problem.setTitle("Too many requests");
-        return problem;
+        problem.setProperty("retryAfterSeconds", exception.getRetryAfterSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER,
+                        Long.toString(exception.getRetryAfterSeconds()))
+                .body(problem);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

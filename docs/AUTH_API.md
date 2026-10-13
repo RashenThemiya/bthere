@@ -93,6 +93,23 @@ The backend sends a six-digit OTP to the email address. The user cannot log in u
 - `400 Bad Request`: invalid fields.
 - `409 Conflict`: email is already registered.
 - `429 Too Many Requests`: an OTP was requested again before the resend cooldown ended.
+
+The `429` response includes the remaining wait time in both the standard
+`Retry-After` response header and the JSON body:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Too many requests",
+  "status": 429,
+  "detail": "Please wait before requesting another OTP",
+  "retryAfterSeconds": 43
+}
+```
+
+The mobile app should disable resend and count down from
+`retryAfterSeconds`. It may submit another request when the countdown reaches
+zero.
 - `500 Internal Server Error`: email delivery/configuration failed.
 
 ## 2. Verify registration email OTP

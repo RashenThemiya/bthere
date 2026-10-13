@@ -12,8 +12,13 @@ POST /api/v1/uploads/images
 Authorization: Bearer <SUPER_ADMIN token>
 Content-Type: multipart/form-data
 
-file: <JPG, PNG or WebP, maximum 10 MB>
+file: <JPG, PNG, WebP or SVG, maximum 10 MB>
 ```
+
+SVG is accepted only for Super Admin-managed service assets. SVG XML is
+validated, and files containing scripts, event handlers, external references,
+DOCTYPE/entities, embedded objects, or unsafe styles are rejected. Provider
+profile-photo uploads remain raster-only.
 
 Success: `201 Created`.
 

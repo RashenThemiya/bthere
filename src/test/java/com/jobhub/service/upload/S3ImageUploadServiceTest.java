@@ -60,7 +60,49 @@ class S3ImageUploadServiceTest {
                 IllegalArgumentException.class,
                 () -> service.uploadImage("service-icons", file));
 
-        assertEquals("Only JPG, PNG and WebP images are allowed", error.getMessage());
+        assertEquals("Only JPG, PNG, WebP and SVG images are allowed", error.getMessage());
+        verifyNoInteractions(s3Client);
+    }
+
+    @Test
+    void uploadsSafeSvgForAdminManagedServiceAssets() {
+        byte[] svg = ("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">"
+                + "<path d=\"M2 2h20v20H2z\"/></svg>")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "icon.svg", "image/svg+xml", svg);
+
+        FileUploadResponse response = service.uploadImage("service-icons", file);
+
+        assertTrue(response.key().matches("service-icons/[0-9a-f-]+\\.svg"));
+        assertEquals("image/svg+xml", response.contentType());
+        verify(s3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
+
+    @Test
+    void rejectsSvgWithExecutableContent() {
+        byte[] svg = ("<svg xmlns=\"http://www.w3.org/2000/svg\">"
+                + "<script>alert(1)</script></svg>")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "icon.svg", "image/svg+xml", svg);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.uploadImage("service-icons", file));
+        verifyNoInteractions(s3Client);
+    }
+
+    @Test
+    void rejectsSvgForProviderPhotoUploads() {
+        byte[] svg = "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "photo.svg", "image/svg+xml", svg);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.uploadImage("providers/10/images", file));
+
+        assertEquals("SVG is allowed only for admin-managed service assets", error.getMessage());
         verifyNoInteractions(s3Client);
     }
 

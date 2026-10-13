@@ -16,6 +16,12 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +31,8 @@ public class S3ImageUploadService {
     private static final Map<String, String> EXTENSIONS = Map.of(
             "image/jpeg", ".jpg",
             "image/png", ".png",
-            "image/webp", ".webp"
+            "image/webp", ".webp",
+            "image/svg+xml", ".svg"
     );
 
     private final S3Client s3Client;
@@ -40,7 +47,7 @@ public class S3ImageUploadService {
     private String publicBaseUrl;
 
     public FileUploadResponse uploadImage(String keyPrefix, MultipartFile file) {
-        validate(file);
+        validate(keyPrefix, file);
         String contentType = file.getContentType().toLowerCase();
         String key = keyPrefix + "/" + UUID.randomUUID() + EXTENSIONS.get(contentType);
 
@@ -52,7 +59,7 @@ public class S3ImageUploadService {
         }
         if (!matchesContentType(imageBytes, contentType)) {
             throw new IllegalArgumentException(
-                    "Image content does not match its JPG, PNG or WebP content type");
+                    "Image content does not match its JPG, PNG, WebP or SVG content type");
         }
 
         PutObjectRequest request = PutObjectRequest.builder()
@@ -71,7 +78,7 @@ public class S3ImageUploadService {
         );
     }
 
-    private void validate(MultipartFile file) {
+    private void validate(String keyPrefix, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Image file is required");
         }
@@ -82,7 +89,11 @@ public class S3ImageUploadService {
         }
         String contentType = file.getContentType();
         if (contentType == null || !EXTENSIONS.containsKey(contentType.toLowerCase())) {
-            throw new IllegalArgumentException("Only JPG, PNG and WebP images are allowed");
+            throw new IllegalArgumentException("Only JPG, PNG, WebP and SVG images are allowed");
+        }
+        if ("image/svg+xml".equalsIgnoreCase(contentType)
+                && !"service-icons".equals(keyPrefix)) {
+            throw new IllegalArgumentException("SVG is allowed only for admin-managed service assets");
         }
     }
 
@@ -102,8 +113,55 @@ public class S3ImageUploadService {
                     && bytes[2] == 'F' && bytes[3] == 'F'
                     && bytes[8] == 'W' && bytes[9] == 'E'
                     && bytes[10] == 'B' && bytes[11] == 'P';
+            case "image/svg+xml" -> isSafeSvg(bytes);
             default -> false;
         };
+    }
+
+    private boolean isSafeSvg(byte[] bytes) {
+        try {
+            String source = new String(bytes, StandardCharsets.UTF_8);
+            String lower = source.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("<!doctype") || lower.contains("<!entity")) return false;
+
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+            Element root = factory.newDocumentBuilder()
+                    .parse(new java.io.ByteArrayInputStream(bytes)).getDocumentElement();
+            String rootName = root.getLocalName() == null ? root.getNodeName() : root.getLocalName();
+            return "svg".equalsIgnoreCase(rootName) && safeSvgElement(root);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean safeSvgElement(Element element) {
+        String name = element.getLocalName() == null
+                ? element.getNodeName() : element.getLocalName();
+        name = name.toLowerCase(java.util.Locale.ROOT);
+        if (java.util.Set.of("script", "foreignobject", "iframe", "object", "embed", "style")
+                .contains(name)) return false;
+        NamedNodeMap attributes = element.getAttributes();
+        for (int index = 0; index < attributes.getLength(); index++) {
+            Node attribute = attributes.item(index);
+            String attributeName = attribute.getNodeName().toLowerCase(java.util.Locale.ROOT);
+            String value = attribute.getNodeValue().trim().toLowerCase(java.util.Locale.ROOT);
+            if (attributeName.startsWith("on") || value.startsWith("javascript:")
+                    || value.startsWith("data:text/html") || value.contains("url(")) return false;
+            if ((attributeName.endsWith("href") || "src".equals(attributeName))
+                    && !value.isBlank() && !value.startsWith("#")) return false;
+        }
+        NodeList children = element.getChildNodes();
+        for (int index = 0; index < children.getLength(); index++) {
+            Node child = children.item(index);
+            if (child instanceof Element childElement && !safeSvgElement(childElement)) return false;
+        }
+        return true;
     }
 
     private String requireBucket() {

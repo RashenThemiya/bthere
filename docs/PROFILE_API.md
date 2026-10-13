@@ -14,7 +14,7 @@ POST /api/v1/uploads/images
 Authorization: Bearer <access-token>
 Content-Type: multipart/form-data
 
-file: <JPG, PNG or WebP image>
+file: <JPG, PNG or WebP image; safe SVG is also accepted for Super Admin service assets>
 ```
 
 Maximum size is 10 MB. Example response:

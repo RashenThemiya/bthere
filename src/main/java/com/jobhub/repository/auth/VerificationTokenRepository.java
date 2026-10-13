@@ -16,6 +16,11 @@ public interface VerificationTokenRepository extends JpaRepository<VerificationT
             LocalDateTime createdAfter
     );
 
+    Optional<VerificationToken> findFirstByTypeAndDestinationOrderByCreatedAtDesc(
+            String type,
+            String destination
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<VerificationToken> findFirstByTypeAndDestinationAndUsedAtIsNullOrderByCreatedAtDesc(
             String type,

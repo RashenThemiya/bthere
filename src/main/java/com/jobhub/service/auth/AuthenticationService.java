@@ -40,6 +40,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.security.SecureRandom;
 import java.util.List;
@@ -97,14 +98,8 @@ public class AuthenticationService {
         }
 
         String tokenType = otpTokenType(registration);
-        LocalDateTime cooldownStart = LocalDateTime.now().minusSeconds(otpResendSeconds);
-        if (verificationTokenRepository.existsByTypeAndDestinationAndCreatedAtAfter(
-                tokenType,
-                phoneNumber,
-                cooldownStart
-        )) {
-            throw new TooManyRequestsException("Please wait before requesting another OTP");
-        }
+        enforceOtpCooldown(tokenType, phoneNumber,
+                "Please wait before requesting another OTP");
 
         String otp = String.format(Locale.ROOT, "%06d", secureRandom.nextInt(1_000_000));
         VerificationToken token = new VerificationToken();
@@ -545,16 +540,8 @@ public class AuthenticationService {
 
     private void sendEmailVerificationOtp(User user) {
         String tokenType = "EMAIL_VERIFY";
-        LocalDateTime cooldownStart = LocalDateTime.now().minusSeconds(otpResendSeconds);
-        if (verificationTokenRepository.existsByTypeAndDestinationAndCreatedAtAfter(
-                tokenType,
-                user.getEmail(),
-                cooldownStart
-        )) {
-            throw new TooManyRequestsException(
-                    "Please wait before requesting another email verification code"
-            );
-        }
+        enforceOtpCooldown(tokenType, user.getEmail(),
+                "Please wait before requesting another email verification code");
 
         String otp = generateOtp();
         VerificationToken token = new VerificationToken();
@@ -597,6 +584,21 @@ public class AuthenticationService {
                 "If the phone number is eligible, an OTP has been sent",
                 otpExpirySeconds
         );
+    }
+
+    private void enforceOtpCooldown(String tokenType, String destination, String message) {
+        verificationTokenRepository
+                .findFirstByTypeAndDestinationOrderByCreatedAtDesc(tokenType, destination)
+                .ifPresent(token -> {
+                    if (token.getCreatedAt() == null) return;
+                    LocalDateTime retryAt = token.getCreatedAt().plusSeconds(otpResendSeconds);
+                    LocalDateTime now = LocalDateTime.now();
+                    if (!retryAt.isAfter(now)) return;
+                    long remainingNanos = Duration.between(now, retryAt).toNanos();
+                    long retryAfterSeconds = Math.max(1,
+                            (remainingNanos + 999_999_999L) / 1_000_000_000L);
+                    throw new TooManyRequestsException(message, retryAfterSeconds);
+                });
     }
 
     private OtpRequestResponse acceptedEmailOtpResponse() {
