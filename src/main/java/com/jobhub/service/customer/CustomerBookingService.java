@@ -50,6 +50,10 @@ public class CustomerBookingService {
     private final ServiceCustomFieldRepository customFieldRepository;
     private final ServicePricingService pricingService;
     private final ObjectMapper objectMapper;
+    private final CustomerRequirementsService customerRequirementsService;
+    private final CustomerAvailabilityService availabilityService;
+    private final com.jobhub.service.upload.S3PrivateDocumentService privateDocuments;
+    private final com.jobhub.service.finance.WalletService walletService;
 
     @Transactional
     public BookingResponse create(Long userId, CreateBookingRequest request) {
@@ -59,7 +63,9 @@ public class CustomerBookingService {
                         request.optionId(), request.serviceTypeId())
                 .filter(item -> "ACTIVE".equals(item.getStatus()))
                 .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
+        customerRequirementsService.requireEligible(userId, request.serviceTypeId(), request.optionId());
         List<Long> providerIds = resolveProviderIds(option, request);
+        availabilityService.lockProviders(providerIds);
         List<ServiceProviderTypeAssignment> assignments = providerIds.stream()
                 .map(providerId -> requireApprovedProvider(providerId,
                         request.serviceTypeId(), request.optionId()))
@@ -74,7 +80,6 @@ public class CustomerBookingService {
         BookingTime time = resolveTime(option, request);
         Location location = resolveLocation(assignment, option, mode, request);
         Route route = resolveRoute(option, request, location);
-        enforceCapacity(option, providerIds, time, location);
         Map<ServiceCustomField, JsonNode> validatedAnswers = validateAnswers(
                 userId, request.serviceTypeId(), request.optionId(),
                 request.answers() == null ? List.of() : request.answers());
@@ -83,6 +88,27 @@ public class CustomerBookingService {
                 .orElseThrow(() -> new IllegalArgumentException("Provider has no active market"));
         Market market = marketRepository.findById(providerMarket.getMarketId())
                 .orElseThrow(() -> new ResourceNotFoundException("Market not found"));
+        availabilityService.requireOffering(market.getMarketId(), request.serviceTypeId());
+        java.time.ZoneId marketZone = java.time.ZoneId.of(market.getTimezone());
+        if (time.start().isBefore(java.time.LocalDateTime.now(marketZone))
+                || java.time.Duration.between(time.start(), time.end()).compareTo(java.time.Duration.ofDays(31)) > 0) {
+            throw new IllegalArgumentException("Choose a future interval of at most 31 days");
+        }
+        CustomerDiscoveryService.requireUnambiguous(marketZone, time.start(), time.end());
+        for (var selected : assignments) {
+            if (!availabilityService.qualified(selected, option, market.getMarketId())
+                    || !availabilityService.scheduled(selected, time.start(), time.end())) {
+                throw new IllegalArgumentException("Provider is not available for this market and schedule");
+            }
+            // Check coverage for every team member, not only the primary provider.
+            Location memberLocation = resolveLocation(selected, option, mode, request);
+            Integer capacity = memberLocation.providerLocationId() == null ? null
+                    : areaRepository.findById(memberLocation.providerLocationId()).map(ServiceProviderServiceArea::getCapacity).orElse(null);
+            if (availabilityService.remaining(selected, option, memberLocation.providerLocationId(), capacity,
+                    time.start(), time.end(), true) < 1) {
+                throw new IllegalArgumentException("Provider capacity changed; search again");
+            }
+        }
         BigDecimal pricingLatitude = "ROUTE_BASED".equals(schedulingModel(option))
                 ? route.destinationLatitude() : location.latitude();
         BigDecimal pricingLongitude = "ROUTE_BASED".equals(schedulingModel(option))
@@ -132,6 +158,7 @@ public class CustomerBookingService {
         job = jobRepository.save(job);
         saveProviderAssignments(job.getJobId(), providerIds);
         saveAnswers(job.getJobId(), validatedAnswers);
+        if ("WALLET".equals(paymentMethod)) walletService.reserveBooking(userId, job.getJobId());
         return response(job);
     }
 
@@ -247,9 +274,27 @@ public class CustomerBookingService {
                 }
                 files.forEach(file -> {
                     JsonNode key = file.isTextual() ? file : file.get("key");
-                    if (key == null || !key.isTextual()
-                            || !key.asText().startsWith("providers/" + userId + "/")) {
+                    if (key == null || !key.isTextual()) {
                         throw new IllegalArgumentException("Uploaded file does not belong to this customer");
+                    }
+                    var metadata = privateDocuments.inspectCustomerFile(userId, key.asText());
+                    if (field.getMaximumFileSizeMb() != null
+                            && metadata.size() > field.getMaximumFileSizeMb() * 1024L * 1024L) {
+                        throw new IllegalArgumentException("Uploaded file exceeds the configured size limit");
+                    }
+                    String kind = switch (metadata.contentType()) {
+                        case "application/pdf" -> "PDF";
+                        case "image/jpeg" -> "JPG";
+                        case "image/png" -> "PNG";
+                        case "image/webp" -> "WEBP";
+                        default -> "UNSUPPORTED";
+                    };
+                    JsonNode allowedTypes = read(field.getAllowedFileTypesJson());
+                    if ("UNSUPPORTED".equals(kind) || "IMAGE_UPLOAD".equals(field.getFieldType()) && "PDF".equals(kind)
+                            || allowedTypes != null && !allowedTypes.isEmpty()
+                            && java.util.stream.StreamSupport.stream(allowedTypes.spliterator(), false)
+                            .noneMatch(t -> kind.equalsIgnoreCase(t.asText()))) {
+                        throw new IllegalArgumentException("Uploaded file type is not allowed");
                     }
                 });
             }
@@ -313,6 +358,9 @@ public class CustomerBookingService {
         if (!option.isLocationEnabled()) {
             throw new IllegalArgumentException("Physical locations are disabled for this option");
         }
+        Long locationMarketId = providerMarketRepository.findByServiceProviderIdAndStatus(
+                assignment.getServiceProviderId(), "ACTIVE")
+                .orElseThrow(() -> new IllegalArgumentException("Provider has no active market")).getMarketId();
         if ("CUSTOMER_TO_PROVIDER".equals(mode)) {
             if (request.providerLocationId() == null || request.meetingPoint() != null) {
                 throw new IllegalArgumentException("Select one provider location");
@@ -320,7 +368,8 @@ public class CustomerBookingService {
             ServiceProviderServiceArea area = areaRepository.findById(request.providerLocationId())
                     .filter(item -> assignment.getAssignmentId().equals(item.getAssignmentId())
                             && option.getOptionId().equals(item.getOptionId())
-                            && mode.equals(item.getDeliveryMode()) && "ACTIVE".equals(item.getStatus()))
+                            && mode.equals(item.getDeliveryMode()) && "ACTIVE".equals(item.getStatus())
+                            && locationMarketId.equals(item.getMarketId()))
                     .orElseThrow(() -> new IllegalArgumentException("Provider location is invalid"));
             return Location.fromArea(area);
         }
@@ -339,7 +388,8 @@ public class CustomerBookingService {
             List<ServiceProviderServiceArea> areas = areaRepository
                     .findAllByAssignmentIdAndOptionIdAndDeliveryModeOrderByLocationNameAsc(
                             assignment.getAssignmentId(), option.getOptionId(), mode);
-            boolean covered = areas.stream().anyMatch(area -> area.getRadiusKm() != null
+            boolean covered = areas.stream().anyMatch(area -> "ACTIVE".equals(area.getStatus())
+                    && locationMarketId.equals(area.getMarketId()) && area.getRadiusKm() != null
                     && distanceKm(area.getLatitude(), area.getLongitude(),
                     customerLatitude, customerLongitude)
                     <= area.getRadiusKm().doubleValue());
@@ -383,57 +433,6 @@ public class CustomerBookingService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Provider " + providerId + " is not active for this service option"));
         return assignment;
-    }
-
-    private void enforceCapacity(ServiceOption option, List<Long> providerIds,
-                                 BookingTime time, Location location) {
-        Set<String> excluded = Set.of("CANCELLED", "COMPLETED", "REJECTED");
-        String model = fulfillmentModel(option);
-        String bookingMode = option.getBookingMode() == null
-                ? "MANY_AT_A_TIME" : option.getBookingMode();
-        if ("ONE_AT_A_TIME".equals(bookingMode)) {
-            for (Long providerId : providerIds) {
-                long primaryUsed = jobRepository.countProviderServiceOverlapping(
-                        providerId, option.getServiceProviderTypeId(),
-                        time.start(), time.end(), excluded);
-                long assignmentUsed = jobProviderRepository.countProviderServiceOverlapping(
-                        providerId, option.getServiceProviderTypeId(),
-                        time.start(), time.end(), excluded);
-                if (Math.max(primaryUsed, assignmentUsed) > 0) {
-                    throw new IllegalArgumentException(
-                            "Provider " + providerId + " already has a booking for this service");
-                }
-            }
-            return;
-        }
-        if ("MANY_CUSTOMERS_ONE_PROVIDER".equals(model)) {
-            int capacity = option.getDefaultCapacity() == null ? 1 : option.getDefaultCapacity();
-            if (location.providerLocationId() != null) {
-                Integer locationCapacity = areaRepository.findById(location.providerLocationId())
-                        .map(ServiceProviderServiceArea::getCapacity).orElse(null);
-                if (locationCapacity != null) capacity = locationCapacity;
-            }
-            long used = location.providerLocationId() == null
-                    ? jobRepository.countPrimaryOverlapping(providerIds.get(0), option.getOptionId(),
-                    time.start(), time.end(), excluded)
-                    : jobRepository.countLocationOverlapping(providerIds.get(0), option.getOptionId(),
-                    location.providerLocationId(), time.start(), time.end(), excluded);
-            if (used >= capacity) {
-                throw new IllegalArgumentException("No capacity is available for the selected time");
-            }
-            return;
-        }
-        for (Long providerId : providerIds) {
-            long primaryUsed = jobRepository.countPrimaryOverlapping(providerId, option.getOptionId(),
-                    time.start(), time.end(), excluded);
-            long assignmentUsed = jobProviderRepository.countOverlapping(
-                    providerId, option.getOptionId(), time.start(), time.end(), excluded);
-            long used = Math.max(primaryUsed, assignmentUsed);
-            if (used > 0) {
-                throw new IllegalArgumentException(
-                        "Provider " + providerId + " is unavailable for the selected time");
-            }
-        }
     }
 
     private void saveProviderAssignments(Long jobId, List<Long> providerIds) {

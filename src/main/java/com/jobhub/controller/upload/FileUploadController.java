@@ -49,7 +49,9 @@ public class FileUploadController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @RequestPart("file") MultipartFile file
     ) {
-        return ResponseEntity.ok(documentService.upload(user.id(), file));
+        return ResponseEntity.ok(user.roles().contains("CUSTOMER")
+                ? documentService.uploadCustomer(user.id(), file)
+                : documentService.upload(user.id(), file));
     }
 
     @GetMapping("/view-url")

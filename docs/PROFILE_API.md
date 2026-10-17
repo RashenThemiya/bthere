@@ -2,6 +2,9 @@
 
 Base URL: `https://jobhub.pentarixlabs.com`
 
+For one mobile request registering a service, options, and supporting details,
+see [Combined service registration](PROVIDER_SERVICE_REGISTRATION_API.md).
+
 Every endpoint below requires `Authorization: Bearer <access-token>`.
 
 ## S3 image upload
@@ -42,6 +45,9 @@ the relative `key` in every document or certificate `documentKey` field. Provide
 URLs only for their own files; authorized admins can view provider files.
 
 ## Customer profile
+
+For configurable personal details, documents, verification, and global/service/option
+booking requirements, see [Customer requirements API](CUSTOMER_REQUIREMENTS_API.md).
 
 - `GET /api/v1/customers/me/profile`
 - `PUT /api/v1/customers/me/profile`
@@ -156,6 +162,14 @@ POST /api/v1/admin/provider-types/setup
   "name": "Caregiver",
   "description": "Home and elderly care",
   "iconUrl": "https://cdn.example.com/caregiver.svg",
+  "availabilityEnabled": true,
+  "optionsRequired": true,
+  "minimumOptionSelections": 1,
+  "maximumOptionSelections": 5,
+  "icon": null,
+  "coverImage": null,
+  "gallery": [],
+  "responsibilities": [],
   "documents": [
     {
       "documentTypeId": 1,
@@ -192,6 +206,10 @@ POST /api/v1/admin/provider-types/setup
 ```
 
 Requirement levels are `DISABLED`, `OPTIONAL`, and `REQUIRED`.
+
+`gallery` and `responsibilities` are required arrays, even when empty. For
+structured icons, cover images, galleries, responsibilities, and replacement
+rules, see [SERVICE_MEDIA_RESPONSIBILITIES_API.md](SERVICE_MEDIA_RESPONSIBILITIES_API.md).
 
 Super Admin updates the full setup with:
 
@@ -386,6 +404,36 @@ This request replaces that service's requirement list. An empty list means
 the service requires no documents.
 
 ## Dynamic provider requirements for multiple options
+
+### Provider option and language selections
+
+These endpoints require the `SERVICE_PROVIDER` role and an assignment owned
+by the authenticated provider.
+
+- `GET /api/v1/providers/me/services/{assignmentId}/options`
+- `PUT /api/v1/providers/me/services/{assignmentId}/options`
+
+PUT replaces the selected options using active option IDs from that service:
+
+```json
+{
+  "optionIds": [12, 13]
+}
+```
+
+- `GET /api/v1/providers/me/services/{assignmentId}/languages`
+- `PUT /api/v1/providers/me/services/{assignmentId}/languages`
+
+```json
+{
+  "languages": ["SINHALA", "ENGLISH", "TAMIL"]
+}
+```
+
+PUT replaces the language selection. Allowed values are `SINHALA`, `ENGLISH`,
+and `TAMIL`.
+
+### Admin field configuration
 
 Super Admin can create one dynamic requirement for several service options:
 

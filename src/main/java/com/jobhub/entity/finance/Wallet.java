@@ -23,8 +23,11 @@ public class Wallet extends AuditedEntity {
     private Long walletId;
     private Long userId;
     private String currencyCode;
-    private BigDecimal availableBalance;
-    private BigDecimal pendingBalance;
+    @Column(precision = 19, scale = 4) private BigDecimal availableBalance;
+    @Column(precision = 19, scale = 4) private BigDecimal pendingBalance;
+    @Column(precision = 19, scale = 4) private BigDecimal reservedBalance;
     private String status;
+    private String fundingMode;
+    @Version private Long version;
 }
 

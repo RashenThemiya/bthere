@@ -14,6 +14,23 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(PaymentUnavailableException.class)
+    public ProblemDetail handlePaymentUnavailable(PaymentUnavailableException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());
+    }
+
+    @ExceptionHandler(CustomerEligibilityException.class)
+    public ProblemDetail handleCustomerEligibility(CustomerEligibilityException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, exception.getMessage());
+        problem.setTitle("Customer eligibility requirements not satisfied");
+        problem.setProperty("eligibility", exception.getEligibility());
+        return problem;
+    }
+
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    public ProblemDetail handleConcurrentEdit(org.springframework.dao.OptimisticLockingFailureException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "The record changed; reload it before retrying");
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException exception) {

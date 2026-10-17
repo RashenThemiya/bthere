@@ -45,6 +45,11 @@ Markets hold country-specific configuration without duplicating global users, ro
 
 Frontend developers should use the complete [Authentication API documentation](docs/AUTH_API.md).
 Profile and provider onboarding endpoints are documented in [Profile API documentation](docs/PROFILE_API.md).
+Dynamic customer forms, private documents, verification, and scoped booking rules are documented in [Customer requirements API](docs/CUSTOMER_REQUIREMENTS_API.md).
+Customer market browsing, booking context, and provider map/list search are documented in [Customer discovery API](docs/CUSTOMER_DISCOVERY_API.md).
+The complete customer frontend integration contract is in [Customer App frontend reference](docs/CUSTOMER_APP_FRONTEND_API.md).
+The initial internal wallet ledger and its deliberately disabled external payment capabilities are documented in [Wallet API](docs/WALLET_API.md).
+Development-only payment simulation and the DISABLED/MOCK/PAYHERE SPI switch are documented in [Mock payment API](docs/MOCK_PAYMENTS_API.md).
 Administration endpoints are documented in [Administration API documentation](docs/ADMIN_API.md).
 
 Log in using a username or email as the identifier:

@@ -61,6 +61,74 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class JobhubApplicationTests {
+    @Autowired private com.jobhub.controller.customer.WalletController walletController;
+    @Autowired private com.jobhub.controller.admin.AdminWalletController adminWalletController;
+    @Autowired private com.jobhub.controller.admin.AdminPaymentGatewayController adminPaymentGatewayController;
+
+    @Test
+    void customerCannotInvokeFinanceSettlementAndExternalFundingFailsClosed() {
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "customer", "unused", java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_CUSTOMER")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminPaymentGatewayController.get())
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThat(walletController.capabilities().topups()).isFalse();
+            org.assertj.core.api.Assertions.assertThat(walletController.capabilities().withdrawals()).isFalse();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminWalletController.approve(null, 1L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> walletController.setup(new com.jobhub.security.AuthenticatedUser(25L,"test",null,"ACTIVE",java.util.List.of("CUSTOMER")),"CARD"))
+                    .isInstanceOf(com.jobhub.exception.PaymentUnavailableException.class);
+        } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
+    @MockitoBean
+    private com.jobhub.repository.finance.PaymentGatewaySettingsRepository paymentGatewaySettingsRepository;
+
+    @MockitoBean private com.jobhub.repository.finance.WalletRepository walletRepository;
+    @MockitoBean private com.jobhub.repository.finance.GatewayIntentRepository gatewayIntentRepository;
+    @MockitoBean private com.jobhub.repository.finance.PaymentInstrumentRepository paymentInstrumentRepository;
+    @MockitoBean private com.jobhub.repository.finance.WalletOperationRepository walletOperationRepository;
+    @MockitoBean private com.jobhub.repository.finance.WalletLedgerRepository walletLedgerRepository;
+
+    @MockitoBean
+    private com.jobhub.repository.customer.CustomerRequirementRepository customerRequirementRepository;
+
+    @MockitoBean
+    private com.jobhub.repository.customer.CustomerRequirementSubmissionRepository customerRequirementSubmissionRepository;
+
+    @MockitoBean
+    private com.jobhub.repository.customer.CustomerEligibilityRuleRepository customerEligibilityRuleRepository;
+
+    @Autowired
+    private com.jobhub.controller.admin.AdminCustomerRequirementsController customerRequirementsAdmin;
+
+    @Test
+    void customerCannotConfigureRequirementsOrReadOtherCustomerReviews() {
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "customer", "unused", java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_CUSTOMER")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerRequirementsAdmin.list())
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerRequirementsAdmin.queue("PENDING", org.springframework.data.domain.Pageable.unpaged()))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
+
+    @Test
+    void verificationAdminCanReviewButCannotChangeDefinitions() {
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "reviewer", "unused", java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_VERIFICATION_ADMIN")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        var page = org.springframework.data.domain.Pageable.unpaged();
+        org.mockito.Mockito.when(customerRequirementSubmissionRepository.findAllByStatus("PENDING", page))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        try {
+            org.assertj.core.api.Assertions.assertThat(customerRequirementsAdmin.queue("PENDING", page)).isEmpty();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerRequirementsAdmin.list())
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
 
     @Autowired
     private MockMvc mockMvc;

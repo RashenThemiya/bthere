@@ -39,9 +39,17 @@ public class S3PrivateDocumentService {
     private String bucket;
 
     public FileUploadResponse upload(Long userId, MultipartFile file) {
+        return uploadToPrefix("providers/" + userId + "/documents/", file);
+    }
+
+    public FileUploadResponse uploadCustomer(Long userId, MultipartFile file) {
+        return uploadToPrefix("customers/" + userId + "/documents/", file);
+    }
+
+    private FileUploadResponse uploadToPrefix(String prefix, MultipartFile file) {
         validate(file);
         String contentType = file.getContentType().toLowerCase();
-        String key = "providers/" + userId + "/documents/"
+        String key = prefix
                 + UUID.randomUUID() + EXTENSIONS.get(contentType);
         try {
             s3Client.putObject(
@@ -69,7 +77,10 @@ public class S3PrivateDocumentService {
         boolean admin = user.roles().stream().anyMatch(role ->
                 "SUPER_ADMIN".equals(role) || role.endsWith("_ADMIN") || "ADMIN".equals(role)
         );
-        if (!admin && !normalizedKey.startsWith("providers/" + user.id() + "/")) {
+        boolean ownProvider = normalizedKey.startsWith("providers/" + user.id() + "/");
+        boolean ownCustomer = user.roles().contains("CUSTOMER")
+                && normalizedKey.startsWith("customers/" + user.id() + "/documents/");
+        if (!admin && !ownProvider && !ownCustomer) {
             throw new IllegalArgumentException("You cannot access this file");
         }
 
@@ -109,7 +120,8 @@ public class S3PrivateDocumentService {
         }
         String prefix = "s3://" + requireBucket() + "/";
         String result = value.startsWith(prefix) ? value.substring(prefix.length()) : value;
-        if (result.contains("..") || result.startsWith("/") || !result.startsWith("providers/")) {
+        if (result.contains("..") || result.startsWith("/")
+                || !(result.startsWith("providers/") || result.startsWith("customers/"))) {
             throw new IllegalArgumentException("File key is invalid");
         }
         return result;
@@ -120,5 +132,22 @@ public class S3PrivateDocumentService {
             throw new IllegalStateException("AWS_S3_BUCKET is not configured");
         }
         return bucket;
+    }
+
+    public record CustomerFile(String contentType, long size) {}
+
+    public CustomerFile inspectCustomerFile(Long userId, String key) {
+        if (key == null || key.contains("..")
+                || !key.matches("customers/" + userId + "/documents/[A-Za-z0-9_-]+\\.[A-Za-z0-9]+")) {
+            throw new IllegalArgumentException("File must be a private document owned by this customer");
+        }
+        try {
+            var head = s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(requireBucket()).key(key).build());
+            return new CustomerFile(head.contentType(), head.contentLength());
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception exception) {
+            if (exception.statusCode() == 404) throw new IllegalArgumentException("Uploaded file does not exist");
+            throw exception;
+        }
     }
 }

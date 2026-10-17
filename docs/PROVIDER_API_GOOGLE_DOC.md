@@ -1,0 +1,1139 @@
+﻿# Provider API reference
+
+Prepared from the local project documentation on 2026-10-15. Google Docs synchronization is pending access.
+
+Includes profile/setup, dynamic requirements and submissions, and service media/responsibilities.
+
+## Combined mobile service registration
+
+`POST /api/v1/providers/me/service-registrations` saves one service with options,
+languages, skills, document references, certificates, education, availability,
+unavailable dates, service areas, and dynamic answers in one transaction.
+Requires an existing provider account/profile/market and bearer authentication.
+See [full payload and response contract](PROVIDER_SERVICE_REGISTRATION_API.md).
+Files upload first. Success returns `201` with `assignment` and `completion`;
+an existing registration returns `409`. Individual update APIs remain available.
+
+
+---
+
+# JobHub Profile and Provider Setup API
+
+Base URL: `https://jobhub.pentarixlabs.com`
+
+Every endpoint below requires `Authorization: Bearer <access-token>`.
+
+## S3 image upload
+
+Upload a provider/profile image before saving its URL in a profile or document
+request:
+
+```http
+POST /api/v1/uploads/images
+Authorization: Bearer <access-token>
+Content-Type: multipart/form-data
+
+file: <JPG, PNG or WebP image; safe SVG is also accepted for Super Admin service assets>
+```
+
+Maximum size is 10 MB. Example response:
+
+```json
+{
+  "key": "providers/15/images/550e8400-e29b-41d4-a716-446655440000.jpg",
+  "url": "https://jobhub-images.s3.ap-south-1.amazonaws.com/providers/15/images/550e8400-e29b-41d4-a716-446655440000.jpg",
+  "contentType": "image/jpeg",
+  "size": 245120
+}
+```
+
+Use the returned image `url` as `profilePhoto`. Configure
+`AWS_S3_PUBLIC_BASE_URL` when images are served
+through CloudFront or another custom public domain.
+
+Private PDFs and document images:
+
+- `POST /api/v1/uploads/documents` accepts PDF, JPG, PNG, or WebP up to 100 MB.
+- `GET /api/v1/uploads/view-url?key={objectKey}` returns a 10-minute presigned URL.
+
+Private uploads return both a relative `key` and an `s3://bucket/key` URL. Store
+the relative `key` in every document or certificate `documentKey` field. Providers can create viewing
+URLs only for their own files; authorized admins can view provider files.
+
+## Customer profile
+
+- `GET /api/v1/customers/me/profile`
+- `PUT /api/v1/customers/me/profile`
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "profilePhoto": "https://cdn.example.com/jane.jpg",
+  "addressLine1": "10 Main Street",
+  "addressLine2": null,
+  "city": "Colombo",
+  "district": "Colombo",
+  "province": "Western",
+  "postalCode": "00100",
+  "country": "Sri Lanka"
+}
+```
+
+Only accounts with the `CUSTOMER` role can use these endpoints.
+
+## Service-provider profile
+
+- `GET /api/v1/providers/me/profile`
+- `PUT /api/v1/providers/me/profile`
+
+```json
+{
+  "firstName": "John",
+  "lastName": "Smith",
+  "nicNumber": "901234567V",
+  "passportNumber": null,
+  "dateOfBirth": "1990-01-01",
+  "gender": "MALE",
+  "profilePhoto": "https://cdn.example.com/john.jpg",
+  "bio": "Experienced electrician",
+  "availabilityStatus": "AVAILABLE",
+  "marketId": 1
+}
+```
+
+NIC and passport are optional at the general-profile level. Super Admin can
+require identity documents for specific services. Availability is `AVAILABLE`,
+`UNAVAILABLE`, or `OFFLINE`. One active market must be selected.
+
+## Markets
+
+Providers list active markets with:
+
+```http
+GET /api/v1/markets
+```
+
+Each market includes its country code, currency code, IANA timezone,
+locale, and international phone code.
+
+Providers can change their operating market later:
+
+```http
+PUT /api/v1/providers/me/markets
+
+{
+  "marketId": 2
+}
+```
+
+Super Admin manages markets with:
+
+- `POST /api/v1/markets` — create a market
+- `GET /api/v1/markets/all` — list active and inactive markets
+- `PUT /api/v1/markets/{marketId}` — update market configuration
+- `PATCH /api/v1/markets/{marketId}/status` — activate or deactivate
+
+```json
+{
+  "name": "United Kingdom",
+  "countryCode": "GB",
+  "currencyCode": "GBP",
+  "timezone": "Europe/London",
+  "locale": "en-GB",
+  "phoneCode": "+44"
+}
+```
+
+## Provider-type catalog and selection
+
+List active types:
+
+```http
+GET /api/v1/provider-types
+```
+
+Super Admin creates a type:
+
+```http
+POST /api/v1/admin/provider-types
+
+{
+  "name": "Electrician",
+  "description": "Electrical installation and repair",
+  "iconUrl": "https://cdn.example.com/electrician.svg"
+}
+```
+
+Recommended: Super Admin creates the service and its complete profile setup
+in one request:
+
+```http
+POST /api/v1/admin/provider-types/setup
+
+{
+  "name": "Caregiver",
+  "description": "Home and elderly care",
+  "iconUrl": "https://cdn.example.com/caregiver.svg",
+  "availabilityEnabled": true,
+  "optionsRequired": true,
+  "minimumOptionSelections": 1,
+  "maximumOptionSelections": 5,
+  "icon": null,
+  "coverImage": null,
+  "gallery": [],
+  "responsibilities": [],
+  "documents": [
+    {
+      "documentTypeId": 1,
+      "required": true,
+      "requiresApproval": true
+    },
+    {
+      "documentTypeId": 2,
+      "required": false,
+      "requiresApproval": true
+    }
+  ],
+  "skills": [
+    {
+      "name": "Elderly care",
+      "required": true,
+      "requiresApproval": false
+    },
+    {
+      "name": "First aid",
+      "required": false,
+      "requiresApproval": false
+    }
+  ],
+  "certificates": {
+    "level": "OPTIONAL",
+    "requiresApproval": true
+  },
+  "education": {
+    "level": "OPTIONAL",
+    "requiresApproval": true
+  }
+}
+```
+
+Requirement levels are `DISABLED`, `OPTIONAL`, and `REQUIRED`.
+
+`gallery` and `responsibilities` are required arrays, even when empty. For
+structured icons, cover images, galleries, responsibilities, and replacement
+rules, see [SERVICE_MEDIA_RESPONSIBILITIES_API.md](SERVICE_MEDIA_RESPONSIBILITIES_API.md).
+
+Super Admin updates the full setup with:
+
+```http
+PUT /api/v1/admin/provider-types/{providerTypeId}/setup
+```
+
+The provider/frontend reads the configured completion form with:
+
+```http
+GET /api/v1/provider-types/{providerTypeId}/setup
+```
+
+Super Admin activates or deactivates a service with:
+
+```http
+PATCH /api/v1/admin/provider-types/{providerTypeId}/status
+
+{
+  "status": "INACTIVE"
+}
+```
+
+Allowed values are `ACTIVE` and `INACTIVE`. Inactive services are hidden from
+the active catalog and cannot be newly selected. Existing provider information
+is preserved so the service can be activated again later.
+
+Provider reads or replaces their selections:
+
+- `GET /api/v1/providers/me/service-types`
+- `PUT /api/v1/providers/me/service-types`
+
+```json
+{
+  "assignments": [
+    {
+      "providerTypeId": 1,
+      "experienceYears": 5.5
+    }
+  ]
+}
+```
+
+PUT replaces the provider's entire existing selection.
+
+A provider can add another service at any time without replacing existing
+selections:
+
+```http
+POST /api/v1/providers/me/service-types
+
+{
+  "providerTypeId": 3,
+  "experienceYears": 2.5
+}
+```
+
+A provider activates or deactivates one of their own services:
+
+```http
+PATCH /api/v1/providers/me/service-types/{assignmentId}/status
+
+{
+  "status": "INACTIVE"
+}
+```
+
+Super Admin can independently activate or deactivate a provider's assigned
+service:
+
+```http
+PATCH /api/v1/admin/provider-service-assignments/{assignmentId}/status
+
+{
+  "status": "INACTIVE"
+}
+```
+
+The returned assignment contains `providerStatus`, `adminStatus`, and the
+effective `status`. The effective status is `ACTIVE` only when both the
+provider and Super Admin statuses are active. A provider cannot override an
+administrative deactivation.
+
+Each selected service has its own `verificationStatus`:
+
+- `PENDING`: one or more required documents are missing, awaiting approval, rejected, or expired.
+- `APPROVED`: every required document is approved and valid.
+
+The response also contains `requiredDocumentTypeIds` and
+`missingDocumentTypeIds`, allowing the frontend to show exactly what the
+provider must upload.
+
+Reusable document requirements can be service-wide or option-specific. In the
+service setup `documents` collection, omit `optionId` (or send `null`) for a
+service-wide requirement, or provide an active option ID for a requirement
+that applies only when the provider selects that option:
+
+```json
+{
+  "documents": [
+    {
+      "documentTypeId": 1,
+      "optionId": null,
+      "required": true,
+      "requiresApproval": true
+    },
+    {
+      "documentTypeId": 5,
+      "optionId": 12,
+      "required": true,
+      "requiresApproval": true
+    }
+  ]
+}
+```
+
+The provider uploads a document once against its `documentTypeId`. Any
+service-wide or selected-option requirement using that type reuses the same
+valid document and its existing approval. Selecting an option recalculates
+`requiredDocumentTypeIds`, `missingDocumentTypeIds`, and service approval.
+
+Service skills:
+
+- `GET /api/v1/providers/me/services/{assignmentId}/skills`
+- `PUT /api/v1/providers/me/services/{assignmentId}/skills`
+
+```json
+{
+  "skillIds": [1, 3, 4]
+}
+```
+
+Professional certificates:
+
+- `GET /api/v1/providers/me/services/{assignmentId}/certificates`
+- `POST /api/v1/providers/me/services/{assignmentId}/certificates`
+
+```json
+{
+  "name": "Caregiver NVQ Level 4",
+  "issuingOrganization": "Training Institute",
+  "certificateNumber": "CERT-1001",
+  "issuedDate": "2024-01-01",
+  "expiryDate": null,
+  "documentKey": "providers/15/documents/certificate.pdf"
+}
+```
+
+Education qualifications:
+
+- `GET /api/v1/providers/me/services/{assignmentId}/education`
+- `POST /api/v1/providers/me/services/{assignmentId}/education`
+
+```json
+{
+  "qualificationName": "Diploma in Caregiving",
+  "instituteName": "Training Institute",
+  "fieldOfStudy": "Caregiving",
+  "startDate": "2022-01-01",
+  "completionDate": "2023-01-01",
+  "result": "Distinction",
+  "documentKey": "providers/15/documents/diploma.pdf"
+}
+```
+
+Combined onboarding progress:
+
+```http
+GET /api/v1/providers/me/completion
+```
+
+The response contains the overall percentage, next step, and per-service
+document, skill, certificate, education, verification, and activation state.
+
+Read the document requirements for a service:
+
+```http
+GET /api/v1/provider-types/{providerTypeId}/document-requirements
+```
+
+Super Admin assigns required document types to a service:
+
+```http
+PUT /api/v1/admin/provider-types/{providerTypeId}/document-requirements
+
+{
+  "documentTypeIds": [1, 2, 5]
+}
+```
+
+This request replaces that service's requirement list. An empty list means
+the service requires no documents.
+
+## Dynamic provider requirements for multiple options
+
+### Provider option and language selections
+
+These endpoints require the `SERVICE_PROVIDER` role and an assignment owned
+by the authenticated provider.
+
+- `GET /api/v1/providers/me/services/{assignmentId}/options`
+- `PUT /api/v1/providers/me/services/{assignmentId}/options`
+
+PUT replaces the selected options using active option IDs from that service:
+
+```json
+{
+  "optionIds": [12, 13]
+}
+```
+
+- `GET /api/v1/providers/me/services/{assignmentId}/languages`
+- `PUT /api/v1/providers/me/services/{assignmentId}/languages`
+
+```json
+{
+  "languages": ["SINHALA", "ENGLISH", "TAMIL"]
+}
+```
+
+PUT replaces the language selection. Allowed values are `SINHALA`, `ENGLISH`,
+and `TAMIL`.
+
+### Admin field configuration
+
+Super Admin can create one dynamic requirement for several service options:
+
+```http
+POST /api/v1/admin/provider-types/{providerTypeId}/custom-fields
+```
+
+```json
+{
+  "optionIds": [12, 13],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "ASSIGNMENT",
+  "code": "DRIVING_EXPERIENCE",
+  "label": "Driving experience in years",
+  "fieldType": "NUMBER",
+  "required": true,
+  "requiresApproval": false,
+  "displayOrder": 1
+}
+```
+
+The provider answers this field once when any listed option is selected.
+Use `optionIds: []` for a service-wide requirement. PUT to
+`/api/v1/admin/provider-types/{providerTypeId}/custom-fields/{fieldId}`
+replaces the option list. Read the form from
+`GET /api/v1/provider-types/{providerTypeId}/onboarding-schema`.
+See [DYNAMIC_FIELDS_API.md](DYNAMIC_FIELDS_API.md) for submission and reuse rules.
+
+Option GET responses now include `dynamicFields` with the full definitions
+applicable to each option, including common service-wide fields. Super Admin
+can also send `dynamicFields` in the option POST or PUT API to create or edit
+fields in the same transaction. Each entry contains an optional `fieldId`
+(omit to create) and a `definition` containing the custom-field request.
+See [option API examples](DYNAMIC_FIELDS_API.md#dynamic-fields-in-option-apis).
+
+### Create an option with dynamic fields
+
+Super Admin creates the option and its fields together in one request:
+
+```http
+POST /api/v1/admin/provider-types/{providerTypeId}/options
+Authorization: Bearer <super-admin-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "code": "HOME_CARE",
+  "name": "Home Care",
+  "description": "Care provided at the customer's home",
+  "displayOrder": 1,
+  "schedulingModel": "TIME_BASED",
+  "locationEnabled": true,
+  "deliveryModes": ["PROVIDER_TO_CUSTOMER"],
+  "fulfillmentModel": "ONE_TO_ONE",
+  "defaultCapacity": 1,
+  "requiredProviderCount": 1,
+  "bookingMode": "MANY_AT_A_TIME",
+  "providerSelectionMode": "OPEN_REQUEST",
+  "pricingOwner": "ADMIN",
+  "allowedPaymentMethods": ["CASH", "CARD"],
+  "icon": null,
+  "coverImage": null,
+  "gallery": [],
+  "responsibilities": [],
+  "dynamicFields": [
+    {
+      "definition": {
+        "scope": "PROVIDER_REQUIREMENT",
+        "reuseScope": "ASSIGNMENT",
+        "code": "CARE_EXPERIENCE",
+        "label": "Care experience in years",
+        "fieldType": "NUMBER",
+        "required": true,
+        "requiresApproval": false,
+        "displayOrder": 1
+      }
+    },
+    {
+      "definition": {
+        "scope": "BOOKING_FIELD",
+        "code": "CARE_NOTES",
+        "label": "Care instructions",
+        "fieldType": "TEXTAREA",
+        "required": false,
+        "requiresApproval": false,
+        "displayOrder": 2
+      }
+    }
+  ]
+}
+```
+
+Omit `fieldId` to create each new field. Omit `optionId` and `optionIds`
+inside its definition: the backend assigns it to the newly created option.
+The response includes the new `optionId` and `dynamicFields` containing their
+generated `fieldId` and `optionIds`. Providers complete `PROVIDER_REQUIREMENT`
+fields; customers complete `BOOKING_FIELD` fields when booking.
+
+To edit the option and a field together, send the option properties to
+`PUT /api/v1/admin/provider-types/{providerTypeId}/options/{optionId}` and
+include that field's returned `fieldId` alongside its full `definition`.
+Omitted dynamic fields remain unchanged.
+
+## Document types and provider documents
+
+List active document types:
+
+```http
+GET /api/v1/document-types
+```
+
+Super Admin creates a document type:
+
+```http
+POST /api/v1/admin/document-types
+
+{
+  "name": "National ID",
+  "description": "Government-issued identity document",
+  "required": true,
+  "hasExpiry": false
+}
+```
+
+Provider document endpoints:
+
+- `GET /api/v1/providers/me/documents`
+- `POST /api/v1/providers/me/documents`
+- `DELETE /api/v1/providers/me/documents/{documentId}`
+
+```json
+{
+  "documentTypeId": 1,
+  "documentName": "NIC front",
+  "documentNumber": "901234567V",
+  "documentKey": "providers/15/documents/nic-front.pdf",
+  "issuedDate": "2018-01-01",
+  "expiryDate": null
+}
+```
+
+The file must first be uploaded to secure object storage. This API stores its
+relative S3 object key and metadata. New documents receive `PENDING` status.
+Approved documents cannot be deleted.
+
+A provider stores only one current document for each document type. Posting
+the same document type again updates it and returns it to `PENDING` review.
+One approved document is reusable across every selected service that requires
+that document type. For example, one approved National ID can satisfy the
+National ID requirement for Electrician, Plumber, and Cleaner services.
+
+## Admin document review
+
+Super Admin and Verification Admin can list documents:
+
+```http
+GET /api/v1/admin/provider-documents?status=PENDING
+```
+
+Allowed filters: `PENDING`, `APPROVED`, and `REJECTED`.
+
+Approve:
+
+```http
+PATCH /api/v1/admin/provider-documents/{documentId}/review
+
+{
+  "status": "APPROVED",
+  "rejectionReason": null
+}
+```
+
+Reject:
+
+```json
+{
+  "status": "REJECTED",
+  "rejectionReason": "The uploaded image is unreadable"
+}
+```
+
+A rejection reason is mandatory when rejecting a document.
+
+After an administrator reviews a document, the backend automatically
+recalculates the approval status of all services selected by that provider.
+
+Admin qualification-review endpoints:
+
+- `GET /api/v1/admin/provider-qualifications/skills?status=PENDING`
+- `PATCH /api/v1/admin/provider-qualifications/skills/{id}/review`
+- `GET /api/v1/admin/provider-qualifications/certificates?status=PENDING`
+- `PATCH /api/v1/admin/provider-qualifications/certificates/{id}/review`
+- `GET /api/v1/admin/provider-qualifications/education?status=PENDING`
+- `PATCH /api/v1/admin/provider-qualifications/education/{id}/review`
+
+Review requests use the same `APPROVED` or `REJECTED` body as document review.
+
+## Provider service availability
+
+Availability belongs to a provider's selected service assignment. This allows a
+provider to offer different hours and locations for different services.
+The administrator controls these features independently for every service with
+`availabilityEnabled` in the service setup and each option's `locationEnabled`
+and `deliveryModes` configuration.
+The frontend should read `GET /api/v1/provider-types/{providerTypeId}/setup`
+and only show the enabled steps.
+
+Get the weekly schedule:
+
+```http
+GET /api/v1/providers/me/services/{assignmentId}/availability
+```
+
+Replace it with selected days and hours:
+
+```http
+PUT /api/v1/providers/me/services/{assignmentId}/availability
+
+{
+  "availableAnyDay": false,
+  "availableAnyTime": false,
+  "weeklySlots": [
+    { "dayOfWeek": "MONDAY", "startTime": "08:00", "endTime": "17:00" },
+    { "dayOfWeek": "SUNDAY", "startTime": "08:00", "endTime": "17:00" }
+  ]
+}
+```
+
+For every day and every time, use both flags as `true` and send an empty
+`weeklySlots` array. If only `availableAnyTime` is true, provide the selected
+days as slots and omit their start/end times.
+
+## Specific unavailable dates
+
+```http
+GET /api/v1/providers/me/services/{assignmentId}/unavailable-dates
+POST /api/v1/providers/me/services/{assignmentId}/unavailable-dates
+DELETE /api/v1/providers/me/services/{assignmentId}/unavailable-dates/{unavailableDateId}
+```
+
+```json
+{
+  "date": "2026-10-20",
+  "reason": "Medical appointment"
+}
+```
+
+## Service locations and travel ranges
+
+Get locations:
+
+```http
+GET /api/v1/providers/me/services/{assignmentId}/options/{optionId}/delivery-modes/{deliveryMode}/service-areas
+```
+
+Replace all locations:
+
+```http
+PUT /api/v1/providers/me/services/{assignmentId}/options/{optionId}/delivery-modes/{deliveryMode}/service-areas
+
+[
+  {
+    "locationName": "Colombo base",
+    "country": "Sri Lanka",
+    "province": "Western",
+    "district": "Colombo",
+    "city": "Colombo",
+    "latitude": 6.9271,
+    "longitude": 79.8612,
+    "radiusKm": 20
+  }
+]
+```
+
+The provider can add multiple locations. Each radius is validated from 0.1 km
+to 500 km, and locations use the provider's currently selected market.
+
+
+---
+
+# Admin-managed service fields
+
+This module lets Super Admin configure provider requirements and customer
+booking schemas without backend code changes.
+
+## Scopes
+
+- `PROVIDER_REQUIREMENT`: completed by a provider and optionally reviewed.
+- `BOOKING_FIELD`: completed by a customer for each job (job submission is a later module).
+
+Use `optionIds` to apply one field to multiple options of the same service:
+
+```json
+{
+  "optionIds": [12, 13],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "ASSIGNMENT",
+  "code": "DRIVING_EXPERIENCE",
+  "label": "Driving experience in years",
+  "fieldType": "NUMBER",
+  "required": true,
+  "requiresApproval": false,
+  "displayOrder": 1
+}
+```
+
+POST creates one field ID; PUT replaces the field's complete option list.
+An empty or omitted `optionIds` applies the field to the complete service.
+Every ID must be unique and identify an active option of that service.
+The legacy `optionId` is still supported, but do not send both properties.
+Responses include `optionIds`, including for existing single-option fields.
+
+The same field appears under each configured option in the schema. Selecting
+any configured option makes it applicable; selecting several still requires
+only one answer per provider-service registration. `reuseScope` controls reuse
+between separate field definitions or registrations, not which options apply.
+
+## Reusing provider answers
+
+Provider requirements accept `reuseScope`:
+
+- `ASSIGNMENT`: answer separately for each provider-service registration. This
+  is the default and preserves existing behavior.
+- `SERVICE`: reuse an approved answer with the same field `code` and
+  `fieldType` across options belonging to the same service.
+- `PROVIDER`: reuse an approved answer with the same field `code` and
+  `fieldType` across all services belonging to the provider.
+
+`BOOKING_FIELD` definitions must use `ASSIGNMENT`. Reuse is only available for
+`PROVIDER_REQUIREMENT` fields. Reusable definitions must use the same stable
+`code` and compatible `fieldType`, for example `DRIVING_EXPERIENCE` and
+`NUMBER`. Changing the label does not prevent reuse.
+
+When the provider submissions endpoint returns an inherited answer, it uses
+the target field ID and contains `"reused": true`, the configured
+`reuseScope`, and `sourceAssignmentId`. The provider does not submit or verify
+that value again. Submitting a new value for the target field creates an
+assignment-specific replacement and restarts approval when approval is
+required.
+
+## Admin APIs
+
+- `POST /api/v1/admin/provider-types/{serviceTypeId}/custom-fields`
+- `GET /api/v1/admin/provider-types/{serviceTypeId}/custom-fields`
+- `PUT /api/v1/admin/provider-types/{serviceTypeId}/custom-fields/{fieldId}`
+- `PATCH /api/v1/admin/provider-types/{serviceTypeId}/custom-fields/{fieldId}/status`
+
+Supported types are `TEXT`, `TEXTAREA`, `NUMBER`, `BOOLEAN`, `DATE`, `TIME`,
+`PHONE`, `EMAIL`, `SELECT`, `MULTI_SELECT`, `IMAGE_UPLOAD`, `DOCUMENT_UPLOAD`,
+and `FILE_UPLOAD`.
+
+Example provider image requirement:
+
+```json
+{
+  "optionId": 2,
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "SERVICE",
+  "code": "VEHICLE_PHOTOS",
+  "label": "Vehicle photos",
+  "description": "Upload front, rear and side photos",
+  "fieldType": "IMAGE_UPLOAD",
+  "required": true,
+  "requiresApproval": true,
+  "minimumFiles": 1,
+  "maximumFiles": 3,
+  "maximumFileSizeMb": 10,
+  "allowedFileTypes": ["JPG", "PNG", "WEBP"],
+  "options": null,
+  "condition": null,
+  "displayOrder": 4
+}
+```
+
+Example Hospital Care booking field:
+
+```json
+{
+  "optionId": 2,
+  "scope": "BOOKING_FIELD",
+  "reuseScope": "ASSIGNMENT",
+  "code": "HOSPITAL_NAME",
+  "label": "Hospital name",
+  "fieldType": "TEXT",
+  "required": true,
+  "requiresApproval": false,
+  "displayOrder": 1
+}
+```
+
+Example conditional provider field:
+
+```json
+{
+  "optionId": null,
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "PROVIDER",
+  "code": "VEHICLE_REGISTRATION",
+  "label": "Vehicle registration",
+  "fieldType": "TEXT",
+  "required": true,
+  "requiresApproval": true,
+  "condition": {
+    "fieldCode": "HAS_VEHICLE",
+    "operator": "EQUALS",
+    "value": true
+  }
+}
+```
+
+## Schemas used by frontends
+
+- `GET /api/v1/provider-types/{serviceTypeId}/onboarding-schema`
+- `GET /api/v1/provider-types/{serviceTypeId}/booking-schema`
+
+Both return common fields and fields grouped by active service option.
+The response also includes `serviceSetup`, containing standard document and
+skill requirements, availability/location switches, certificate/education
+rules, and option-selection limits. This lets the frontend build complete
+onboarding from one response.
+
+## Dynamic fields in option APIs
+
+Both option list endpoints include `dynamicFields` on each option:
+
+- `GET /api/v1/provider-types/{serviceTypeId}/options` returns active fields.
+- `GET /api/v1/admin/provider-types/{serviceTypeId}/options` also includes inactive fields.
+
+The list includes fields assigned to the option and common service-wide fields,
+with their `fieldId`, `optionIds`, `scope`, `reuseScope`, and complete definition.
+
+Super Admin can create or edit dynamic fields in the same option request:
+
+- `POST /api/v1/admin/provider-types/{serviceTypeId}/options`
+- `PUT /api/v1/admin/provider-types/{serviceTypeId}/options/{optionId}`
+
+Add this property alongside the usual option properties:
+
+```json
+{
+  "dynamicFields": [
+    {
+      "fieldId": 25,
+      "definition": {
+        "scope": "PROVIDER_REQUIREMENT",
+        "reuseScope": "ASSIGNMENT",
+        "code": "DRIVING_EXPERIENCE",
+        "label": "Driving experience in years",
+        "fieldType": "NUMBER",
+        "required": true,
+        "requiresApproval": false,
+        "displayOrder": 1
+      }
+    }
+  ]
+}
+```
+
+Omit `fieldId` to create a new field. Include it to update an existing field
+that applies to this option. Each `definition` is a full custom-field request.
+Omitting option IDs assigns new fields to the current option and preserves
+existing fields' option assignments. Explicit `optionIds` replaces those
+assignments and must include the current option; `[]` makes the field common.
+Editing a shared or common definition changes it for every option using it.
+
+Omitted, null, or empty `dynamicFields` leaves existing fields unchanged;
+fields omitted from the array are also preserved. Use the custom-field status
+API to deactivate a field. Option and field changes are saved in one transaction.
+
+## Provider submissions
+
+- `GET /api/v1/providers/me/services/{assignmentId}/submissions`
+- `PUT /api/v1/providers/me/services/{assignmentId}/submissions`
+
+```json
+{
+  "submissions": [
+    {
+      "fieldId": 25,
+      "value": {
+        "files": [
+          { "key": "providers/15/images/front.jpg" },
+          { "key": "providers/15/images/rear.jpg" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Required provider fields are included in service completion. Fields requiring
+approval remain incomplete until approved.
+
+## Admin provider review
+
+- `GET /api/v1/admin/provider-submissions?status=PENDING&page=0&size=20`
+- `PATCH /api/v1/admin/provider-submissions/{submissionId}/review`
+
+Review body uses `APPROVED` or `REJECTED` and an optional `rejectionReason`.
+
+
+---
+
+# Service media and responsibilities
+
+Media and responsibilities are managed through the existing service setup and
+service-option create/update APIs. Image bytes are uploaded first with the
+existing upload API; its returned `key` and `url` are then stored in the JSON
+payload.
+
+## Upload an image
+
+```http
+POST /api/v1/uploads/images
+Authorization: Bearer <SUPER_ADMIN token>
+Content-Type: multipart/form-data
+
+file: <JPG, PNG, WebP or SVG, maximum 10 MB>
+```
+
+SVG is accepted only for Super Admin-managed service assets. SVG XML is
+validated, and files containing scripts, event handlers, external references,
+DOCTYPE/entities, embedded objects, or unsafe styles are rejected. Provider
+profile-photo uploads remain raster-only.
+
+Success: `201 Created`.
+
+```json
+{
+  "key": "service-icons/550e8400-e29b-41d4-a716-446655440000.jpg",
+  "url": "https://jobhube.s3.eu-north-1.amazonaws.com/service-icons/550e8400-e29b-41d4-a716-446655440000.jpg",
+  "contentType": "image/jpeg",
+  "size": 245120
+}
+```
+
+## Service setup endpoints
+
+```http
+POST /api/v1/admin/provider-types/setup
+PUT  /api/v1/admin/provider-types/{serviceTypeId}/setup
+```
+
+The existing setup payload now includes these additive content properties:
+
+```json
+{
+  "name": "Home Nursing",
+  "description": "Professional nursing services at home",
+  "iconUrl": "https://jobhube.s3.eu-north-1.amazonaws.com/service-icons/nursing.png",
+  "availabilityEnabled": true,
+  "serviceAreasEnabled": true,
+  "optionsRequired": true,
+  "minimumOptionSelections": 1,
+  "maximumOptionSelections": 5,
+  "documents": [
+    {
+      "documentTypeId": 1,
+      "optionId": null,
+      "required": true,
+      "requiresApproval": true
+    }
+  ],
+  "skills": [],
+  "certificates": { "level": "OPTIONAL", "requiresApproval": false },
+  "education": { "level": "OPTIONAL", "requiresApproval": false },
+  "icon": {
+    "key": "service-icons/nursing.png",
+    "url": "https://jobhube.s3.eu-north-1.amazonaws.com/service-icons/nursing.png",
+    "altText": "Home nursing icon",
+    "displayOrder": 0
+  },
+  "coverImage": {
+    "key": "service-icons/nursing-cover.jpg",
+    "url": "https://jobhube.s3.eu-north-1.amazonaws.com/service-icons/nursing-cover.jpg",
+    "altText": "Home nursing",
+    "displayOrder": 0
+  },
+  "gallery": [
+    {
+      "key": "service-icons/nursing-gallery.jpg",
+      "url": "https://jobhube.s3.eu-north-1.amazonaws.com/service-icons/nursing-gallery.jpg",
+      "altText": "Nurse caring for a patient",
+      "displayOrder": 1
+    }
+  ],
+  "responsibilities": [
+    {
+      "responsibleParty": "PROVIDER",
+      "title": "Arrive on time",
+      "description": "Arrive at the confirmed service time.",
+      "required": true,
+      "displayOrder": 1
+    }
+  ]
+}
+```
+
+`iconUrl` remains for backward-compatible clients. When `icon` is supplied,
+the backend synchronizes `iconUrl` to `icon.url`.
+
+## Service-option endpoints
+
+```http
+POST /api/v1/admin/provider-types/{serviceTypeId}/options
+PUT  /api/v1/admin/provider-types/{serviceTypeId}/options/{optionId}
+```
+
+The existing option payload now includes `icon`, `coverImage`, `gallery`, and
+`responsibilities` with the same structures used by service setup.
+
+```json
+{
+  "code": "HOME_CARE",
+  "name": "Home Care",
+  "description": "Care provided at the customer's home",
+  "displayOrder": 1,
+  "schedulingModel": "TIME_BASED",
+  "routeAverageSpeedKmh": null,
+  "locationEnabled": true,
+  "deliveryModes": ["PROVIDER_TO_CUSTOMER"],
+  "fulfillmentModel": "ONE_TO_ONE",
+  "defaultCapacity": 1,
+  "requiredProviderCount": 1,
+  "bookingMode": "ONE_AT_A_TIME",
+  "providerSelectionMode": "OPEN_REQUEST",
+  "pricingOwner": "ADMIN",
+  "allowedPaymentMethods": ["CARD", "WALLET"],
+  "icon": {
+    "key": "service-icons/home-care.png",
+    "url": "https://jobhube.s3.eu-north-1.amazonaws.com/service-icons/home-care.png",
+    "altText": "Home care icon",
+    "displayOrder": 0
+  },
+  "coverImage": null,
+  "gallery": [],
+  "responsibilities": [
+    {
+      "responsibleParty": "CUSTOMER",
+      "title": "Provide access",
+      "description": "Ensure the provider can access the service location.",
+      "required": true,
+      "displayOrder": 1
+    }
+  ]
+}
+```
+
+## Replacement semantics
+
+The PUT endpoints are complete replacements:
+
+- `icon: null` removes structured icon metadata.
+- `coverImage: null` removes the cover image.
+- `gallery: []` removes all gallery images.
+- `responsibilities: []` removes all responsibilities.
+- `gallery` and `responsibilities` are required arrays on create and PUT.
+- Media keys must be unique inside the parent service or option.
+- Gallery display orders must be unique.
+- Responsibility display orders must be unique.
+
+## Responsibility enum
+
+`responsibleParty` accepts exactly:
+
+```text
+PROVIDER
+CUSTOMER
+PLATFORM
+```
+
+## Responses
+
+Existing service setup, provider-type, and service-option responses now include:
+
+```json
+{
+  "icon": { "key": "...", "url": "...", "altText": "...", "displayOrder": 0 },
+  "coverImage": null,
+  "gallery": [],
+  "responsibilities": []
+}
+```
+
+The database stores these collections in `service_type_media`,
+`service_type_responsibility`, `service_option_media`, and
+`service_option_responsibility`. Hibernate creates the tables on deployment
+under the current schema-update configuration.
+

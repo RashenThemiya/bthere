@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -19,9 +18,9 @@ public record CreateBookingRequest(
         Long providerId,
         List<Long> providerIds,
         @NotBlank String deliveryMode,
-        @Future LocalDateTime startDatetime,
+        LocalDateTime startDatetime,
         LocalDateTime expectedEndDatetime,
-        @Future LocalDateTime requestedPickupTime,
+        LocalDateTime requestedPickupTime,
         @Valid RoutePoint pickup,
         @Valid RoutePoint destination,
         Long providerLocationId,
