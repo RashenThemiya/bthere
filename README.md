@@ -49,6 +49,8 @@ Dynamic customer forms, private documents, verification, and scoped booking rule
 Customer market browsing, booking context, and provider map/list search are documented in [Customer discovery API](docs/CUSTOMER_DISCOVERY_API.md).
 The complete customer frontend integration contract is in [Customer App frontend reference](docs/CUSTOMER_APP_FRONTEND_API.md).
 The initial internal wallet ledger and its deliberately disabled external payment capabilities are documented in [Wallet API](docs/WALLET_API.md).
+
+Provider-grouped admin approval queues, requirement details and atomic bulk reviews are documented in [Provider approval API](docs/PROVIDER_APPROVAL_API.md).
 Development-only payment simulation and the DISABLED/MOCK/PAYHERE SPI switch are documented in [Mock payment API](docs/MOCK_PAYMENTS_API.md).
 Administration endpoints are documented in [Administration API documentation](docs/ADMIN_API.md).
 

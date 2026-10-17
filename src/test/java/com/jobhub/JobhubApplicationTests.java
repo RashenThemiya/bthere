@@ -62,6 +62,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class JobhubApplicationTests {
     @Autowired private com.jobhub.controller.customer.WalletController walletController;
+    @Autowired private com.jobhub.controller.admin.AdminProviderApprovalController approvalController;
+
+    @Test void providerApprovalEndpointsRestrictRoles() {
+        for (String role : java.util.List.of("CUSTOMER","SERVICE_PROVIDER","FINANCE_ADMIN")) {
+            var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> approvalController.detail(12L)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> approvalController.bulk(null,null)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+        }
+    }
+
     @Autowired private com.jobhub.controller.admin.AdminWalletController adminWalletController;
     @Autowired private com.jobhub.controller.admin.AdminPaymentGatewayController adminPaymentGatewayController;
 
@@ -81,6 +94,9 @@ class JobhubApplicationTests {
                     .isInstanceOf(com.jobhub.exception.PaymentUnavailableException.class);
         } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
     }
+    @MockitoBean
+    private jakarta.persistence.EntityManager approvalEntityManager;
+
     @MockitoBean
     private com.jobhub.repository.finance.PaymentGatewaySettingsRepository paymentGatewaySettingsRepository;
 

@@ -274,7 +274,7 @@ public class ProviderServiceApprovalService {
                 });
     }
 
-    private java.util.Optional<ProviderCustomFieldSubmission> reusableSubmission(
+    public java.util.Optional<ProviderCustomFieldSubmission> reusableSubmission(
             ServiceProviderTypeAssignment assignment, ServiceCustomField field) {
         String reuseScope = field.getReuseScope() == null
                 ? "ASSIGNMENT" : field.getReuseScope();
@@ -290,7 +290,7 @@ public class ProviderServiceApprovalService {
                 .findFirst();
     }
 
-    private boolean conditionApplies(
+    public boolean conditionApplies(
             ServiceProviderTypeAssignment assignment, ServiceCustomField field,
             Map<String, ServiceCustomField> byCode,
             Map<Long, ProviderCustomFieldSubmission> submissions) {

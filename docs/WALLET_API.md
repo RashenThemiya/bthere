@@ -1,4 +1,5 @@
 # Initial wallet and booking-payment foundation
+
 First release: wallets and payment initiation support **LKR only** for customers and providers. Other currency requests return HTTP 400 even if configured in an active market. Wallet lists return only LKR; legacy foreign-currency data is preserved without conversion. LKR amounts allow at most two decimal places. The underlying user/currency schema is retained for future expansion.
 
 Update: [Switchable mock payments](MOCK_PAYMENTS_API.md) now provides an explicitly
