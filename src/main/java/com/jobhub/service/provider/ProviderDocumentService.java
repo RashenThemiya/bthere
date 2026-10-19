@@ -68,7 +68,7 @@ public class ProviderDocumentService {
         type.setName(name);
         type.setDescription(optional(request.description()));
         type.setRequired(false);
-        type.setHasExpiry(request.hasExpiry());
+        configureDateModes(type, request);
         type.setStatus("ACTIVE");
         return toTypeResponse(documentTypeRepository.save(type));
     }
@@ -86,7 +86,7 @@ public class ProviderDocumentService {
         }
         type.setName(name);
         type.setDescription(optional(request.description()));
-        type.setHasExpiry(request.hasExpiry());
+        configureDateModes(type, request);
         return toTypeResponse(documentTypeRepository.save(type));
     }
 
@@ -131,9 +131,8 @@ public class ProviderDocumentService {
                         "Document type was not found or is inactive"
                 ));
 
-        if (type.isHasExpiry() && request.expiryDate() == null) {
-            throw new IllegalArgumentException("Expiry date is required for this document type");
-        }
+        validateDate("Issued date", type.effectiveIssuedDateMode(), request.issuedDate());
+        validateDate("Expiry date", type.effectiveExpiryDateMode(), request.expiryDate());
         if (request.issuedDate() != null
                 && request.expiryDate() != null
                 && request.expiryDate().isBefore(request.issuedDate())) {
@@ -148,7 +147,8 @@ public class ProviderDocumentService {
                 .orElseGet(ServiceProviderDocument::new);
         document.setServiceProviderId(provider.getServiceProviderId());
         document.setDocumentTypeId(type.getDocumentTypeId());
-        document.setDocumentName(request.documentName().trim());
+        document.setDocumentName(optional(request.documentName()) == null
+                ? type.getName() : request.documentName().trim());
         document.setDocumentNumber(optional(request.documentNumber()));
         document.setDocumentUrl(request.documentKey().trim());
         document.setIssuedDate(request.issuedDate());
@@ -273,8 +273,32 @@ public class ProviderDocumentService {
                 type.getName(),
                 type.getDescription(),
                 type.isHasExpiry(),
-                type.getStatus()
+                type.getStatus(),
+                type.effectiveIssuedDateMode(),
+                type.effectiveExpiryDateMode()
         );
+    }
+
+    private void configureDateModes(DocumentType type, CreateDocumentTypeRequest request) {
+        String issued = request.issuedDateMode() == null ? "OPTIONAL" : request.issuedDateMode();
+        String expiry = request.expiryDateMode() == null
+                ? (request.hasExpiry() ? "REQUIRED" : "OPTIONAL") : request.expiryDateMode();
+        if (!Set.of("HIDDEN", "OPTIONAL", "REQUIRED").contains(issued)
+                || !Set.of("HIDDEN", "OPTIONAL", "REQUIRED").contains(expiry)) {
+            throw new IllegalArgumentException("Date mode must be HIDDEN, OPTIONAL or REQUIRED");
+        }
+        type.setIssuedDateMode(issued);
+        type.setExpiryDateMode(expiry);
+        type.setHasExpiry("REQUIRED".equals(expiry));
+    }
+
+    private void validateDate(String label, String mode, java.time.LocalDate value) {
+        if ("REQUIRED".equals(mode) && value == null) {
+            throw new IllegalArgumentException(label + " is required for this document type");
+        }
+        if ("HIDDEN".equals(mode) && value != null) {
+            throw new IllegalArgumentException(label + " is disabled for this document type");
+        }
     }
 
     private DocumentType requireDocumentType(Long documentTypeId) {

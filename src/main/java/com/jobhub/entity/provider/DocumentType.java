@@ -24,5 +24,15 @@ public class DocumentType extends AuditedEntity {
     private boolean isRequired;
     private boolean hasExpiry;
     private String status;
+    private String issuedDateMode;
+    private String expiryDateMode;
+
+    public String effectiveIssuedDateMode() {
+        return issuedDateMode == null ? "OPTIONAL" : issuedDateMode;
+    }
+
+    public String effectiveExpiryDateMode() {
+        return expiryDateMode == null ? (hasExpiry ? "REQUIRED" : "OPTIONAL") : expiryDateMode;
+    }
 }
 

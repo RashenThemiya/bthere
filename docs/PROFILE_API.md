@@ -384,6 +384,36 @@ GET /api/v1/providers/me/completion
 The response contains the overall percentage, next step, and per-service
 document, skill, certificate, education, verification, and activation state.
 
+### Document upload metadata controls
+
+Super Admin can configure dates in `POST /api/v1/admin/document-types` and
+`PUT /api/v1/admin/document-types/{documentTypeId}`:
+
+```json
+{
+  "name": "NIC",
+  "description": "National Identity Card",
+  "hasExpiry": false,
+  "issuedDateMode": "OPTIONAL",
+  "expiryDateMode": "HIDDEN"
+}
+```
+
+Both modes accept `HIDDEN`, `OPTIONAL`, or `REQUIRED` and are returned by document
+type list/create/update APIs. Frontends must hide HIDDEN dates, allow blank OPTIONAL
+dates, and require REQUIRED dates. Backend rejects supplied HIDDEN dates and missing
+REQUIRED dates. If modes are omitted, issued date defaults to OPTIONAL; expiry date
+defaults to REQUIRED when legacy `hasExpiry` is true, otherwise OPTIONAL. Explicit
+expiryDateMode takes precedence; response hasExpiry reflects whether expiry is REQUIRED.
+Existing rows without modes retain these legacy defaults.
+
+Provider upload requires `documentTypeId` and `documentKey`. `documentName` is
+optional and defaults to the document type name; `documentNumber` is optional.
+Dates follow admin configuration. This does not change service document requirements
+or approval rules. New nullable columns `issued_date_mode` and `expiry_date_mode`
+are added to `document_type` by Hibernate schema update; manually managed schemas
+must add them before deploying. Existing uploads are not rewritten.
+
 Read the document requirements for a service:
 
 ```http

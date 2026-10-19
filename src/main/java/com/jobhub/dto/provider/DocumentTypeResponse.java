@@ -5,6 +5,8 @@ public record DocumentTypeResponse(
         String name,
         String description,
         boolean hasExpiry,
-        String status
+        String status,
+        String issuedDateMode,
+        String expiryDateMode
 ) {
 }

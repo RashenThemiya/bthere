@@ -11,7 +11,6 @@ public record ProviderDocumentRequest(
         @NotNull(message = "Document type ID is required")
         Long documentTypeId,
 
-        @NotBlank(message = "Document name is required")
         @Size(max = 255, message = "Document name must not exceed 255 characters")
         String documentName,
 
