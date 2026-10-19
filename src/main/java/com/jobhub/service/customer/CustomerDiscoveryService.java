@@ -31,6 +31,7 @@ public class CustomerDiscoveryService {
     private final ProviderServiceLanguageRepository languages;
     private final ProviderServiceSkillRepository skills;
     private final ServiceTypeSkillRepository configuredSkills;
+    private final ProviderSearchFields providerSearchFields;
 
     public List<ServiceCard> services(Long userId, Long marketId) {
         profiles.get(userId); availability.market(marketId);
@@ -56,7 +57,8 @@ public class CustomerDiscoveryService {
         var card = options(userId, marketId, serviceId).stream().filter(o -> optionId.equals(o.option().optionId()))
                 .findFirst().orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
         return new Context(marketId, availability.market(marketId).getTimezone(), card,
-                fields.schema(serviceId, "BOOKING_FIELD", optionId), List.of("languages", "requiredSkillIds"), false);
+                fields.schema(serviceId, "BOOKING_FIELD", optionId), List.of("languages", "requiredSkillIds", "providerFilters"), false,
+                providerSearchFields.schema(providerSearchFields.definitions(serviceId, optionId)));
     }
     public Results search(Long userId, Search request) {
         profiles.get(userId);
@@ -65,6 +67,8 @@ public class CustomerDiscoveryService {
         var option = options.findByOptionIdAndServiceProviderTypeId(request.optionId(), request.serviceTypeId())
                 .filter(o -> "ACTIVE".equals(o.getStatus())).orElseThrow(() -> new ResourceNotFoundException("Active option not found"));
         var market = availability.market(request.marketId());
+        var publicFields = providerSearchFields.definitions(request.serviceTypeId(), request.optionId());
+        providerSearchFields.validate(publicFields, request.providerFilters());
         ZoneId zone = ZoneId.of(market.getTimezone());
         String mode = request.deliveryMode().trim().toUpperCase(Locale.ROOT);
         if (!option.getDeliveryModes().contains(mode)) throw new IllegalArgumentException("Delivery mode is not enabled");
@@ -111,10 +115,12 @@ public class CustomerDiscoveryService {
             skills.findAllByAssignmentId(assignment.getAssignmentId()).stream().filter(s -> "APPROVED".equals(s.getVerificationStatus()))
                     .forEach(s -> approvedSkills.add(s.getSkillId()));
             if (!approvedSkills.containsAll(requiredSkills)) continue;
+            var attributes = providerSearchFields.attributes(assignment, publicFields);
+            if (!providerSearchFields.matches(attributes, request.providerFilters())) continue;
             var provider = providers.findById(assignment.getServiceProviderId()).orElseThrow();
             if ("ONLINE".equals(mode)) {
                 int remaining = availability.remaining(assignment, option, null, null, start, end, false);
-                if (remaining > 0) candidates.add(candidate(provider, assignment, option, null, null, null, remaining, spoken));
+                if (remaining > 0) candidates.add(candidate(provider, assignment, option, null, null, null, remaining, spoken, attributes));
                 continue;
             }
             if (!option.isLocationEnabled()) continue;
@@ -139,7 +145,7 @@ public class CustomerDiscoveryService {
                         fixed ? area.getLongitude() : area.getLongitude().setScale(2, RoundingMode.HALF_UP));
                 double distance = CustomerAvailabilityService.distance(centre.latitude(), centre.longitude(), pin.latitude(), pin.longitude());
                 candidates.add(candidate(provider, assignment, option, fixed ? area.getServiceAreaId() : null, pin,
-                        Math.round(distance * 10.0)/10.0, remaining, spoken));
+                        Math.round(distance * 10.0)/10.0, remaining, spoken, attributes));
                 if (!fixed) break;
             }
         }
@@ -162,11 +168,12 @@ public class CustomerDiscoveryService {
         }
     }
     private Candidate candidate(ServiceProvider p, ServiceProviderTypeAssignment a, ServiceOption o, Long location,
-                                Point pin, Double distance, int remaining, List<String> spoken) {
+                                Point pin, Double distance, int remaining, List<String> spoken,
+                                Map<Long, com.fasterxml.jackson.databind.JsonNode> attributes) {
         return new Candidate(p.getServiceProviderId(), a.getAssignmentId(), o.getOptionId(), location,
                 p.getFirstName() + " " + p.getLastName(), p.getProfilePhoto(), p.getAverageRating(), p.getTotalRatings(),
                 pin == null ? "ONLINE" : location != null ? "PUBLIC_SERVICE_LOCATION" : "APPROXIMATE_SERVICE_AREA",
-                pin, distance, remaining, spoken);
+                pin, distance, remaining, spoken, attributes);
     }
     private Access access(Eligibility result) {
         if (result.eligible()) return new Access("ELIGIBLE", "CONTINUE", result);

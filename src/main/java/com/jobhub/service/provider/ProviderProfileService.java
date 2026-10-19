@@ -21,6 +21,7 @@ public class ProviderProfileService {
     private final ServiceProviderRepository serviceProviderRepository;
     private final ServiceProviderMarketRepository providerMarketRepository;
     private final MarketRepository marketRepository;
+    private final ProviderServiceApprovalService approvalService;
 
     @Transactional(readOnly = true)
     public ProviderProfileResponse get(Long userId) {
@@ -45,6 +46,7 @@ public class ProviderProfileService {
         provider.setStatus("ACTIVE");
         provider = serviceProviderRepository.save(provider);
         replaceMarket(provider.getServiceProviderId(), request.marketId());
+        approvalService.refreshProviderApprovals(provider.getServiceProviderId());
         return toResponse(provider);
     }
 
@@ -53,6 +55,7 @@ public class ProviderProfileService {
         ServiceProvider provider = findByUserId(userId);
         validateMarketId(marketId);
         replaceMarket(provider.getServiceProviderId(), marketId);
+        approvalService.refreshProviderApprovals(provider.getServiceProviderId());
         return toResponse(provider);
     }
 

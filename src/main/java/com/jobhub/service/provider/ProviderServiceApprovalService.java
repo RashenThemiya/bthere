@@ -32,6 +32,7 @@ public class ProviderServiceApprovalService {
     private final ServiceCustomFieldRepository customFieldRepository;
     private final ProviderCustomFieldSubmissionRepository customSubmissionRepository;
     private final ObjectMapper objectMapper;
+    private final ProviderProfileFields profileFields;
 
     public void refreshProviderApprovals(Long providerId) {
         List<ServiceProviderTypeAssignment> assignments =
@@ -265,6 +266,9 @@ public class ProviderServiceApprovalService {
                 .filter(field -> conditionApplies(
                         assignment, field, byCode, submissions))
                 .allMatch(field -> {
+                    if (field.isProfileBacked()) {
+                        return profileValue(assignment, field).provided();
+                    }
                     ProviderCustomFieldSubmission submission = submissions.get(field.getFieldId());
                     if (submission == null) {
                         submission = reusableSubmission(assignment, field).orElse(null);
@@ -276,6 +280,7 @@ public class ProviderServiceApprovalService {
 
     public java.util.Optional<ProviderCustomFieldSubmission> reusableSubmission(
             ServiceProviderTypeAssignment assignment, ServiceCustomField field) {
+        if (field.isProfileBacked()) return java.util.Optional.empty();
         String reuseScope = field.getReuseScope() == null
                 ? "ASSIGNMENT" : field.getReuseScope();
         if ("ASSIGNMENT".equals(reuseScope)) return java.util.Optional.empty();
@@ -302,11 +307,18 @@ public class ProviderServiceApprovalService {
             ServiceCustomField parent = byCode.get(code);
             ProviderCustomFieldSubmission submission = parent == null
                     ? null : submissions.get(parent.getFieldId());
-            if (submission == null && parent != null) {
-                submission = reusableSubmission(assignment, parent).orElse(null);
+            JsonNode actual;
+            if (parent != null && parent.isProfileBacked()) {
+                var resolved = profileValue(assignment, parent);
+                if (!resolved.provided()) return false;
+                actual = resolved.value();
+            } else {
+                if (submission == null && parent != null) {
+                    submission = reusableSubmission(assignment, parent).orElse(null);
+                }
+                if (submission == null) return false;
+                actual = objectMapper.readTree(submission.getValueJson());
             }
-            if (submission == null) return false;
-            JsonNode actual = objectMapper.readTree(submission.getValueJson());
             if (actual.has("value")) actual = actual.get("value");
             JsonNode expected = condition.get("value");
             String operator = condition.path("operator").asText("EQUALS");
@@ -314,5 +326,9 @@ public class ProviderServiceApprovalService {
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    public ProviderProfileFields.Resolved profileValue(ServiceProviderTypeAssignment assignment, ServiceCustomField field) {
+        return profileFields.resolve(assignment.getServiceProviderId(), field);
     }
 }

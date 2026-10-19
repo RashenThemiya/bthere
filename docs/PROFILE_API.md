@@ -584,8 +584,9 @@ POST /api/v1/admin/document-types
 {
   "name": "National ID",
   "description": "Government-issued identity document",
-  "required": true,
-  "hasExpiry": false
+  "hasExpiry": false,
+  "issuedDateMode": "OPTIONAL",
+  "expiryDateMode": "HIDDEN"
 }
 ```
 

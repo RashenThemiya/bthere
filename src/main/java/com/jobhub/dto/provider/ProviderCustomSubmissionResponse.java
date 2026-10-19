@@ -17,5 +17,16 @@ public record ProviderCustomSubmissionResponse(
         String reviewNote,
         String reuseScope,
         boolean reused,
-        Long sourceAssignmentId
-) {}
+        Long sourceAssignmentId,
+        String valueSource,
+        String profileField,
+        boolean readOnly
+) {
+    public ProviderCustomSubmissionResponse(Long submissionId, Long assignmentId, Long fieldId,
+            String fieldCode, String fieldLabel, JsonNode value, String verificationStatus,
+            Long reviewedBy, LocalDateTime reviewedAt, String reviewNote, String reuseScope,
+            boolean reused, Long sourceAssignmentId) {
+        this(submissionId, assignmentId, fieldId, fieldCode, fieldLabel, value, verificationStatus,
+                reviewedBy, reviewedAt, reviewNote, reuseScope, reused, sourceAssignmentId, "MANUAL", null, false);
+    }
+}

@@ -22,11 +22,18 @@ public record ServiceCustomFieldRequest(
         List<@NotBlank String> allowedFileTypes,
         JsonNode options,
         JsonNode condition,
-        @Min(0) Integer displayOrder
+        @Min(0) Integer displayOrder,
+        boolean customerVisible,
+        boolean searchable,
+        String filterOperator,
+        @jakarta.validation.Valid ServiceMediaPayload icon,
+        String valueSource,
+        String profileField
 ) {
     public ServiceCustomFieldRequest withOptionIds(List<Long> ids) {
         return new ServiceCustomFieldRequest(null, ids, scope, reuseScope, code, label,
                 description, fieldType, required, requiresApproval, minimumFiles, maximumFiles,
-                maximumFileSizeMb, allowedFileTypes, options, condition, displayOrder);
+                maximumFileSizeMb, allowedFileTypes, options, condition, displayOrder,
+                customerVisible, searchable, filterOperator, icon, valueSource, profileField);
     }
 }

@@ -1,5 +1,163 @@
 # JobHub Administration API
 
+## Super Admin tab update: fields, icons, search and document dates (2026-10-20)
+
+Implemented locally; deployment is not verified. Configuration requires SUPER_ADMIN.
+Providers/customers consume their relevant definitions and submit answers. IDs/URLs
+below are illustrative.
+
+### Configure provider requirements and booking questions
+
+```http
+POST /api/v1/admin/provider-types/3/custom-fields
+GET /api/v1/admin/provider-types/3/custom-fields
+PUT /api/v1/admin/provider-types/3/custom-fields/25
+PATCH /api/v1/admin/provider-types/3/custom-fields/25/status
+```
+
+POST returns 201; GET/PUT/PATCH return 200. GET is a plain array. Status body:
+{"status":"ACTIVE"} or {"status":"INACTIVE"}. Upload field/choice icons first
+using POST /api/v1/uploads/images, multipart part file; use returned key/url.
+Admin images support JPG, PNG, WebP and sanitized SVG, maximum 10 MB.
+
+Create/update definition:
+
+```json
+{
+  "optionIds":[12],"scope":"PROVIDER_REQUIREMENT","reuseScope":"PROVIDER",
+  "code":"VEHICLE_TYPE","label":"Vehicle type","description":"Your available vehicle",
+  "fieldType":"SELECT","required":false,"requiresApproval":false,
+  "minimumFiles":null,"maximumFiles":null,"maximumFileSizeMb":null,
+  "allowedFileTypes":[],"condition":null,"displayOrder":1,
+  "customerVisible":true,"searchable":true,"filterOperator":"IN",
+  "icon":{"key":"service-icons/vehicle.png","url":"https://your-bucket.example/service-icons/vehicle.png","altText":"Vehicle"},
+  "options":[
+    {"value":"CAR","label":"Car","icon":{"key":"service-icons/car.png","url":"https://your-bucket.example/service-icons/car.png"}},
+    {"value":"VAN","label":"Van","icon":null},
+    "BIKE"
+  ]
+}
+```
+
+Response contains the definition plus fieldId, serviceTypeId, effective optionId/optionIds,
+version and status. Icons/choices flow to admin lists, option dynamicFields, onboarding/
+booking schemas and customer filter definitions.
+
+| Setting | Admin behavior |
+| --- | --- |
+| scope | PROVIDER_REQUIREMENT: provider onboarding. BOOKING_FIELD: customer per booking. |
+| required | Mandatory completion; separate from approval/customer visibility. |
+| requiresApproval | Provider answer becomes PENDING when true, otherwise auto-APPROVED. |
+| optionIds | []/omitted: service-wide. Otherwise active options of this service. Do not also send legacy optionId. |
+| reuseScope | ASSIGNMENT, SERVICE, PROVIDER; booking fields must use ASSIGNMENT. |
+| customerVisible | Publish approved manual answers or valid linked profile values; default false. |
+| searchable | Enable customer filters; default false; requires customerVisible. |
+| filterOperator | Derived if omitted: IN for choices, RANGE for NUMBER, EQUALS for BOOLEAN. |
+| icon | Optional field icon; each select choice may independently have an icon. |
+
+Only unconditional SELECT/MULTI_SELECT/NUMBER/BOOLEAN provider requirements can be
+customer-visible/searchable. Uploads, text/contact fields and BOOKING_FIELD cannot
+be enabled as provider filters. Booking fields can still have field/choice icons;
+keep visibility/search flags false. All 13 existing types remain available for forms.
+Choices must have unique nonempty string values; objects may add label/icon metadata.
+Answers and filters submit values only. Missing icon key/url, malformed choices,
+duplicate choice values or incompatible operators return 400.
+
+Field PUT replaces the complete definition, including option assignments, icons,
+choices and flags. Preserve settings to keep them. Omitted/null icon removes attachment
+without deleting the S3 object. Label/icon changes preserve values; changing values
+can make saved answers invalid for search. Option POST/PUT also accepts
+dynamicFields:[{fieldId,definition}]: omit fieldId to create, supply to edit. Icons
+belong inside definition, separately from option.icon. Omitted dynamic fields remain unchanged.
+
+### Reuse provider profile data
+
+Profile-backed provider fields are now available to avoid duplicate onboarding inputs.
+Set valueSource:PROVIDER_PROFILE and profileField:gender (SELECT/TEXT), dateOfBirth
+(DATE), age (NUMBER), or another compatible allowlisted profile property. Default
+valueSource is MANUAL. Existing fields are not automatically linked by code/name.
+Keep requiresApproval:false; reviewed evidence is configured separately. Only profile
+gender/age can be publicly enabled as dynamic attributes; identifiers/DOB remain private.
+Profile-linked values are read-only in provider forms and report PROVIDED, not verified
+APPROVED. Required fields use live validity for completeness; old manual answers cannot
+override the profile. See [mapping, examples and SQL rollout](DYNAMIC_FIELDS_API.md#reuse-provider-profile-values-without-duplicate-inputs).
+
+### Document date controls
+
+```http
+POST /api/v1/admin/document-types
+GET /api/v1/admin/document-types
+PUT /api/v1/admin/document-types/1
+```
+
+```json
+{"name":"NIC","description":"National Identity Card","hasExpiry":false,
+ "issuedDateMode":"OPTIONAL","expiryDateMode":"HIDDEN"}
+```
+
+POST 201 / PUT 200 returns {id,name,description,hasExpiry,status,issuedDateMode,expiryDateMode}.
+GET returns a plain array. HIDDEN rejects supplied date, OPTIONAL permits blank,
+REQUIRED requires a date. Omitted modes default issued to OPTIONAL, expiry to REQUIRED
+if legacy hasExpiry true, otherwise OPTIONAL. Explicit expiryDateMode takes precedence;
+response hasExpiry reflects REQUIRED. Existing rows retain legacy defaults.
+Provider documentName/number are optional; name defaults to type name. Required document
+types belong to service/option setup, not a required flag on document-type creation.
+Existing uploads are not retroactively rewritten.
+
+### Customer requirements and review response wrappers
+
+GET /api/v1/admin/customer-requirements returns Requirement[], not Page:
+
+```json
+[{"requirementId":2,"version":1,"status":"ACTIVE","definition":{
+  "code":"DATE_OF_BIRTH","label":"Date of birth","description":null,"fieldType":"DATE",
+  "required":true,"verificationMode":"DOCUMENT_REVIEW","blocksBooking":false,
+  "targets":[{"scope":"SERVICE","serviceTypeId":3,"optionId":null}],
+  "evidenceCodes":["NIC"],"choices":[],"minimumFiles":null,"maximumFiles":null,
+  "maximumFileSizeMb":null,"allowedFileTypes":[],"displayOrder":2
+}}]
+```
+
+GET /api/v1/admin/customer-submissions?status=PENDING&page=0&size=20 returns
+Page<Submission>: content items with totalElements, totalPages, number and size.
+Items contain submissionId/customerId/requirementId/code/value, effective status,
+storedStatus, expiresOn, review metadata, answerVersion and definitionVersion;
+no embedded requirement definition. Join by requirementId. Filter uses storedStatus;
+effective status may be MISSING/EXPIRED. Review sends current answerVersion.
+VERIFICATION_ADMIN can also read/review these submissions.
+
+Successful submission queue response fragment (Spring Page may include additional
+pageable/sort/first/last metadata):
+
+```json
+{
+  "content":[{
+    "submissionId":101,"customerId":25,"requirementId":2,"code":"DATE_OF_BIRTH",
+    "value":"2000-05-10","status":"PENDING","storedStatus":"PENDING",
+    "expiresOn":null,"reviewedBy":null,"reviewedAt":null,"rejectionReason":null,
+    "answerVersion":1,"definitionVersion":1
+  }],
+  "totalElements":1,"totalPages":1,"number":0,"size":20
+}
+```
+
+GET /api/v1/admin/customer-eligibility returns Rule[]:
+
+```json
+[{"ruleId":3,"target":{"scope":"OPTION","serviceTypeId":3,"optionId":12},
+  "configuration":{"enabled":true,"minimumAge":21,"dateOfBirthCode":"DATE_OF_BIRTH",
+  "requiresVerifiedDateOfBirth":true,"requiredCodes":["NIC"]}}]
+```
+
+Hydrate by target.scope/serviceTypeId/optionId using configuration. GLOBAL has null
+IDs; SERVICE has optionId null; OPTION has both IDs. No expanded names/objects or
+default entries for unconfigured targets are returned.
+
+Full validation and database rollout: [dynamic fields](DYNAMIC_FIELDS_API.md),
+[provider filtering](CUSTOMER_DISCOVERY_API.md#dynamic-provider-filters),
+[document modes](PROFILE_API.md#document-upload-metadata-controls),
+[customer requirements](CUSTOMER_REQUIREMENTS_API.md).
+
 Base URL: `https://jobhub.pentarixlabs.com`
 
 All endpoints require `Authorization: Bearer <access-token>`. Paginated

@@ -52,4 +52,16 @@ public class ServiceCustomField extends AuditedEntity {
     private Integer displayOrder;
     private Integer version;
     private String status;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean customerVisible;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean searchable;
+    private String filterOperator;
+    @Column(columnDefinition = "TEXT")
+    private String iconJson;
+    private String valueSource;
+    private String profileField;
+
+    public String effectiveValueSource() { return valueSource == null ? "MANUAL" : valueSource; }
+    public boolean isProfileBacked() { return "PROVIDER_PROFILE".equals(effectiveValueSource()); }
 }

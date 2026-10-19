@@ -34,11 +34,13 @@ class CustomerDiscoveryServiceTest {
     @Mock ProviderServiceLanguageRepository languages;
     @Mock ProviderServiceSkillRepository skills;
     @Mock ServiceTypeSkillRepository configuredSkills;
+    @Mock ProviderSearchFields providerSearchFields;
     @InjectMocks CustomerDiscoveryService service;
     ServiceOption option;
     ServiceProviderTypeAssignment assignment;
 
     @BeforeEach void setup() {
+        lenient().when(providerSearchFields.matches(anyMap(), nullable(List.class))).thenReturn(true);
         option = new ServiceOption(); option.setOptionId(12L); option.setServiceProviderTypeId(3L);
         option.setStatus("ACTIVE"); option.setLocationEnabled(true); option.setDeliveryModes(Set.of("PROVIDER_TO_CUSTOMER", "CUSTOMER_TO_PROVIDER", "ONLINE"));
         var market = new Market(); market.setMarketId(1L); market.setTimezone("Asia/Colombo");
@@ -75,6 +77,12 @@ class CustomerDiscoveryServiceTest {
     @Test void fullProvidersDisappearFromResults() {
         when(availability.remaining(eq(assignment), eq(option), any(), any(), any(), any(), eq(false))).thenReturn(0);
         assertThat(service.search(25L, search("ONLINE", null)).candidates()).isEmpty();
+    }
+    @Test void dynamicFiltersExcludeCandidatesBeforePagination() {
+        when(providerSearchFields.matches(anyMap(), nullable(List.class))).thenReturn(false);
+        var result = service.search(25L, search("ONLINE", null));
+        assertThat(result.totalCandidates()).isZero();
+        assertThat(result.candidates()).isEmpty();
     }
     @Test void scheduleUnavailableProvidersAreNotReturned() {
         when(availability.scheduled(eq(assignment), any(), any())).thenReturn(false);

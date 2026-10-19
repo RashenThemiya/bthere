@@ -39,6 +39,7 @@ public class ServiceCustomFieldService {
     private final ProviderProfileService profileService;
     private final ProviderServiceApprovalService approvalService;
     private final ServiceSetupService serviceSetupService;
+    private final ProviderProfileFields profileFields;
 
     @Transactional
     public ServiceCustomFieldResponse create(Long serviceTypeId, ServiceCustomFieldRequest request) {
@@ -50,18 +51,22 @@ public class ServiceCustomFieldService {
         item.setVersion(1);
         item.setStatus("ACTIVE");
         apply(item, request, definition);
-        return response(fieldRepository.save(item));
+        item = fieldRepository.save(item);
+        if (item.isProfileBacked()) refreshProfileAssignments(serviceTypeId);
+        return response(item);
     }
 
     @Transactional
     public ServiceCustomFieldResponse update(
             Long serviceTypeId, Long fieldId, ServiceCustomFieldRequest request) {
         ServiceCustomField item = requireField(serviceTypeId, fieldId);
+        boolean wasProfileBacked = item.isProfileBacked();
         ValidatedDefinition definition = validateDefinition(serviceTypeId, item, request);
         validateUniqueCode(serviceTypeId, fieldId, definition);
         apply(item, request, definition);
         item = fieldRepository.save(item);
         synchronizeExistingSubmissionIdentity(item);
+        if (wasProfileBacked || item.isProfileBacked()) refreshProfileAssignments(serviceTypeId);
         return response(item);
     }
 
@@ -75,7 +80,9 @@ public class ServiceCustomFieldService {
         ServiceCustomField item = requireField(serviceTypeId, fieldId);
         item.setStatus(status);
         item.setVersion((item.getVersion() == null ? 1 : item.getVersion()) + 1);
-        return response(fieldRepository.save(item));
+        item = fieldRepository.save(item);
+        if (item.isProfileBacked()) refreshProfileAssignments(serviceTypeId);
+        return response(item);
     }
 
     @Transactional(readOnly = true)
@@ -245,6 +252,9 @@ public class ServiceCustomFieldService {
         if (!field.appliesToOptions(selectedOptionIds)) {
             throw new IllegalArgumentException("Select the related service option before submitting this field");
         }
+        if (field.isProfileBacked()) {
+            throw new IllegalArgumentException("This field uses your provider profile; update the profile instead of submitting a duplicate answer");
+        }
         validateValue(userId, field, value);
     }
 
@@ -258,6 +268,17 @@ public class ServiceCustomFieldService {
             case "MULTI_SELECT" -> { if (!value.isArray()) invalidType(field); }
             case "IMAGE_UPLOAD", "DOCUMENT_UPLOAD", "FILE_UPLOAD" -> validateFiles(userId, field, value);
             default -> { if (!value.isTextual()) invalidType(field); }
+        }
+        if (Set.of("SELECT", "MULTI_SELECT").contains(field.getFieldType())) {
+            JsonNode choices = read(field.getOptionsJson());
+            List<JsonNode> selected = new ArrayList<>();
+            if ("SELECT".equals(field.getFieldType())) selected.add(value);
+            else value.forEach(selected::add);
+            for (JsonNode selection : selected) {
+                if (!DynamicFieldChoices.contains(choices, selection)) {
+                    throw new IllegalArgumentException("Select a configured choice for " + field.getLabel());
+                }
+            }
         }
     }
 
@@ -290,6 +311,23 @@ public class ServiceCustomFieldService {
             Long serviceTypeId, ServiceCustomField existing, ServiceCustomFieldRequest request) {
         String scope = normalizeScope(request.scope());
         String fieldType = request.fieldType().trim().toUpperCase(Locale.ROOT);
+        ProviderProfileFields.validate(request, scope, fieldType);
+        if (request.customerVisible() || request.searchable()) {
+            if (!PROVIDER_REQUIREMENT.equals(scope)
+                    || !Set.of("SELECT", "MULTI_SELECT", "NUMBER", "BOOLEAN").contains(fieldType)
+                    || request.condition() != null && !request.condition().isNull()) {
+                throw new IllegalArgumentException("Customer fields must be unconditional SELECT, MULTI_SELECT, NUMBER or BOOLEAN provider requirements");
+            }
+        }
+        if (request.searchable() && !request.customerVisible()) {
+            throw new IllegalArgumentException("Searchable fields must be customer visible");
+        }
+        String expectedOperator = "NUMBER".equals(fieldType) ? "RANGE"
+                : "BOOLEAN".equals(fieldType) ? "EQUALS" : "IN";
+        if (request.filterOperator() != null
+                && (!request.searchable() || !expectedOperator.equals(request.filterOperator()))) {
+            throw new IllegalArgumentException("Invalid filter operator for this field type");
+        }
         if (!FIELD_TYPES.contains(fieldType)) {
             throw new IllegalArgumentException("Unsupported custom field type");
         }
@@ -310,10 +348,8 @@ public class ServiceCustomFieldService {
                 throw new IllegalArgumentException("Maximum files cannot be below minimum files");
             }
         }
-        if (("SELECT".equals(fieldType) || "MULTI_SELECT".equals(fieldType))
-                && (request.options() == null || !request.options().isArray()
-                || request.options().isEmpty())) {
-            throw new IllegalArgumentException("Select fields require a non-empty options array");
+        if (Set.of("SELECT", "MULTI_SELECT").contains(fieldType)) {
+            DynamicFieldChoices.validateDefinition(request.options());
         }
         String reuseScope = request.reuseScope() == null || request.reuseScope().isBlank()
                 ? "ASSIGNMENT" : request.reuseScope().trim().toUpperCase(Locale.ROOT);
@@ -348,6 +384,13 @@ public class ServiceCustomFieldService {
         item.setOptionsJson(write(request.options()));
         item.setConditionJson(write(request.condition()));
         item.setDisplayOrder(request.displayOrder() == null ? 0 : request.displayOrder());
+        item.setIconJson(write(request.icon()));
+        item.setValueSource(request.valueSource() == null ? "MANUAL" : request.valueSource());
+        item.setProfileField(request.profileField());
+        item.setCustomerVisible(request.customerVisible());
+        item.setSearchable(request.searchable());
+        item.setFilterOperator(!request.searchable() ? null : "NUMBER".equals(definition.fieldType())
+                ? "RANGE" : "BOOLEAN".equals(definition.fieldType()) ? "EQUALS" : "IN");
     }
 
     private List<ProviderCustomSubmissionResponse> providerSubmissions(
@@ -367,6 +410,13 @@ public class ServiceCustomFieldService {
         List<ProviderCustomSubmissionResponse> result = new ArrayList<>();
         for (ServiceCustomField field : fields) {
             ProviderCustomFieldSubmission own = byField.remove(field.getFieldId());
+            if (field.isProfileBacked()) {
+                var resolved = profileFields.resolve(assignment.getServiceProviderId(), field);
+                result.add(new ProviderCustomSubmissionResponse(null, assignment.getAssignmentId(), field.getFieldId(),
+                        field.getCode(), field.getLabel(), resolved.value(), resolved.status(), null, null, null,
+                        normalizedReuseScope(field), false, null, "PROVIDER_PROFILE", field.getProfileField(), true));
+                continue;
+            }
             if (own != null) {
                 result.add(submissionResponse(own, field, false,
                         assignment.getAssignmentId(), own.getAssignmentId()));
@@ -395,7 +445,8 @@ public class ServiceCustomFieldService {
                 targetField == null ? null : targetField.getLabel(), read(item.getValueJson()),
                 item.getVerificationStatus(), item.getReviewedBy(), item.getReviewedAt(), item.getReviewNote(),
                 targetField == null ? normalizedReuseScope(item) : normalizedReuseScope(targetField),
-                reused, sourceAssignmentId);
+                reused, sourceAssignmentId, targetField == null ? "MANUAL" : targetField.effectiveValueSource(),
+                targetField == null ? null : targetField.getProfileField(), targetField != null && targetField.isProfileBacked());
     }
 
     private ServiceCustomFieldResponse response(ServiceCustomField item) {
@@ -405,7 +456,20 @@ public class ServiceCustomFieldService {
                 item.isRequiresApproval(), item.getMinimumFiles(), item.getMaximumFiles(),
                 item.getMaximumFileSizeMb(), readStringList(item.getAllowedFileTypesJson()),
                 read(item.getOptionsJson()), read(item.getConditionJson()), item.getDisplayOrder(),
-                item.getVersion(), item.getStatus());
+                item.getVersion(), item.getStatus(), item.isCustomerVisible(), item.isSearchable(), item.getFilterOperator(),
+                readIcon(item.getIconJson()), item.effectiveValueSource(), item.getProfileField());
+    }
+
+    private ServiceMediaPayload readIcon(String value) {
+        if (value == null) return null;
+        try { return objectMapper.readValue(value, ServiceMediaPayload.class); }
+        catch (JsonProcessingException exception) { throw new IllegalStateException("Stored field icon is invalid", exception); }
+    }
+
+    /** Resolves exact answers before reusable answers; callers must allowlist public fields. */
+    @Transactional(readOnly = true)
+    public List<ProviderCustomSubmissionResponse> resolvedProviderAnswers(ServiceProviderTypeAssignment assignment) {
+        return providerSubmissions(assignment);
     }
 
     private ServiceProviderTypeAssignment ownedAssignment(Long userId, Long assignmentId) {
@@ -488,6 +552,12 @@ public class ServiceCustomFieldService {
             submission.setReuseScope(normalizedReuseScope(field));
         }
         submissionRepository.saveAll(submissions);
+    }
+
+    private void refreshProfileAssignments(Long serviceTypeId) {
+        assignmentRepository.findAllByServiceProviderTypeId(serviceTypeId).stream()
+                .map(ServiceProviderTypeAssignment::getServiceProviderId).distinct()
+                .forEach(approvalService::refreshProviderApprovals);
     }
 
     private String normalizedReuseScope(ServiceCustomField field) {

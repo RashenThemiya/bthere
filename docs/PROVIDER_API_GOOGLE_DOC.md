@@ -1,8 +1,110 @@
 ﻿# Provider API reference
 
-Prepared from the local project documentation on 2026-10-15. Google Docs synchronization is pending access.
+Updated for provider-facing document and dynamic-field changes on 2026-10-20.
+Google Docs tabs synchronized and read-back verified on 2026-10-20:
+[Online API reference](https://docs.google.com/document/d/1StVD4sflhJLvNeTgKvFC0wmyzA2XQu0eJHTYRgGf4jA/edit?tab=t.0).
+Deployment is not verified.
 
 Includes profile/setup, dynamic requirements and submissions, and service media/responsibilities.
+
+## Provider tab update: choices, icons and document dates (2026-10-20)
+
+Provider writes require SERVICE_PROVIDER authentication. Examples use illustrative
+IDs/URLs. Admin configures fields/icons; providers read metadata and submit answers.
+
+### Read and render provider requirements
+
+```http
+GET /api/v1/provider-types/3/onboarding-schema
+GET /api/v1/provider-types/3/options
+GET /api/v1/providers/me/services/14/submissions
+```
+
+Use onboarding commonFields plus selected options[].fields. Generic option
+dynamicFields may include both scopes: render PROVIDER_REQUIREMENT for onboarding,
+not BOOKING_FIELD. Deduplicate shared fields by fieldId.
+
+Example field fragment returned inside schemas:
+
+```json
+{
+  "fieldId":25,"scope":"PROVIDER_REQUIREMENT","reuseScope":"PROVIDER",
+  "code":"VEHICLE_TYPE","label":"Vehicle type","fieldType":"SELECT",
+  "required":false,"requiresApproval":false,
+  "icon":{"key":"service-icons/vehicle.png","url":"https://your-bucket.example/service-icons/vehicle.png","altText":"Vehicle"},
+  "options":[
+    {"value":"CAR","label":"Car","icon":{"key":"service-icons/car.png","url":"https://your-bucket.example/service-icons/car.png"}},
+    {"value":"VAN","label":"Van","icon":null},
+    "BIKE"
+  ],
+  "customerVisible":true,"searchable":true,"filterOperator":"IN"
+}
+```
+
+The overall field icon and each SELECT/MULTI_SELECT choice icon are independently
+optional. Display label when present, otherwise value; without icon show text only.
+Support both legacy string choices and rich objects. Choices are admin-configured,
+not hardcoded mobile enums. required, not scope alone, determines mandatory fields.
+
+### Submit values, not presentation metadata
+
+Profile-backed fields: admin may set valueSource:PROVIDER_PROFILE and profileField
+(e.g. gender, dateOfBirth, age). Read schema metadata and GET submissions together.
+Returned profile items have readOnly:true, submissionId:null and status PROVIDED,
+MISSING or INVALID. Display the resolved value instead of asking again; offer Edit
+profile when needed. Do not include these field IDs in standalone or combined registration
+requirements: duplicates return 400. Profile changes update resolved values/search without
+copying answers. Only new MANUAL requirements need input. Profile-backed PROVIDED does
+not mean admin-verified; reviewed evidence remains separate. Full mapping/type list:
+[profile reuse](DYNAMIC_FIELDS_API.md#reuse-provider-profile-values-without-duplicate-inputs).
+
+```http
+PUT /api/v1/providers/me/services/14/submissions
+```
+
+```json
+{"submissions":[{"fieldId":25,"value":"CAR"}]}
+```
+
+Success 200: ProviderCustomSubmissionResponse[]. SELECT sends a string; MULTI_SELECT
+sends an array such as ["CAR","BIKE"]. Never send label/icon objects. Unknown choices
+return 400. requiresApproval true produces PENDING, otherwise auto-APPROVED.
+Inherited answers include reused:true and sourceAssignmentId. Existing reuse rules
+continue to apply. Exact pending/rejected replacements suppress older reusable approvals
+in customer search. Only admin-enabled customerVisible fields publish approved valid
+answers; searchable enables filters. Auto-approval is not independent credential verification.
+
+### Document upload: mandatory file, conditional dates
+
+GET /api/v1/document-types returns a plain array, with date modes on each item:
+
+```json
+[{"id":1,"name":"NIC","description":"National Identity Card","hasExpiry":false,
+  "status":"ACTIVE","issuedDateMode":"OPTIONAL","expiryDateMode":"HIDDEN"}]
+```
+
+HIDDEN: hide and omit/null date; OPTIONAL: allow blank; REQUIRED: require a date.
+Backend rejects supplied hidden dates and missing required dates. Expiry cannot
+precede issued date. Use modes rather than guessing from document name/hasExpiry.
+
+Upload first using POST /api/v1/uploads/documents, multipart part file. Then:
+
+```http
+POST /api/v1/providers/me/documents
+```
+
+```json
+{"documentTypeId":1,"documentKey":"providers/25/documents/nic.jpg"}
+```
+
+Success 201. Key namespace uses authenticated user ID. documentName defaults to type
+name; documentNumber is optional. Dates follow admin modes. Posting the same type
+replaces its upload and restarts review. Existing uploads are not retroactively changed.
+Service/selected-option setup still decides which document types are mandatory.
+
+Full contracts: [dynamic fields and choice icons](DYNAMIC_FIELDS_API.md),
+[document date controls](PROFILE_API.md#document-upload-metadata-controls),
+[customer matching](CUSTOMER_DISCOVERY_API.md#dynamic-provider-filters).
 
 ## Combined mobile service registration
 
@@ -567,8 +669,9 @@ POST /api/v1/admin/document-types
 {
   "name": "National ID",
   "description": "Government-issued identity document",
-  "required": true,
-  "hasExpiry": false
+  "hasExpiry": false,
+  "issuedDateMode": "OPTIONAL",
+  "expiryDateMode": "HIDDEN"
 }
 ```
 

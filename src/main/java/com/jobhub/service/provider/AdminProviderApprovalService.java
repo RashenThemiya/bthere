@@ -95,6 +95,14 @@ public class AdminProviderApprovalService {
   Map<String,ServiceCustomField> byCode=new HashMap<>();definitions.forEach(f -> byCode.put(f.getCode(),f));
   for(var def:definitions) {
    if(!def.appliesToOptions(selected) || !approvals.conditionApplies(a,def,byCode,byField)) continue;
+   if(def.isProfileBacked()) {
+    var resolved=approvals.profileValue(a,def);
+    dyn.add(new Requirement("DYNAMIC_REQUIREMENT",null,def.getFieldId(),def.getLabel(),def.isRequired(),false,
+        resolved.status(),!resolved.provided(),false,false,null,null,null,null,
+        info("code",def.getCode(),"fieldType",def.getFieldType(),"valueSource","PROVIDER_PROFILE",
+            "profileField",def.getProfileField(),"readOnly",true,"value",resolved.value(),"optionIds",def.effectiveOptionIds())));
+    continue;
+   }
    var item=byField.get(def.getFieldId());
    if(item==null)item=approvals.reusableSubmission(a,def).orElse(null);
    Long source=item==null?a.getAssignmentId():item.getAssignmentId();

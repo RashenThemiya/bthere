@@ -32,7 +32,52 @@ class ServiceCustomFieldServiceTest {
     @Mock ProviderProfileService profileService;
     @Mock ProviderServiceApprovalService approvalService;
     @Mock ServiceSetupService serviceSetupService;
+    @Mock ProviderProfileFields profileFields;
     @InjectMocks ServiceCustomFieldService service;
+
+    @Test void profileBackedFieldsIgnoreOldAnswersAndRejectDuplicateInput() throws Exception {
+        var mapper = new ObjectMapper();
+        var realService = new ServiceCustomFieldService(mapper, typeRepository, optionRepository,
+                fieldRepository, submissionRepository, providerOptionRepository, assignmentRepository,
+                profileService, approvalService, serviceSetupService, profileFields);
+        var definition = mapper.readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"GENDER","label":"Gender","fieldType":"SELECT",
+                 "valueSource":"PROVIDER_PROFILE","profileField":"gender","options":["MALE","FEMALE"],
+                 "customerVisible":true,"searchable":true}
+                """, ServiceCustomFieldRequest.class);
+        when(fieldRepository.save(any())).thenAnswer(i -> {
+            ServiceCustomField item = i.getArgument(0); item.setFieldId(25L); return item;
+        });
+        var created = realService.create(1L, definition);
+        assertThat(created.valueSource()).isEqualTo("PROVIDER_PROFILE");
+        assertThat(created.profileField()).isEqualTo("gender");
+        assertThat(definition.withOptionIds(List.of(12L)).profileField()).isEqualTo("gender");
+        var field = new ServiceCustomField(); field.setFieldId(25L); field.setScope("PROVIDER_REQUIREMENT");
+        field.setStatus("ACTIVE"); field.setServiceProviderTypeId(1L); field.setValueSource("PROVIDER_PROFILE");
+        field.setProfileField("gender"); field.setCode("GENDER");
+        var provider = new ServiceProvider(); provider.setServiceProviderId(15L);
+        when(profileService.findByUserId(5L)).thenReturn(provider);
+        var assignment = new ServiceProviderTypeAssignment(); assignment.setAssignmentId(14L);
+        assignment.setServiceProviderId(15L); assignment.setServiceProviderTypeId(1L);
+        when(assignmentRepository.findByAssignmentIdAndServiceProviderId(14L, 15L)).thenReturn(Optional.of(assignment));
+        when(fieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                1L, "PROVIDER_REQUIREMENT", "ACTIVE")).thenReturn(List.of(field));
+        var stale = new ProviderCustomFieldSubmission(); stale.setFieldId(25L); stale.setValueJson("\"MALE\"");
+        stale.setSubmissionId(99L); stale.setVerificationStatus("APPROVED");
+        when(submissionRepository.findAllByAssignmentId(14L)).thenReturn(List.of(stale));
+        when(profileFields.resolve(15L, field)).thenReturn(new ProviderProfileFields.Resolved(mapper.readTree("\"FEMALE\""), "PROVIDED"));
+        var resolved = realService.getSubmissions(5L, 14L);
+        assertThat(resolved).hasSize(1);
+        assertThat(resolved.get(0).value().asText()).isEqualTo("FEMALE");
+        assertThat(resolved.get(0).submissionId()).isNull();
+        assertThat(resolved.get(0).readOnly()).isTrue();
+        assertThat(resolved.get(0).valueSource()).isEqualTo("PROVIDER_PROFILE");
+        when(fieldRepository.findAllByFieldIdIn(any())).thenReturn(List.of(field));
+        var duplicate = new com.jobhub.dto.provider.ProviderCustomSubmissionRequest(List.of(
+                new com.jobhub.dto.provider.ProviderCustomSubmissionRequest.Entry(25L, mapper.readTree("\"MALE\""))));
+        assertThatThrownBy(() -> realService.saveSubmissions(5L, 14L, duplicate)).hasMessageContaining("update the profile");
+        verify(submissionRepository, never()).save(any());
+    }
 
     @BeforeEach
     void typeExists() {
@@ -69,6 +114,128 @@ class ServiceCustomFieldServiceTest {
         assertThat(result.fieldId()).isEqualTo(25L);
         assertThat(result.optionIds()).containsExactly(12L, 13L);
         verify(fieldRepository, times(1)).save(any());
+    }
+
+    @Test void rejectsSearchOnPrivateUploadAndConditionalFields() throws Exception {
+        assertThatThrownBy(() -> service.create(1L, request("\"searchable\":true")))
+                .hasMessageContaining("customer visible");
+        var upload = new ObjectMapper().readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"NIC","label":"NIC",
+                 "fieldType":"IMAGE_UPLOAD","customerVisible":true,"searchable":true}
+                """, ServiceCustomFieldRequest.class);
+        assertThatThrownBy(() -> service.create(1L, upload)).hasMessageContaining("unconditional");
+        assertThatThrownBy(() -> service.create(1L,
+                request("\"searchable\":true,\"customerVisible\":true,\"condition\":{}")))
+                .hasMessageContaining("unconditional");
+    }
+
+    @Test void richChoicesRoundTripAndProvidersSubmitOnlyTheirValues() throws Exception {
+        var mapper = new ObjectMapper();
+        var realService = new ServiceCustomFieldService(mapper, typeRepository, optionRepository,
+                fieldRepository, submissionRepository, providerOptionRepository, assignmentRepository,
+                profileService, approvalService, serviceSetupService, profileFields);
+        var definition = mapper.readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"VEHICLE","label":"Vehicle",
+                 "fieldType":"SELECT","customerVisible":true,"searchable":true,
+                 "options":["BIKE",{"value":"CAR","label":"Car","icon":{
+                 "key":"service-icons/car.png","url":"https://example.com/car.png"}}]}
+                """, ServiceCustomFieldRequest.class);
+        var saved = new java.util.concurrent.atomic.AtomicReference<ServiceCustomField>();
+        when(fieldRepository.save(any())).thenAnswer(i -> {
+            ServiceCustomField item = i.getArgument(0); item.setFieldId(25L); saved.set(item); return item;
+        });
+        var response = realService.create(1L, definition);
+        assertThat(response.options()).isEqualTo(definition.options());
+        assertThat(response.options().get(1).path("icon").path("key").asText()).isEqualTo("service-icons/car.png");
+        var provider = new ServiceProvider(); provider.setServiceProviderId(15L);
+        when(profileService.findByUserId(5L)).thenReturn(provider);
+        var assignment = new ServiceProviderTypeAssignment();
+        assignment.setAssignmentId(14L); assignment.setServiceProviderId(15L); assignment.setServiceProviderTypeId(1L);
+        when(assignmentRepository.findByAssignmentIdAndServiceProviderId(14L, 15L)).thenReturn(Optional.of(assignment));
+        when(fieldRepository.findAllByFieldIdIn(any())).thenAnswer(i -> List.of(saved.get()));
+        var valid = new com.jobhub.dto.provider.ProviderCustomSubmissionRequest(List.of(
+                new com.jobhub.dto.provider.ProviderCustomSubmissionRequest.Entry(25L, mapper.readTree("\"CAR\""))));
+        realService.saveSubmissions(5L, 14L, valid);
+        verify(submissionRepository).save(argThat(s -> "\"CAR\"".equals(s.getValueJson())));
+        for (String invalid : List.of("\"Car\"", "\"UNKNOWN\"", "{\"value\":\"CAR\"}")) {
+            var request = new com.jobhub.dto.provider.ProviderCustomSubmissionRequest(List.of(
+                    new com.jobhub.dto.provider.ProviderCustomSubmissionRequest.Entry(25L, mapper.readTree(invalid))));
+            assertThatThrownBy(() -> realService.saveSubmissions(5L, 14L, request)).isInstanceOf(IllegalArgumentException.class);
+        }
+        saved.get().setFieldType("MULTI_SELECT");
+        realService.saveSubmissions(5L, 14L, new com.jobhub.dto.provider.ProviderCustomSubmissionRequest(List.of(
+                new com.jobhub.dto.provider.ProviderCustomSubmissionRequest.Entry(25L, mapper.readTree("[\"CAR\",\"BIKE\"]")))));
+        verify(submissionRepository).save(argThat(s -> "[\"CAR\",\"BIKE\"]".equals(s.getValueJson())));
+    }
+
+    @Test void fieldIconsPersistAcrossSchemasAndCanBeRemoved() throws Exception {
+        var realMapper = new ObjectMapper();
+        var realService = new ServiceCustomFieldService(realMapper, typeRepository, optionRepository,
+                fieldRepository, submissionRepository, providerOptionRepository, assignmentRepository,
+                profileService, approvalService, serviceSetupService, profileFields);
+        var saved = new java.util.concurrent.atomic.AtomicReference<ServiceCustomField>();
+        when(fieldRepository.save(any())).thenAnswer(i -> {
+            ServiceCustomField item = i.getArgument(0);
+            item.setFieldId(25L); saved.set(item); return item;
+        });
+        var definition = request("\"icon\":{\"key\":\"service-icons/experience.png\","
+                + "\"url\":\"https://example.com/experience.png\",\"altText\":\"Experience\"}");
+        var created = realService.create(1L, definition);
+        assertThat(created.icon().key()).isEqualTo("service-icons/experience.png");
+        assertThat(definition.withOptionIds(List.of(12L)).icon()).isEqualTo(created.icon());
+        when(fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(1L))
+                .thenAnswer(i -> List.of(saved.get()));
+        assertThat(realService.listForOption(1L, 12L, false).get(0).icon()).isEqualTo(created.icon());
+        when(fieldRepository.findByFieldIdAndServiceProviderTypeId(25L, 1L))
+                .thenAnswer(i -> Optional.of(saved.get()));
+        var bookingField = realMapper.readValue("""
+                {"scope":"BOOKING_FIELD","code":"CARE_NOTES","label":"Care notes",
+                 "fieldType":"TEXTAREA","icon":{"key":"service-icons/notes.png",
+                 "url":"https://example.com/notes.png"}}
+                """, ServiceCustomFieldRequest.class);
+        assertThat(realService.update(1L, 25L, bookingField).icon().key()).isEqualTo("service-icons/notes.png");
+        assertThat(realService.update(1L, 25L, request("\"icon\":null")).icon()).isNull();
+        assertThat(saved.get().getIconJson()).isNull();
+    }
+
+    @Test void nestedIconRequiresKeyAndUrlButIconItselfIsOptional() throws Exception {
+        try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            var validator = factory.getValidator();
+            assertThat(validator.validate(request("\"icon\":null"))).isEmpty();
+            assertThat(validator.validate(request("\"icon\":{\"key\":\"\",\"url\":\"\"}")))
+                    .extracting(v -> v.getPropertyPath().toString()).contains("icon.key", "icon.url");
+        }
+    }
+
+    @Test void resolvesApprovedReusableAnswersButKeepsPendingExactOverride() throws Exception {
+        var assignment = new ServiceProviderTypeAssignment();
+        assignment.setAssignmentId(14L);
+        assignment.setServiceProviderId(15L);
+        assignment.setServiceProviderTypeId(1L);
+        var field = new ServiceCustomField();
+        field.setFieldId(25L); field.setCode("GENDER"); field.setFieldType("SELECT");
+        field.setReuseScope("PROVIDER"); field.setScope("PROVIDER_REQUIREMENT");
+        var source = new ProviderCustomFieldSubmission();
+        source.setSubmissionId(2L); source.setAssignmentId(99L);
+        source.setReusableFieldType("SELECT"); source.setVerificationStatus("APPROVED");
+        source.setValueJson("\"FEMALE\"");
+        when(fieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                1L, "PROVIDER_REQUIREMENT", "ACTIVE")).thenReturn(List.of(field));
+        when(submissionRepository.findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
+                15L, "GENDER", "APPROVED")).thenReturn(List.of(source));
+        when(objectMapper.readTree(anyString())).thenAnswer(i -> new ObjectMapper().readTree((String) i.getArgument(0)));
+        var inherited = service.resolvedProviderAnswers(assignment);
+        assertThat(inherited.get(0).reused()).isTrue();
+        assertThat(inherited.get(0).fieldId()).isEqualTo(25L);
+        assertThat(inherited.get(0).sourceAssignmentId()).isEqualTo(99L);
+
+        var exact = new ProviderCustomFieldSubmission();
+        exact.setFieldId(25L); exact.setAssignmentId(14L);
+        exact.setVerificationStatus("PENDING"); exact.setValueJson("\"MALE\"");
+        when(submissionRepository.findAllByAssignmentId(14L)).thenReturn(List.of(exact));
+        var overridden = service.resolvedProviderAnswers(assignment);
+        assertThat(overridden.get(0).reused()).isFalse();
+        assertThat(overridden.get(0).verificationStatus()).isEqualTo("PENDING");
     }
 
     @Test

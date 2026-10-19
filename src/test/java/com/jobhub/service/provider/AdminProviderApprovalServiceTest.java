@@ -61,6 +61,18 @@ class AdminProviderApprovalServiceTest {
   lenient().when(entityManager.find(ProviderServiceSkill.class,id,LockModeType.PESSIMISTIC_WRITE)).thenReturn(item);
   return item;
  }
+ @Test void linkedProfileDataIsNotMarkedMissingJustBecauseItHasNoSubmissionId() {
+  var field=new ServiceCustomField();field.setFieldId(4L);field.setCode("GENDER");field.setLabel("Gender");
+  field.setValueSource("PROVIDER_PROFILE");field.setProfileField("gender");field.setRequired(true);
+  when(fields.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(3L,"PROVIDER_REQUIREMENT","ACTIVE"))
+      .thenReturn(List.of(field));
+  when(approvals.conditionApplies(eq(a),eq(field),anyMap(),anyMap())).thenReturn(true);
+  when(approvals.profileValue(a,field)).thenReturn(new ProviderProfileFields.Resolved(com.fasterxml.jackson.databind.node.TextNode.valueOf("FEMALE"),"PROVIDED"));
+  var row=service.detail(12L).services().get(0).dynamicRequirements().get(0);
+  assertThat(row.id()).isNull();assertThat(row.missing()).isFalse();assertThat(row.reviewable()).isFalse();
+  assertThat(row.verificationStatus()).isEqualTo("PROVIDED");
+  assertThat(row.details().path("valueSource").asText()).isEqualTo("PROVIDER_PROFILE");
+ }
  @Test void showsMissingRequirementsAndExpiredUploads() {
   type.setCertificateRequirement("REQUIRED");type.setEducationRequirement("REQUIRED");type.setOptionsRequired(true);
   var def=new ServiceTypeSkill();def.setSkillId(4L);def.setName("First aid");def.setMandatory(true);

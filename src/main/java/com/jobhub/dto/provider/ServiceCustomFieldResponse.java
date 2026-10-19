@@ -25,5 +25,11 @@ public record ServiceCustomFieldResponse(
         JsonNode condition,
         Integer displayOrder,
         Integer version,
-        String status
+        String status,
+        boolean customerVisible,
+        boolean searchable,
+        String filterOperator,
+        ServiceMediaPayload icon,
+        String valueSource,
+        String profileField
 ) {}

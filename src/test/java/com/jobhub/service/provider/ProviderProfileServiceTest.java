@@ -32,6 +32,7 @@ class ProviderProfileServiceTest {
 
     @Mock
     private MarketRepository marketRepository;
+    @Mock private ProviderServiceApprovalService approvalService;
 
     @InjectMocks
     private ProviderProfileService providerProfileService;
@@ -70,5 +71,6 @@ class ProviderProfileServiceTest {
         assertThat(response.verificationStatus()).isEqualTo("NOT_SUBMITTED");
         assertThat(response.averageRating()).isZero();
         assertThat(response.profileCompleted()).isTrue();
+        org.mockito.Mockito.verify(approvalService).refreshProviderApprovals(14L);
     }
 }

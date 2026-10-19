@@ -83,13 +83,110 @@ option's fields, plus service setup. Use field types, required flags, choices,
 upload rules, and conditions to render the form. Customer eligibility details are
 reusable; BOOKING_FIELD answers belong to each booking.
 
-Supported matching filters are explicitly `languages` and `requiredSkillIds`.
+Supported matching filters are `languages`, `requiredSkillIds`, and admin-enabled
+`providerFilters`. Context also returns `providerFilters`, an array of dynamic
+filter definitions for this exact service/option; see below.
 Use language codes SINHALA, ENGLISH, TAMIL and skill IDs configured for the service
 in the schema's service setup. All requested languages and approved skills must
 match the provider. An arbitrary dynamic booking answer is not automatically a
 provider attribute filter: no such mapping exists in current admin configuration.
 Collect normal dynamic booking answers before the existing final booking call;
 their existing server validation still applies there.
+
+### Dynamic provider filters
+
+Super Admin enables fields using the existing custom-field POST/PUT endpoints:
+
+```json
+{
+  "optionIds": [12],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "PROVIDER",
+  "code": "GENDER",
+  "label": "Gender",
+  "fieldType": "SELECT",
+  "required": false,
+  "requiresApproval": false,
+  "options": ["MALE", "FEMALE", "OTHER"],
+  "customerVisible": true,
+  "searchable": true,
+  "filterOperator": "IN"
+}
+```
+
+Both flags default to false, including existing definitions. Searchable requires
+customerVisible. Only unconditional PROVIDER_REQUIREMENT fields of types SELECT,
+MULTI_SELECT, NUMBER and BOOLEAN can be published. Uploads, text/contact fields and
+BOOKING_FIELD definitions cannot be enabled. Select choices must be unique nonempty
+string values. Choices may be strings or objects with value, label and optional icon;
+see [choice icon contract](DYNAMIC_FIELDS_API.md#icons-for-individual-select-choices).
+Filters submit values only, never label/icon objects. PUT replaces these settings
+too, so preserve flags when editing a field.
+The operator is derived if omitted: IN for choices, RANGE for NUMBER, EQUALS for BOOLEAN.
+An explicitly incompatible operator is rejected.
+
+Booking context `providerFilters` example (IDs are illustrative):
+
+Each definition also includes optional `icon` media (`key`, `url`, `altText`,
+`displayOrder`), or null for fields without an icon. Render it alongside the label.
+See [field icon upload/configuration](DYNAMIC_FIELDS_API.md#optional-field-icons).
+
+```json
+[
+  {"fieldId": 25, "code": "GENDER", "label": "Gender", "fieldType": "SELECT",
+   "options": ["MALE", "FEMALE", "OTHER"], "filterOperator": "IN"},
+  {"fieldId": 26, "code": "EXPERIENCE", "label": "Experience years", "fieldType": "NUMBER",
+   "options": null, "filterOperator": "RANGE"},
+  {"fieldId": 27, "code": "OWN_VEHICLE", "label": "Own vehicle", "fieldType": "BOOLEAN",
+   "options": null, "filterOperator": "EQUALS"}
+]
+```
+
+Add to the existing provider-search body:
+
+```json
+{
+  "providerFilters": [
+    {"fieldId": 25, "value": ["FEMALE"]},
+    {"fieldId": 26, "minimum": 3, "maximum": 20},
+    {"fieldId": 27, "value": true}
+  ]
+}
+```
+
+This fragment supplements required market/option/time/location fields. Filters are
+AND-combined with each other and languages/skills. IN means any selected choice;
+MULTI_SELECT matches if any requested choice is present. Number bounds are inclusive;
+one bound may be omitted. BOOLEAN takes a JSON boolean. Maximum 50 filters and 100
+choices per filter; duplicate field IDs/choices, unknown or inactive fields, other-option
+fields, nonsearchable fields, invalid types/choices and inverted/empty ranges return 400.
+Omit providerFilters or send [] for no dynamic filtering.
+
+Each candidate has `providerAttributes`, an object keyed by field ID, e.g.
+`{"25":"FEMALE","26":5,"27":true}`. Only opted-in customer-visible fields
+and APPROVED manual answers or valid PROVIDER_PROFILE/PROVIDED values are included.
+Profile bindings may publicly expose gender and derived age only, never raw DOB/identifiers.
+See [profile reuse](DYNAMIC_FIELDS_API.md#reuse-provider-profile-values-without-duplicate-inputs).
+Fields not requiring
+review are automatically APPROVED on submission; this is not an independent verification.
+Existing provider/service answer reuse applies. An exact pending/rejected answer overrides
+an older reusable approval and is excluded; missing/unapproved/invalid answers never match.
+Matching happens before pagination and does not change booking eligibility or reserve capacity.
+Display-only customerVisible fields may appear in providerAttributes but cannot be queried.
+
+Persistence: `service_custom_field` gains `customer_visible` and `searchable` booleans
+defaulting false, and nullable `filter_operator` varchar. Hibernate schema update handles
+these in the current setup. Manually managed deployments must add columns before rollout:
+
+```sql
+ALTER TABLE service_custom_field
+  ADD COLUMN customer_visible BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN searchable BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN filter_operator VARCHAR(255) NULL;
+```
+
+Discovery still scans candidates in memory; dynamic answer resolution adds reads per
+candidate with public fields. Batch/index and load-test before large-scale deployment.
 
 ## Time-based provider search
 

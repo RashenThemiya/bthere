@@ -1,5 +1,102 @@
 # Customer App — full frontend API reference
 
+## Customer tab update: provider filters and field/choice icons (2026-10-20)
+
+Implemented locally; deployment is not verified. These additions supplement the
+numbered reference. Customers consume admin-configured metadata; the customer app
+does not expose admin configuration or icon-upload controls.
+
+### Discover filters for the selected option
+
+```http
+GET /api/v1/customers/me/booking-context?marketId=1&serviceTypeId=3&optionId=12
+```
+
+Success 200: existing context plus providerFilters. Response fragment:
+
+```json
+{
+  "matchingFilters":["languages","requiredSkillIds","providerFilters"],
+  "providerFilters":[
+    {
+      "fieldId":25,"code":"VEHICLE_TYPE","label":"Vehicle type",
+      "fieldType":"SELECT","filterOperator":"IN",
+      "icon":{"key":"service-icons/vehicle.png","url":"https://your-bucket.example/service-icons/vehicle.png"},
+      "options":[
+        {"value":"CAR","label":"Car","icon":{"key":"service-icons/car.png","url":"https://your-bucket.example/service-icons/car.png"}},
+        {"value":"VAN","label":"Van","icon":null},
+        "BIKE"
+      ]
+    },
+    {"fieldId":26,"code":"EXPERIENCE","label":"Experience years","fieldType":"NUMBER","options":null,"filterOperator":"RANGE","icon":null},
+    {"fieldId":27,"code":"OWN_VEHICLE","label":"Own vehicle","fieldType":"BOOLEAN","options":null,"filterOperator":"EQUALS","icon":null}
+  ]
+}
+```
+
+Only active applicable fields explicitly enabled by admin appear. SELECT/MULTI_SELECT
+render choices, NUMBER renders inclusive min/max inputs, BOOLEAN renders Yes/No.
+Empty providerFilters means no dynamic filters. Re-fetch on service/option change
+and clear obsolete selections. Support string choices and {value,label,icon} objects;
+fallback to value for missing label, text-only for missing icon. Field and choice icons
+are independently optional.
+
+### Search using stable values
+
+```http
+POST /api/v1/customers/me/provider-search
+```
+
+```json
+{
+  "marketId":1,"serviceTypeId":3,"optionId":12,"deliveryMode":"ONLINE",
+  "startAt":"2030-01-07T08:00:00+05:30","endAt":"2030-01-07T10:00:00+05:30",
+  "languages":["ENGLISH"],"requiredSkillIds":[],
+  "providerFilters":[
+    {"fieldId":25,"value":["CAR","VAN"]},
+    {"fieldId":26,"minimum":3},
+    {"fieldId":27,"value":true}
+  ],
+  "page":0,"pageSize":20
+}
+```
+
+Use actual IDs, future times and an enabled delivery mode. ONLINE omits location;
+physical searches require it. Submit values only, never labels/icons/choice objects.
+Filters AND-combine with each other and languages/skills. IN accepts any requested
+choice (any overlap for MULTI_SELECT). RANGE permits either or both bounds. EQUALS
+takes a boolean. Omit providerFilters or send [] to clear dynamic filtering.
+
+Success 200: existing Results wrapper/pagination; candidates additionally include
+providerAttributes keyed by field ID, e.g. {"25":"CAR","26":5,"27":true}.
+Only approved manual answers or valid linked profile values from customer-visible fields are included. Reuse is
+resolved by backend. Display-only fields may appear but cannot be queried. No-review
+fields are auto-approved; do not label all attributes independently verified.
+Private uploads and pending/rejected/invalid answers are excluded. Filtering occurs
+before pagination and does not reserve capacity or create a booking.
+
+400: unavailable/private/inactive/other-option field, invalid choice/type/range,
+duplicate IDs/choices, over 50 filters or over 100 choices per filter.
+403: customer eligibility failed. Do not retry invalid filters unchanged.
+
+### Booking fields remain separate
+
+Profile-backed provider filters: admin can publish gender from provider profile and
+age derived from provider DOB. These are live self-declared PROVIDED values; they
+can match filters without a duplicate provider submission. Do not label them verified.
+Raw DOB, NIC/passport and other private profile details cannot be published through
+this mapping. Customer profile/patient fields are not auto-filled from provider data.
+
+bookingSchema BOOKING_FIELD definitions also carry optional field and choice icons.
+Render common plus selected-option fields, respecting required/conditions. Final booking
+answers remain {fieldId,value}: SELECT sends "CAR", MULTI_SELECT sends ["CAR","VAN"].
+Do not submit provider filter field IDs as booking answers or automatically copy filters
+to the booking form. Reusable customer NIC/DOB requirements retain their own requirementId,
+definition wrapper and submission APIs; provider document date modes do not govern them.
+
+Full contracts: [provider filters](CUSTOMER_DISCOVERY_API.md#dynamic-provider-filters)
+and [choice icons](DYNAMIC_FIELDS_API.md#icons-for-individual-select-choices).
+
 Wallet update (2026-10-17): WALLET bookings now reserve funds atomically and return
 paymentStatus RESERVED. Initial wallet read/history/reconciliation and finance
 settlement APIs are documented in [Wallet API](WALLET_API.md). Top-ups, withdrawals,
@@ -850,13 +947,15 @@ Success: 200 OK.
   },
   "matchingFilters": [
     "languages",
-    "requiredSkillIds"
+    "requiredSkillIds",
+    "providerFilters"
   ],
-  "liveTrackingSupported": false
+  "liveTrackingSupported": false,
+  "providerFilters": []
 }
 ```
 
-All three integer query parameters are required. The endpoint remains readable when selection.access is blocked, so the app can explain the service and offer requirements. It does not bypass search eligibility. selection is the complete OptionCard. bookingSchema.options is filtered to the selected option. commonFields always applies; selected option fields apply in addition; deduplicate shared fieldId values. serviceSetup documents/skills/certificate/education sections describe provider setup and may supply configured skill IDs; do not ask the customer to complete provider qualification sections. matchingFilters is exactly [languages, requiredSkillIds]. liveTrackingSupported is currently false.
+All three integer query parameters are required. The endpoint remains readable when selection.access is blocked, so the app can explain the service and offer requirements. It does not bypass search eligibility. selection is the complete OptionCard. bookingSchema.options is filtered to the selected option. commonFields always applies; selected option fields apply in addition; deduplicate shared fieldId values. serviceSetup documents/skills/certificate/education sections describe provider setup and may supply configured skill IDs; do not ask the customer to complete provider qualification sections. matchingFilters is [languages, requiredSkillIds, providerFilters]. Context providerFilters describes admin-enabled dynamic provider filters; see [dynamic provider filter contract](CUSTOMER_DISCOVERY_API.md#dynamic-provider-filters). liveTrackingSupported is currently false.
 
 ## 20. Customer reusable requirements form
 
@@ -1290,7 +1389,7 @@ Use only values allowed by the selected option/definition. Arrays containing enu
 | deliveryModeConfigurations.customerLocationInput | MEETING_POINT, PROVIDER_LOCATION_SELECTION, NONE. ROUTE_BASED additionally needs pickup/destination, even though generic delivery configuration says MEETING_POINT. |
 | Results.status | AVAILABLE, NO_AVAILABLE_PROVIDERS. |
 | Candidate.locationLabel | PUBLIC_SERVICE_LOCATION, APPROXIMATE_SERVICE_AREA, ONLINE. |
-| matchingFilters | languages, requiredSkillIds. No arbitrary dynamic answer → provider matching mapping exists. |
+| matchingFilters | languages, requiredSkillIds, providerFilters. Dynamic provider filtering requires admin-enabled customerVisible/searchable fields; see CUSTOMER_DISCOVERY_API.md. |
 | liveTrackingSupported | Boolean; currently false. No live GPS/heartbeat stream is implemented by these endpoints. |
 | Booking status/paymentStatus | Creation writes status:PENDING and paymentStatus:PENDING. Status fields are strings. Overlap rules exclude CANCELLED, COMPLETED, REJECTED, EXPIRED. These overlap values are not a claim that customer lifecycle transition endpoints exist. |
 
@@ -1363,10 +1462,11 @@ Examples above show every property of service, option, context, search, profile 
 | optionId / optionIds | Legacy integer|null / integer[]. Empty optionIds means common; current arrays support multiple options. |
 | scope / reuseScope | Strings described in enum catalog; customer booking schema has scope BOOKING_FIELD. |
 | code / label / description | String stable code; string display label; string|null help text. |
+| icon | Optional media object: {key, url, altText, displayOrder}, or null. Display alongside the provider/booking field label; customer providerFilters carries the same icon. See [field icon configuration](DYNAMIC_FIELDS_API.md#optional-field-icons). |
 | fieldType / required / requiresApproval | Type enum; boolean; boolean. BOOKING_FIELD does not use the reusable customer admin approval workflow. |
 | minimumFiles / maximumFiles / maximumFileSizeMb | Integer|null. Booking count default minimum1 if required else0; maximum enforced only when configured. Private upload hard maximum100MB remains. |
 | allowedFileTypes | String[]; [] means no extra configured restriction beyond supported private formats. |
-| options | JSON|null. SELECT/MULTI_SELECT choices can be strings or objects with value; use object's label for display when provided and submit its value. |
+| options | JSON|null. SELECT/MULTI_SELECT choices can be strings or objects with value, optional label and optional icon media. Display choice icon/label (fallback to value), submit only string value(s). Customer providerFilters preserves these icons too. See [choice icons](DYNAMIC_FIELDS_API.md#icons-for-individual-select-choices). |
 | condition | JSON|null. Supported shape: {fieldCode:string, operator:EQUALS|NOT_EQUALS, value:any JSON}. Compare JSON values using their types. |
 | displayOrder / version / status | Integer|null; integer schema revision; ACTIVE/INACTIVE (customer booking-schema read includes active definitions). Keep fieldId/code/version for rendering/cache invalidation; final booking only accepts fieldId/value. |
 

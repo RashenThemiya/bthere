@@ -54,6 +54,14 @@ Provider-grouped admin approval queues, requirement details and atomic bulk revi
 Development-only payment simulation and the DISABLED/MOCK/PAYHERE SPI switch are documented in [Mock payment API](docs/MOCK_PAYMENTS_API.md).
 Administration endpoints are documented in [Administration API documentation](docs/ADMIN_API.md).
 
+Role-specific updates for dynamic provider search, field/choice icons and document
+date controls (2026-10-20): [Provider reference](docs/PROVIDER_API_GOOGLE_DOC.md),
+[Customer reference](docs/CUSTOMER_APP_FRONTEND_API.md), and
+[Super Admin reference](docs/ADMIN_API.md). These describe local implementation;
+deployment is not verified. The [online API reference](https://docs.google.com/document/d/1StVD4sflhJLvNeTgKvFC0wmyzA2XQu0eJHTYRgGf4jA/edit)
+was updated and read-back verified on 2026-10-20 in its Provider, Customer Requirements,
+Customer App and Super Admin tabs, including provider profile reuse.
+
 Log in using a username or email as the identifier:
 
 ```http
