@@ -2,6 +2,12 @@
 
 ## Customer tab update: provider filters and field/choice icons (2026-10-20)
 
+Profile-photo 403 troubleshooting: the upload endpoint authenticates writes, while
+the returned image URL requires separate S3/CDN anonymous read configuration.
+Customer images currently use providers/{userId}/images, not customer document
+prefixes. Do not add a Bearer token to S3 image requests or replace stable profile
+URLs with expiring document view URLs. See [public image access checks](PUBLIC_IMAGE_ACCESS.md).
+
 Implemented locally; deployment is not verified. These additions supplement the
 numbered reference. Customers consume admin-configured metadata; the customer app
 does not expose admin configuration or icon-upload controls.

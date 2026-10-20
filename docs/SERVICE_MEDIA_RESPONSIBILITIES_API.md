@@ -5,6 +5,10 @@ service-option create/update APIs. Image bytes are uploaded first with the
 existing upload API; its returned `key` and `url` are then stored in the JSON
 payload.
 
+Public image delivery requires a configured S3/CDN read-access path; the uploader
+does not grant public permissions. If the returned URL gives 403, follow
+[public image access diagnostics](PUBLIC_IMAGE_ACCESS.md) before changing policies.
+
 ## Upload an image
 
 ```http
