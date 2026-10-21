@@ -34,11 +34,15 @@ public class CustomerAvailabilityService {
     }
     public void requireOffering(Long marketId, Long serviceId) {
         market(marketId);
-        if (types.findById(serviceId).filter(t -> "ACTIVE".equals(t.getStatus())).isEmpty()
-                || offerings.findByMarketIdAndServiceProviderTypeId(marketId, serviceId)
-                .filter(o -> "ACTIVE".equals(o.getStatus())).isEmpty()) {
+        if (!hasActiveOffering(marketId, serviceId)) {
             throw new ResourceNotFoundException("Service is not offered in this market");
         }
+    }
+    /** The caller validates the market; absent offerings are normal catalog exclusions. */
+    public boolean hasActiveOffering(Long marketId, Long serviceId) {
+        return types.findById(serviceId).filter(t -> "ACTIVE".equals(t.getStatus())).isPresent()
+                && offerings.findByMarketIdAndServiceProviderTypeId(marketId, serviceId)
+                .filter(o -> "ACTIVE".equals(o.getStatus())).isPresent();
     }
     public boolean qualified(ServiceProviderTypeAssignment assignment, ServiceOption option, Long marketId) {
         if (!"ACTIVE".equals(assignment.getStatus()) || !"ACTIVE".equals(assignment.getProviderStatus())

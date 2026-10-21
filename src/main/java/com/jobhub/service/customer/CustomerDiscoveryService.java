@@ -37,8 +37,8 @@ public class CustomerDiscoveryService {
         profiles.get(userId); availability.market(marketId);
         List<ServiceCard> result = new ArrayList<>();
         for (var type : types.listActiveTypes()) {
-            try { availability.requireOffering(marketId, type.id()); }
-            catch (ResourceNotFoundException unavailable) { continue; }
+            // Catching an exception from a transactional collaborator poisons this transaction.
+            if (!availability.hasActiveOffering(marketId, type.id())) continue;
             var access = access(requirements.eligibility(userId, type.id(), null));
             if (access.eligibility().eligible() && optionService.list(type.id(), false).stream()
                     .anyMatch(o -> !requirements.eligibility(userId, type.id(), o.optionId()).eligible())) {

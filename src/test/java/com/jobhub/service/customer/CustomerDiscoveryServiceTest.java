@@ -114,6 +114,7 @@ class CustomerDiscoveryServiceTest {
         assertThat(service.search(25L, search("ONLINE", null)).status()).isEqualTo("NO_AVAILABLE_PROVIDERS");
     }
     @Test void restrictedServiceRemainsVisibleWithAnApplicationAction() {
+        when(availability.hasActiveOffering(1L, 3L)).thenReturn(true);
         when(types.listActiveTypes()).thenReturn(List.of(new ProviderTypeResponse(3L, "Nursing", null, null,
                 "ACTIVE", null, null, List.of(), List.of())));
         when(requirements.eligibility(25L, 3L, null)).thenReturn(new Eligibility(false, List.of(new Reason("MISSING", "NIC", "Upload NIC"))));
