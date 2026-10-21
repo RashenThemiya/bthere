@@ -61,6 +61,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class JobhubApplicationTests {
+    @MockitoBean
+    private com.jobhub.repository.provider.ServiceOptionMapMarkerRuleRepository mapMarkerRuleRepository;
+    @Autowired private com.jobhub.controller.admin.AdminMapMarkerRuleController mapMarkerRuleController;
+
+    @Test void combinationMapMarkerRulesRequireSuperAdmin() {
+        for (String role : java.util.List.of("CUSTOMER", "SERVICE_PROVIDER", "VERIFICATION_ADMIN")) {
+            var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    "test", "unused", java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role)));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> mapMarkerRuleController.list(1L,12L))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> mapMarkerRuleController.delete(1L,12L,7L))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+        }
+    }
     @Autowired private com.jobhub.controller.customer.WalletController walletController;
     @Autowired private com.jobhub.controller.admin.AdminProviderApprovalController approvalController;
 

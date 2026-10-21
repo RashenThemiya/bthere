@@ -32,6 +32,7 @@ public class CustomerDiscoveryService {
     private final ProviderServiceSkillRepository skills;
     private final ServiceTypeSkillRepository configuredSkills;
     private final ProviderSearchFields providerSearchFields;
+    private final MapMarkerResolver mapMarkerResolver;
 
     public List<ServiceCard> services(Long userId, Long marketId) {
         profiles.get(userId); availability.market(marketId);
@@ -65,10 +66,11 @@ public class CustomerDiscoveryService {
         availability.requireOffering(request.marketId(), request.serviceTypeId());
         requirements.requireEligible(userId, request.serviceTypeId(), request.optionId());
         var option = options.findByOptionIdAndServiceProviderTypeId(request.optionId(), request.serviceTypeId())
-                .filter(o -> "ACTIVE".equals(o.getStatus())).orElseThrow(() -> new ResourceNotFoundException("Active option not found"));
+                .filter(o -> o.activeForService(request.serviceTypeId())).orElseThrow(() -> new ResourceNotFoundException("Active option not found"));
         var market = availability.market(request.marketId());
         var publicFields = providerSearchFields.definitions(request.serviceTypeId(), request.optionId());
         providerSearchFields.validate(publicFields, request.providerFilters());
+        MapMarker mapMarker = mapMarkerResolver.resolve(request.serviceTypeId(), option, publicFields, request.providerFilters());
         ZoneId zone = ZoneId.of(market.getTimezone());
         String mode = request.deliveryMode().trim().toUpperCase(Locale.ROOT);
         if (!option.getDeliveryModes().contains(mode)) throw new IllegalArgumentException("Delivery mode is not enabled");
@@ -120,7 +122,7 @@ public class CustomerDiscoveryService {
             var provider = providers.findById(assignment.getServiceProviderId()).orElseThrow();
             if ("ONLINE".equals(mode)) {
                 int remaining = availability.remaining(assignment, option, null, null, start, end, false);
-                if (remaining > 0) candidates.add(candidate(provider, assignment, option, null, null, null, remaining, spoken, attributes));
+                if (remaining > 0) candidates.add(candidate(provider, assignment, option, null, null, null, remaining, spoken, attributes, mapMarker));
                 continue;
             }
             if (!option.isLocationEnabled()) continue;
@@ -145,7 +147,7 @@ public class CustomerDiscoveryService {
                         fixed ? area.getLongitude() : area.getLongitude().setScale(2, RoundingMode.HALF_UP));
                 double distance = CustomerAvailabilityService.distance(centre.latitude(), centre.longitude(), pin.latitude(), pin.longitude());
                 candidates.add(candidate(provider, assignment, option, fixed ? area.getServiceAreaId() : null, pin,
-                        Math.round(distance * 10.0)/10.0, remaining, spoken, attributes));
+                        Math.round(distance * 10.0)/10.0, remaining, spoken, attributes, mapMarker));
                 if (!fixed) break;
             }
         }
@@ -169,11 +171,11 @@ public class CustomerDiscoveryService {
     }
     private Candidate candidate(ServiceProvider p, ServiceProviderTypeAssignment a, ServiceOption o, Long location,
                                 Point pin, Double distance, int remaining, List<String> spoken,
-                                Map<Long, com.fasterxml.jackson.databind.JsonNode> attributes) {
+                                Map<Long, com.fasterxml.jackson.databind.JsonNode> attributes, MapMarker mapMarker) {
         return new Candidate(p.getServiceProviderId(), a.getAssignmentId(), o.getOptionId(), location,
                 p.getFirstName() + " " + p.getLastName(), p.getProfilePhoto(), p.getAverageRating(), p.getTotalRatings(),
                 pin == null ? "ONLINE" : location != null ? "PUBLIC_SERVICE_LOCATION" : "APPROXIMATE_SERVICE_AREA",
-                pin, distance, remaining, spoken, attributes);
+                pin, distance, remaining, spoken, attributes, mapMarker);
     }
     private Access access(Eligibility result) {
         if (result.eligible()) return new Access("ELIGIBLE", "CONTINUE", result);

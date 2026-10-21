@@ -33,6 +33,7 @@ class MarketServiceOfferingServiceTest {
     @Mock private ServiceOptionRepository optionRepository;
     @Mock private JobRateRepository rateRepository;
     @Mock private AuditService auditService;
+    @Mock private CombinationPricingRules pricingRules;
 
     @InjectMocks
     private MarketServiceOfferingService service;
@@ -41,7 +42,7 @@ class MarketServiceOfferingServiceTest {
     void updateIsACompleteReplacementAndNullOptionClearsExistingOption() {
         MarketServiceOffering offering = offering();
         JobRate rate = rate();
-        when(offeringRepository.findById(7L)).thenReturn(Optional.of(offering));
+        when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering));
         when(rateRepository.findById(9L)).thenReturn(Optional.of(rate));
 
         LocalDateTime effectiveFrom = LocalDateTime.of(2026, 11, 1, 0, 0);
@@ -67,7 +68,7 @@ class MarketServiceOfferingServiceTest {
     void updateValidatesEffectiveToAgainstRequiredEffectiveFrom() {
         MarketServiceOffering offering = offering();
         JobRate rate = rate();
-        when(offeringRepository.findById(7L)).thenReturn(Optional.of(offering));
+        when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering));
         when(rateRepository.findById(9L)).thenReturn(Optional.of(rate));
 
         UpdateJobRateRequest request = new UpdateJobRateRequest(

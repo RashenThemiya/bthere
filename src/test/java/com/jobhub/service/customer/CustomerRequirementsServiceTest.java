@@ -57,7 +57,8 @@ class CustomerRequirementsServiceTest {
         lenient().when(rules.findAllByEnabledTrue()).thenAnswer(i -> ageRules);
         var type = new ServiceProviderType(); type.setStatus("ACTIVE");
         lenient().when(services.findById(3L)).thenReturn(Optional.of(type));
-        var option = new ServiceOption(); option.setStatus("ACTIVE");
+        var option = new ServiceOption(); option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(3L, 0, "ACTIVE"));
+        option.setStatus("ACTIVE");
         lenient().when(options.findByOptionIdAndServiceProviderTypeId(12L, 3L)).thenReturn(Optional.of(option));
     }
 

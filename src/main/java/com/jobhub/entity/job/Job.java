@@ -61,5 +61,9 @@ public class Job extends AuditedEntity {
     private String jobStatus;
     private String paymentMethod;
     private String paymentStatus;
+    @Column(columnDefinition = "TEXT")
+    private String pricingSelectionsJson;
+    @Column(columnDefinition = "TEXT")
+    private String pricingSnapshotJson;
 }
 

@@ -33,5 +33,7 @@ public record BookingResponse(
         String paymentMethod,
         String paymentStatus,
         String status,
-        Map<String, JsonNode> answers
+        Map<String, JsonNode> answers,
+        JsonNode pricingSelections,
+        JsonNode pricingSnapshot
 ) {}

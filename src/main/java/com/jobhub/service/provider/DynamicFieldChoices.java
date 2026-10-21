@@ -26,6 +26,7 @@ public final class DynamicFieldChoices {
                     throw new IllegalArgumentException("Choice label must be a nonempty string");
                 }
                 validateIcon(choice.get("icon"));
+                validateIcon(choice.get("mapMarkerIcon"));
             }
         }
     }
@@ -34,6 +35,22 @@ public final class DynamicFieldChoices {
         if (choices == null || !choices.isArray() || selected == null || !selected.isTextual()) return false;
         for (JsonNode choice : choices) if (selected.equals(value(choice))) return true;
         return false;
+    }
+
+    public static com.jobhub.dto.provider.ServiceMediaPayload mapMarkerIcon(JsonNode choices, String selected) {
+        if (choices == null || !choices.isArray() || selected == null) return null;
+        for (JsonNode choice : choices) {
+            JsonNode value = value(choice);
+            if (value == null || !value.isTextual() || !selected.equals(value.asText()) || !choice.isObject()) continue;
+            JsonNode marker = choice.get("mapMarkerIcon");
+            if (marker == null || marker.isNull()) return null;
+            validateIcon(marker);
+            return new com.jobhub.dto.provider.ServiceMediaPayload(marker.get("key").asText(),
+                    marker.get("url").asText(), marker.path("altText").isTextual()
+                    ? marker.get("altText").asText() : null,
+                    marker.path("displayOrder").isIntegralNumber() ? marker.get("displayOrder").asInt() : null);
+        }
+        return null;
     }
 
     private static JsonNode value(JsonNode choice) {

@@ -19,5 +19,17 @@ public record CreateJobRateRequest(
         String geographicalAreaName,
         @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal areaLatitude,
         @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal areaLongitude,
-        @DecimalMin("0.01") BigDecimal areaRadiusKm
-) {}
+        @DecimalMin("0.01") BigDecimal areaRadiusKm,
+        @jakarta.validation.constraints.Size(max = 10)
+        java.util.List<@jakarta.validation.constraints.NotNull @jakarta.validation.Valid PricingConditionRequest> conditions
+) {
+    public CreateJobRateRequest(String billingType, Integer durationMinutes, BigDecimal rate,
+            LocalDateTime effectiveFrom, LocalDateTime effectiveTo, Long optionId,
+            BigDecimal baseFare, BigDecimal pricePerKm, BigDecimal minimumFare,
+            String geographicalAreaName, BigDecimal areaLatitude, BigDecimal areaLongitude,
+            BigDecimal areaRadiusKm) {
+        this(billingType, durationMinutes, rate, effectiveFrom, effectiveTo, optionId,
+                baseFare, pricePerKm, minimumFare, geographicalAreaName, areaLatitude,
+                areaLongitude, areaRadiusKm, null);
+    }
+}

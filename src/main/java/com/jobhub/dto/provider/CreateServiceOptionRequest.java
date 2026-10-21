@@ -30,5 +30,20 @@ public record CreateServiceOptionRequest(
         @NotNull(message = "Gallery is required") List<@Valid ServiceMediaPayload> gallery,
         @NotNull(message = "Responsibilities are required")
         List<@Valid ServiceResponsibilityPayload> responsibilities,
-        List<@NotNull @Valid OptionDynamicFieldRequest> dynamicFields
-) {}
+        List<@NotNull @Valid OptionDynamicFieldRequest> dynamicFields,
+        @Valid ServiceMediaPayload mapMarkerIcon,
+        @jakarta.validation.constraints.Positive Long mapMarkerFieldId
+) {
+    public CreateServiceOptionRequest(String code, String name, String description, Integer displayOrder,
+            String schedulingModel, Integer routeAverageSpeedKmh, boolean locationEnabled,
+            Set<String> deliveryModes, String fulfillmentModel, Integer defaultCapacity,
+            Integer requiredProviderCount, String bookingMode, String providerSelectionMode, String pricingOwner,
+            Set<String> allowedPaymentMethods, ServiceMediaPayload icon, ServiceMediaPayload coverImage,
+            List<ServiceMediaPayload> gallery, List<ServiceResponsibilityPayload> responsibilities,
+            List<OptionDynamicFieldRequest> dynamicFields) {
+        this(code, name, description, displayOrder, schedulingModel, routeAverageSpeedKmh, locationEnabled,
+                deliveryModes, fulfillmentModel, defaultCapacity, requiredProviderCount, bookingMode,
+                providerSelectionMode, pricingOwner, allowedPaymentMethods, icon, coverImage, gallery,
+                responsibilities, dynamicFields, null, null);
+    }
+}

@@ -14,6 +14,19 @@ import static org.junit.jupiter.api.Assertions.*;
 class ServiceContentSupportTest {
 
     @Test
+    void markerIsSeparateFromCardAndGalleryAndCanReuseTheSameAsset() {
+        List<ServiceMediaValue> target = new ArrayList<>();
+        var shared = media("icons/service.png", 0);
+        ServiceContentSupport.replaceMedia(target, shared, null, List.of(), shared);
+        assertEquals(shared.key(), ServiceContentSupport.icon(target).key());
+        assertEquals(shared.key(), ServiceContentSupport.mapMarkerIcon(target).key());
+        assertTrue(ServiceContentSupport.gallery(target).isEmpty());
+        ServiceContentSupport.replaceMedia(target, shared, null, List.of(), null);
+        assertNotNull(ServiceContentSupport.icon(target));
+        assertNull(ServiceContentSupport.mapMarkerIcon(target));
+    }
+
+    @Test
     void replacesAndClassifiesStructuredMedia() {
         List<ServiceMediaValue> target = new ArrayList<>();
         ServiceContentSupport.replaceMedia(target,

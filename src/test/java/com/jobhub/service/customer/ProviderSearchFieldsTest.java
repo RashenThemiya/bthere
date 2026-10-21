@@ -16,6 +16,24 @@ class ProviderSearchFieldsTest {
     private final ServiceCustomFieldService fields = mock(ServiceCustomFieldService.class);
     private final ProviderSearchFields service = new ProviderSearchFields(fields);
 
+    @Test void pricingRequiresEverySelectedChoiceToMatchApprovedProviderAttributes() throws Exception {
+        var assignment = new ServiceProviderTypeAssignment(); assignment.setServiceProviderTypeId(2L);
+        when(fields.listForOption(2L, 12L, false)).thenReturn(List.of(
+                field(45, "MULTI_SELECT", true, true), field(46, "SELECT", true, true)));
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                answer(45, "[\"A\",\"B\"]", "APPROVED", false),
+                answer(46, "\"A\"", "APPROVED", false)));
+        var choices = List.of(new com.jobhub.dto.market.PricingConditionRequest(45L, "B"),
+                new com.jobhub.dto.market.PricingConditionRequest(46L, "A"));
+        service.requirePricingSelections(assignment, 12L, choices);
+        assertThatIllegalArgumentException().isThrownBy(() -> service.requirePricingSelections(assignment, 12L,
+                List.of(new com.jobhub.dto.market.PricingConditionRequest(45L, "B"),
+                        new com.jobhub.dto.market.PricingConditionRequest(46L, "B"))));
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                answer(45, "[\"B\"]", "APPROVED", false), answer(46, "\"A\"", "PENDING", false)));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.requirePricingSelections(assignment, 12L, choices));
+    }
+
     @Test void selfDeclaredProfileValuesAreFilterableOnlyWhenProvidedAndAllowlisted() throws Exception {
         var assignment = new ServiceProviderTypeAssignment();
         var profileAnswer = new ProviderCustomSubmissionResponse(null, 14L, 25L, "GENDER", "Gender",

@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-final class ServiceContentSupport {
+public final class ServiceContentSupport {
     private static final Set<String> PARTIES = Set.of("PROVIDER", "CUSTOMER", "PLATFORM");
 
     private ServiceContentSupport() {}
@@ -20,12 +20,22 @@ final class ServiceContentSupport {
                              ServiceMediaPayload icon,
                              ServiceMediaPayload cover,
                              List<ServiceMediaPayload> gallery) {
+        replaceMedia(target, icon, cover, gallery, null);
+    }
+
+    static void replaceMedia(List<ServiceMediaValue> target,
+                             ServiceMediaPayload icon,
+                             ServiceMediaPayload cover,
+                             List<ServiceMediaPayload> gallery,
+                             ServiceMediaPayload mapMarkerIcon) {
         List<ServiceMediaPayload> safeGallery = gallery == null ? List.of() : gallery;
         Set<String> keys = new HashSet<>();
         Set<Integer> orders = new HashSet<>();
         List<ServiceMediaValue> replacement = new ArrayList<>();
         if (icon != null) replacement.add(media("ICON", icon, 0, keys));
         if (cover != null) replacement.add(media("COVER", cover, 0, keys));
+        // Marker assets are independent and may intentionally reuse a card icon's file.
+        if (mapMarkerIcon != null) replacement.add(media("MAP_MARKER", mapMarkerIcon, 0, new HashSet<>()));
         for (int index = 0; index < safeGallery.size(); index++) {
             ServiceMediaPayload item = safeGallery.get(index);
             int order = item.displayOrder() == null ? index : item.displayOrder();
@@ -69,6 +79,10 @@ final class ServiceContentSupport {
 
     static ServiceMediaPayload icon(List<ServiceMediaValue> media) {
         return first(media, "ICON");
+    }
+
+    public static ServiceMediaPayload mapMarkerIcon(List<ServiceMediaValue> media) {
+        return first(media, "MAP_MARKER");
     }
 
     static ServiceMediaPayload cover(List<ServiceMediaValue> media) {

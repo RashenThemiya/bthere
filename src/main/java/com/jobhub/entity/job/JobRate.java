@@ -33,5 +33,11 @@ public class JobRate extends AuditedEntity {
     private LocalDateTime effectiveFrom;
     private LocalDateTime effectiveTo;
     private String status;
+
+    @ElementCollection
+    @CollectionTable(name = "job_rate_condition", joinColumns = @JoinColumn(name = "rate_id"),
+            uniqueConstraints = @UniqueConstraint(name = "uk_job_rate_condition_field",
+                    columnNames = {"rate_id", "field_id"}))
+    private java.util.List<JobRateCondition> conditions = new java.util.ArrayList<>();
 }
 

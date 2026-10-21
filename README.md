@@ -2,6 +2,11 @@
 
 Spring Boot REST API starter configured for MySQL.
 
+Shared options across main services: [API and deployment guide](docs/SHARED_SERVICE_OPTIONS_API.md).
+Choice combination pricing: [API and deployment guide](docs/COMBINATION_PRICING_API.md).
+Separate map marker icons: [API and deployment guide](docs/MAP_MARKER_ICONS_API.md).
+Combination map markers: [API and deployment guide](docs/COMBINATION_MAP_MARKERS_API.md).
+
 ## Requirements
 
 - Java 17 or newer

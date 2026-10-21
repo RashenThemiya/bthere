@@ -48,7 +48,9 @@ public record ServiceSetupRequest(
         List<@Valid ServiceMediaPayload> gallery,
 
         @NotNull(message = "Responsibilities are required")
-        List<@Valid ServiceResponsibilityPayload> responsibilities
+        List<@Valid ServiceResponsibilityPayload> responsibilities,
+
+        @Valid ServiceMediaPayload mapMarkerIcon
 ) {
     public record DocumentRequirement(
             @NotNull(message = "Document type ID is required") Long documentTypeId,

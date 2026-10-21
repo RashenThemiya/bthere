@@ -433,7 +433,7 @@ public class CustomerRequirementsService {
             throw new ResourceNotFoundException("Active service not found");
         }
         if (optionId != null && options.findByOptionIdAndServiceProviderTypeId(optionId, serviceId)
-                .filter(o -> "ACTIVE".equals(o.getStatus())).isEmpty()) throw new ResourceNotFoundException("Active option not found for service");
+                .filter(o -> o.activeForService(serviceId)).isEmpty()) throw new ResourceNotFoundException("Active option not found for service");
     }
     private String targetKey(Target t) { return t.scope() + ":" + t.serviceTypeId() + ":" + t.optionId(); }
     private Customer customer(Long userId) {

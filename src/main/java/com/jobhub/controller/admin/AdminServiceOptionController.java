@@ -53,6 +53,28 @@ public class AdminServiceOptionController {
         return ResponseEntity.ok(service.updateStatus(serviceTypeId, optionId, request.status()));
     }
 
+    @GetMapping("/service-options")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Page<SharedServiceOptionResponse>> catalog(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(service.catalog(pageable));
+    }
+
+    @PostMapping("/provider-types/{serviceTypeId}/options/{optionId}/link")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ServiceOptionResponse> link(
+            @PathVariable Long serviceTypeId, @PathVariable Long optionId,
+            @Valid @RequestBody LinkServiceOptionRequest request) {
+        return ResponseEntity.ok(service.link(serviceTypeId, optionId, request));
+    }
+
+    @DeleteMapping("/provider-types/{serviceTypeId}/options/{optionId}/link")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> unlink(@PathVariable Long serviceTypeId, @PathVariable Long optionId) {
+        service.unlink(serviceTypeId, optionId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/provider-service-options")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'VERIFICATION_ADMIN')")
     public ResponseEntity<Page<ProviderServiceOptionResponse>> reviewQueue(

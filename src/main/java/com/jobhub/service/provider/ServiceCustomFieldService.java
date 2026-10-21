@@ -335,7 +335,7 @@ public class ServiceCustomFieldService {
         for (Long optionId : optionIds) {
             ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId)
                     .orElseThrow(() -> new IllegalArgumentException("Service option is invalid"));
-            if (!"ACTIVE".equals(option.getStatus())) {
+            if (!option.activeForService(serviceTypeId)) {
                 throw new IllegalArgumentException("Service option must be active");
             }
         }

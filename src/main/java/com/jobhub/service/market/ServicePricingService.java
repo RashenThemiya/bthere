@@ -11,41 +11,77 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import com.jobhub.dto.market.PricingConditionRequest;
+import com.jobhub.exception.ConflictException;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ServicePricingService {
 
     private final JobRateRepository rateRepository;
+    private final CombinationPricingRules pricingRules;
 
     public Price calculate(Long marketId, Long serviceTypeId, Long optionId,
                            String schedulingModel, LocalDateTime start, LocalDateTime end,
                            BigDecimal distanceKm, BigDecimal areaLatitude,
                            BigDecimal areaLongitude) {
+        return calculate(marketId, serviceTypeId, optionId, schedulingModel, start, end,
+                distanceKm, areaLatitude, areaLongitude, null);
+    }
+
+    public Price calculate(Long marketId, Long serviceTypeId, Long optionId,
+                           String schedulingModel, LocalDateTime start, LocalDateTime end,
+                           BigDecimal distanceKm, BigDecimal areaLatitude, BigDecimal areaLongitude,
+                           List<PricingConditionRequest> requestedSelections) {
+        List<PricingConditionRequest> selections = pricingRules.normalize(requestedSelections);
+        pricingRules.validateChoices(serviceTypeId, optionId, selections);
         LocalDateTime now = LocalDateTime.now();
         List<JobRate> candidates = rateRepository
                 .findAllByMarketIdAndServiceProviderTypeIdAndServiceOptionIdAndStatus(
                         marketId, serviceTypeId, optionId, "ACTIVE").stream()
                 .filter(rate -> rate.getEffectiveFrom() == null || !rate.getEffectiveFrom().isAfter(now))
                 .filter(rate -> rate.getEffectiveTo() == null || !rate.getEffectiveTo().isBefore(now))
+                .filter(rate -> "ROUTE_BASED".equals(schedulingModel)
+                        ? "ROUTE_BASED".equals(rate.getBillingType())
+                        : Set.of("HOURLY", "DAILY", "FIXED").contains(rate.getBillingType()))
+                .filter(rate -> !isAreaRate(rate) || inside(rate, areaLatitude, areaLongitude))
                 .toList();
+        Map<Long, String> selected = new HashMap<>();
+        selections.forEach(c -> selected.put(c.fieldId(), c.choiceValue()));
+        Set<Long> pricingFields = new HashSet<>();
+        candidates.forEach(rate -> rate.getConditions().forEach(c -> pricingFields.add(c.getFieldId())));
+        if (!selected.keySet().equals(pricingFields)) {
+            throw new IllegalArgumentException("Select exactly one choice for every applicable pricing field: "
+                    + new TreeSet<>(pricingFields));
+        }
+        Comparator<JobRate> priority = Comparator
+                .comparingInt((JobRate rate) -> rate.getConditions().size()).reversed()
+                .thenComparing(rate -> isAreaRate(rate) ? rate.getAreaRadiusKm() : null,
+                        Comparator.nullsLast(Comparator.naturalOrder()));
+        List<JobRate> matching = candidates.stream().filter(rate -> pricingRules.matches(rate, selected))
+                .sorted(priority.thenComparing(JobRate::getEffectiveFrom,
+                        Comparator.nullsLast(Comparator.reverseOrder()))).toList();
 
-        JobRate rate = candidates.stream()
-                .filter(item -> isAreaRate(item) && inside(item, areaLatitude, areaLongitude))
-                .min(Comparator.comparing(JobRate::getAreaRadiusKm))
-                .orElseGet(() -> candidates.stream()
-                        .filter(item -> !isAreaRate(item))
-                        .max(Comparator.comparing(JobRate::getEffectiveFrom,
-                                Comparator.nullsFirst(Comparator.naturalOrder())))
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "No active price is configured for this market and service option")));
+        if (matching.isEmpty()) {
+            throw new ResourceNotFoundException("No active price is configured for the selected choices, market and service option");
+        }
+        JobRate rate = matching.get(0);
+        if (!rate.getConditions().isEmpty() && matching.size() > 1
+                && priority.compare(rate, matching.get(1)) == 0) {
+            throw new ConflictException("Multiple equally specific prices match the selected choices");
+        }
 
         BigDecimal amount = "ROUTE_BASED".equals(schedulingModel)
                 ? routeAmount(rate, distanceKm)
                 : timeAmount(rate, start, end);
         return new Price(rate.getRateId(), rate.getCurrencyCode(),
-                amount.setScale(2, RoundingMode.HALF_UP), rate.getGeographicalAreaName());
+                amount.setScale(2, RoundingMode.HALF_UP), rate.getGeographicalAreaName(), selections,
+                new RateSnapshot(rate.getBillingType(), rate.getDurationMinutes(), rate.getRate(),
+                        rate.getBaseFare(), rate.getPricePerKm(), rate.getMinimumFare(),
+                        pricingRules.conditions(rate)));
     }
 
     private BigDecimal routeAmount(JobRate rate, BigDecimal distanceKm) {
@@ -100,5 +136,10 @@ public class ServicePricingService {
     }
 
     public record Price(Long rateId, String currencyCode, BigDecimal amount,
-                        String geographicalAreaName) {}
+                        String geographicalAreaName, List<PricingConditionRequest> pricingSelections,
+                        RateSnapshot pricingSnapshot) {}
+
+    public record RateSnapshot(String billingType, Integer durationMinutes, BigDecimal rate,
+                               BigDecimal baseFare, BigDecimal pricePerKm, BigDecimal minimumFare,
+                               List<PricingConditionRequest> conditions) {}
 }

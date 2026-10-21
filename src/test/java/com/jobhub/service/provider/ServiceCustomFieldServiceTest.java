@@ -94,6 +94,7 @@ class ServiceCustomFieldServiceTest {
     private void activeOption(long id) {
         ServiceOption option = new ServiceOption();
         option.setOptionId(id);
+        option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(1L, 0, "ACTIVE"));
         option.setStatus("ACTIVE");
         when(optionRepository.findByOptionIdAndServiceProviderTypeId(id, 1L))
                 .thenReturn(Optional.of(option));

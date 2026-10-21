@@ -17,6 +17,19 @@ import java.util.*;
 public class ProviderSearchFields {
     private final ServiceCustomFieldService fields;
 
+    public void requirePricingSelections(ServiceProviderTypeAssignment assignment, Long optionId,
+            List<com.jobhub.dto.market.PricingConditionRequest> selections) {
+        if (selections == null || selections.isEmpty()) return;
+        var definitions = definitions(assignment.getServiceProviderTypeId(), optionId);
+        var filters = selections.stream().map(selection -> new ProviderFilter(selection.fieldId(),
+                com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode()
+                        .add(selection.choiceValue()), null, null)).toList();
+        validate(definitions, filters);
+        if (!matches(attributes(assignment, definitions), filters)) {
+            throw new IllegalArgumentException("Provider does not offer the selected pricing choices");
+        }
+    }
+
     public List<ServiceCustomFieldResponse> definitions(Long serviceId, Long optionId) {
         return fields.listForOption(serviceId, optionId, false).stream()
                 .filter(f -> "PROVIDER_REQUIREMENT".equals(f.scope()) && f.customerVisible())

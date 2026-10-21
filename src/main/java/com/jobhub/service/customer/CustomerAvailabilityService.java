@@ -91,7 +91,8 @@ public class CustomerAvailabilityService {
                 : jobs.findReservedOverlaps(assignment.getServiceProviderId(), start, end,
                 Set.of("CANCELLED", "COMPLETED", "REJECTED", "EXPIRED"));
         for (var job : reserved) {
-            if (!option.getServiceProviderTypeId().equals(job.getServiceProviderTypeId())) continue;
+            if (!assignment.getServiceProviderTypeId().equals(job.getServiceProviderTypeId())
+                    && !option.getOptionId().equals(job.getServiceOptionId())) continue;
             boolean exclusive = "ONE_AT_A_TIME".equals(option.getBookingMode())
                     || options.findById(job.getServiceOptionId()).map(o -> "ONE_AT_A_TIME".equals(o.getBookingMode())).orElse(false);
             if (exclusive) return 0;

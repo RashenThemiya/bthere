@@ -50,6 +50,7 @@ public class CustomerBookingService {
     private final ServiceCustomFieldRepository customFieldRepository;
     private final ServicePricingService pricingService;
     private final ObjectMapper objectMapper;
+    private final ProviderSearchFields providerSearchFields;
     private final CustomerRequirementsService customerRequirementsService;
     private final CustomerAvailabilityService availabilityService;
     private final com.jobhub.service.upload.S3PrivateDocumentService privateDocuments;
@@ -57,15 +58,32 @@ public class CustomerBookingService {
 
     @Transactional
     public BookingResponse create(Long userId, CreateBookingRequest request) {
+        PreparedBooking prepared = prepare(userId, request, true);
+        Job job = jobRepository.save(prepared.job());
+        saveProviderAssignments(job.getJobId(), prepared.providerIds());
+        saveAnswers(job.getJobId(), prepared.answers());
+        if ("WALLET".equals(job.getPaymentMethod())) walletService.reserveBooking(userId, job.getJobId());
+        return response(job);
+    }
+
+    @Transactional(readOnly = true)
+    public com.jobhub.dto.job.BookingQuoteResponse quote(Long userId, CreateBookingRequest request) {
+        Job job = prepare(userId, request, false).job();
+        return new com.jobhub.dto.job.BookingQuoteResponse(job.getRateId(), job.getCurrencyCode(),
+                job.getExpectedAmount(), job.getStartDatetime(), job.getExpectedEndDatetime(),
+                job.getEstimatedDistanceKm(), read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()));
+    }
+
+    private PreparedBooking prepare(Long userId, CreateBookingRequest request, boolean locked) {
         Customer customer = customerRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Complete the customer profile first"));
         ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(
                         request.optionId(), request.serviceTypeId())
-                .filter(item -> "ACTIVE".equals(item.getStatus()))
+                .filter(item -> item.activeForService(request.serviceTypeId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
         customerRequirementsService.requireEligible(userId, request.serviceTypeId(), request.optionId());
         List<Long> providerIds = resolveProviderIds(option, request);
-        availabilityService.lockProviders(providerIds);
+        if (locked) availabilityService.lockProviders(providerIds);
         List<ServiceProviderTypeAssignment> assignments = providerIds.stream()
                 .map(providerId -> requireApprovedProvider(providerId,
                         request.serviceTypeId(), request.optionId()))
@@ -105,7 +123,7 @@ public class CustomerBookingService {
             Integer capacity = memberLocation.providerLocationId() == null ? null
                     : areaRepository.findById(memberLocation.providerLocationId()).map(ServiceProviderServiceArea::getCapacity).orElse(null);
             if (availabilityService.remaining(selected, option, memberLocation.providerLocationId(), capacity,
-                    time.start(), time.end(), true) < 1) {
+                    time.start(), time.end(), locked) < 1) {
                 throw new IllegalArgumentException("Provider capacity changed; search again");
             }
         }
@@ -116,7 +134,10 @@ public class CustomerBookingService {
         ServicePricingService.Price price = pricingService.calculate(
                 market.getMarketId(), request.serviceTypeId(), request.optionId(),
                 schedulingModel(option), time.start(), time.end(), route.distanceKm(),
-                pricingLatitude, pricingLongitude);
+                pricingLatitude, pricingLongitude, request.pricingSelections());
+        for (var selected : assignments) {
+            providerSearchFields.requirePricingSelections(selected, request.optionId(), price.pricingSelections());
+        }
 
         Job job = new Job();
         job.setMarketId(market.getMarketId());
@@ -149,18 +170,19 @@ public class CustomerBookingService {
         job.setEstimatedDistanceKm(route.distanceKm());
         job.setEstimatedDurationMinutes(route.durationMinutes());
         job.setRateId(price.rateId());
+        job.setPricingSelectionsJson(write(objectMapper.valueToTree(price.pricingSelections())));
+        job.setPricingSnapshotJson(write(objectMapper.valueToTree(price.pricingSnapshot())));
         job.setExpectedAmount(price.amount());
         job.setTotalAmount(price.amount());
         job.setCustomerNote(trim(request.customerNote()));
         job.setJobStatus("PENDING");
         job.setPaymentMethod(paymentMethod);
         job.setPaymentStatus("PENDING");
-        job = jobRepository.save(job);
-        saveProviderAssignments(job.getJobId(), providerIds);
-        saveAnswers(job.getJobId(), validatedAnswers);
-        if ("WALLET".equals(paymentMethod)) walletService.reserveBooking(userId, job.getJobId());
-        return response(job);
+        return new PreparedBooking(job, providerIds, validatedAnswers);
     }
+
+    private record PreparedBooking(Job job, List<Long> providerIds,
+                                   Map<ServiceCustomField, JsonNode> answers) {}
 
     private BookingTime resolveTime(ServiceOption option, CreateBookingRequest request) {
         if ("TIME_BASED".equals(schedulingModel(option))) {
@@ -480,7 +502,8 @@ public class CustomerBookingService {
                 job.getDestinationAddress(), job.getEstimatedDistanceKm(),
                 job.getEstimatedDurationMinutes(), job.getRateId(), job.getCurrencyCode(),
                 job.getExpectedAmount(), job.getPaymentMethod(), job.getPaymentStatus(),
-                job.getJobStatus(), answers);
+                job.getJobStatus(), answers,
+                read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()));
     }
 
     static String resolvePaymentMethod(ServiceOption option, String requestedMethod) {

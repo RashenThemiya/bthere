@@ -138,7 +138,8 @@ public class ServiceSetupService {
                 ServiceContentSupport.icon(type.getMedia()),
                 ServiceContentSupport.cover(type.getMedia()),
                 ServiceContentSupport.gallery(type.getMedia()),
-                ServiceContentSupport.responsibilities(type.getResponsibilities())
+                ServiceContentSupport.responsibilities(type.getResponsibilities()),
+                ServiceContentSupport.mapMarkerIcon(type.getMedia())
         );
     }
 
@@ -233,7 +234,7 @@ public class ServiceSetupService {
 
     private void applyContent(ServiceProviderType type, ServiceSetupRequest request) {
         ServiceContentSupport.replaceMedia(type.getMedia(), request.icon(),
-                request.coverImage(), request.gallery());
+                request.coverImage(), request.gallery(), request.mapMarkerIcon());
         ServiceContentSupport.replaceResponsibilities(type.getResponsibilities(),
                 request.responsibilities());
         if (request.icon() != null) {

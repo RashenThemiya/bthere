@@ -1,6 +1,7 @@
 package com.jobhub.dto.job;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.jobhub.dto.market.PricingConditionRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -27,8 +28,19 @@ public record CreateBookingRequest(
         @Valid MeetingPoint meetingPoint,
         @Size(max = 4000) String customerNote,
         List<@Valid Answer> answers,
-        String paymentMethod
+        String paymentMethod,
+        @Size(max = 10) List<@NotNull @Valid PricingConditionRequest> pricingSelections
 ) {
+    public CreateBookingRequest(Long serviceTypeId, Long optionId, Long providerId,
+            List<Long> providerIds, String deliveryMode, LocalDateTime startDatetime,
+            LocalDateTime expectedEndDatetime, LocalDateTime requestedPickupTime,
+            RoutePoint pickup, RoutePoint destination, Long providerLocationId,
+            MeetingPoint meetingPoint, String customerNote, List<Answer> answers, String paymentMethod) {
+        this(serviceTypeId, optionId, providerId, providerIds, deliveryMode, startDatetime,
+                expectedEndDatetime, requestedPickupTime, pickup, destination, providerLocationId,
+                meetingPoint, customerNote, answers, paymentMethod, null);
+    }
+
     public record Answer(@NotNull Long fieldId, @NotNull JsonNode value) {}
 
     public record RoutePoint(

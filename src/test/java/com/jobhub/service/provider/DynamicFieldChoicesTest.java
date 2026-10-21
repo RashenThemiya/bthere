@@ -5,6 +5,19 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class DynamicFieldChoicesTest {
+    @org.junit.jupiter.api.Test
+    void mapMarkerIconsAreSeparateValidatedChoiceMetadata() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var choices = mapper.readTree("""
+                [{"value":"CAR","icon":{"key":"card.png","url":"https://example.com/card.png"},
+                "mapMarkerIcon":{"key":"pin.png","url":"https://example.com/pin.png"}}]
+                """);
+        assertThatCode(() -> DynamicFieldChoices.validateDefinition(choices)).doesNotThrowAnyException();
+        assertThat(DynamicFieldChoices.mapMarkerIcon(choices, "CAR").key()).isEqualTo("pin.png");
+        assertThat(DynamicFieldChoices.mapMarkerIcon(choices, "Car")).isNull();
+        var invalid = mapper.readTree("[{\"value\":\"CAR\",\"mapMarkerIcon\":{\"key\":\"pin.png\"}}]");
+        assertThatThrownBy(() -> DynamicFieldChoices.validateDefinition(invalid)).isInstanceOf(IllegalArgumentException.class);
+    }
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test void supportsLegacyStringsAndRichChoicesWithOptionalIcons() throws Exception {

@@ -3,6 +3,7 @@ package com.jobhub.service.customer;
 import com.jobhub.dto.customer.CustomerDiscoveryApi.*;
 import com.jobhub.dto.customer.CustomerRequirementsApi.*;
 import com.jobhub.dto.provider.ProviderTypeResponse;
+import com.jobhub.dto.provider.ServiceMediaPayload;
 import com.jobhub.entity.market.Market;
 import com.jobhub.entity.provider.*;
 import com.jobhub.exception.*;
@@ -35,6 +36,7 @@ class CustomerDiscoveryServiceTest {
     @Mock ProviderServiceSkillRepository skills;
     @Mock ServiceTypeSkillRepository configuredSkills;
     @Mock ProviderSearchFields providerSearchFields;
+    @Mock MapMarkerResolver mapMarkerResolver;
     @InjectMocks CustomerDiscoveryService service;
     ServiceOption option;
     ServiceProviderTypeAssignment assignment;
@@ -42,6 +44,7 @@ class CustomerDiscoveryServiceTest {
     @BeforeEach void setup() {
         lenient().when(providerSearchFields.matches(anyMap(), nullable(List.class))).thenReturn(true);
         option = new ServiceOption(); option.setOptionId(12L); option.setServiceProviderTypeId(3L);
+        option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(3L, 0, "ACTIVE"));
         option.setStatus("ACTIVE"); option.setLocationEnabled(true); option.setDeliveryModes(Set.of("PROVIDER_TO_CUSTOMER", "CUSTOMER_TO_PROVIDER", "ONLINE"));
         var market = new Market(); market.setMarketId(1L); market.setTimezone("Asia/Colombo");
         lenient().when(availability.market(1L)).thenReturn(market);
@@ -73,6 +76,18 @@ class CustomerDiscoveryServiceTest {
         var result = service.search(25L, search("ONLINE", null));
         assertThat(result.status()).isEqualTo("AVAILABLE");
         assertThat(result.candidates().get(0).mapPoint()).isNull();
+    }
+
+    @Test void mapResultsIncludeConfiguredMarkerWithoutChangingProviderDetailsOrCoordinates() {
+        var marker = new MapMarker("OPTION", new ServiceMediaPayload("ride.png", "https://example.com/ride.png", "Ride", 0), null, null);
+        when(mapMarkerResolver.resolve(eq(3L), eq(option), anyList(), isNull())).thenReturn(marker);
+        when(areas.findAllByAssignmentIdAndOptionIdAndDeliveryModeOrderByLocationNameAsc(14L, 12L, "CUSTOMER_TO_PROVIDER"))
+                .thenReturn(List.of(area()));
+        var candidate = service.search(25L, search("CUSTOMER_TO_PROVIDER", point())).candidates().get(0);
+        assertThat(candidate.mapMarker()).isEqualTo(marker);
+        assertThat(candidate.providerId()).isEqualTo(15L);
+        assertThat(candidate.providerLocationId()).isEqualTo(50L);
+        assertThat(candidate.mapPoint()).isEqualTo(point());
     }
     @Test void fullProvidersDisappearFromResults() {
         when(availability.remaining(eq(assignment), eq(option), any(), any(), any(), any(), eq(false))).thenReturn(0);

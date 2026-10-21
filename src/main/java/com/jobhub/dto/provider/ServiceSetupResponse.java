@@ -20,7 +20,8 @@ public record ServiceSetupResponse(
         ServiceMediaPayload icon,
         ServiceMediaPayload coverImage,
         List<ServiceMediaPayload> gallery,
-        List<ServiceResponsibilityPayload> responsibilities
+        List<ServiceResponsibilityPayload> responsibilities,
+        ServiceMediaPayload mapMarkerIcon
 ) {
     public record DocumentRequirement(
             Long documentTypeId,

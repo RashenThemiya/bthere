@@ -27,6 +27,7 @@ class CustomerBookingEligibilityTest {
     @Test void ineligibleCustomerIsRejectedBeforeAnyBookingIsSaved() {
         when(customers.findByUserId(25L)).thenReturn(Optional.of(new Customer()));
         var option = new ServiceOption(); option.setStatus("ACTIVE");
+        option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(3L, 0, "ACTIVE"));
         when(options.findByOptionIdAndServiceProviderTypeId(12L, 3L)).thenReturn(Optional.of(option));
         doThrow(new CustomerEligibilityException(new Eligibility(false,
                 List.of(new Reason("PENDING", "NIC", "Verify NIC")))))

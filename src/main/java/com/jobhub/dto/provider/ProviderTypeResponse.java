@@ -9,6 +9,12 @@ public record ProviderTypeResponse(
         ServiceMediaPayload icon,
         ServiceMediaPayload coverImage,
         java.util.List<ServiceMediaPayload> gallery,
-        java.util.List<ServiceResponsibilityPayload> responsibilities
+        java.util.List<ServiceResponsibilityPayload> responsibilities,
+        ServiceMediaPayload mapMarkerIcon
 ) {
+    public ProviderTypeResponse(Long id, String name, String description, String iconUrl, String status,
+            ServiceMediaPayload icon, ServiceMediaPayload coverImage, java.util.List<ServiceMediaPayload> gallery,
+            java.util.List<ServiceResponsibilityPayload> responsibilities) {
+        this(id, name, description, iconUrl, status, icon, coverImage, gallery, responsibilities, null);
+    }
 }

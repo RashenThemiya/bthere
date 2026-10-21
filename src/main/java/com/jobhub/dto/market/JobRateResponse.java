@@ -9,5 +9,6 @@ public record JobRateResponse(
         BigDecimal baseFare, BigDecimal pricePerKm, BigDecimal minimumFare,
         String geographicalAreaName, BigDecimal areaLatitude,
         BigDecimal areaLongitude, BigDecimal areaRadiusKm,
-        LocalDateTime effectiveFrom, LocalDateTime effectiveTo, String status
+        LocalDateTime effectiveFrom, LocalDateTime effectiveTo, String status,
+        java.util.List<PricingConditionRequest> conditions
 ) {}

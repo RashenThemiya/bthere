@@ -71,6 +71,7 @@ public class ProviderTypeService {
         type.setDescription(optional(request.description()));
         type.setIconUrl(optional(request.iconUrl()));
         type.setStatus("ACTIVE");
+        ServiceContentSupport.replaceMedia(type.getMedia(), null, null, List.of(), request.mapMarkerIcon());
         type.setCertificateRequirement("OPTIONAL");
         type.setEducationRequirement("OPTIONAL");
         return toTypeResponse(providerTypeRepository.save(type));
@@ -446,7 +447,8 @@ public class ProviderTypeService {
                 ServiceContentSupport.icon(type.getMedia()),
                 ServiceContentSupport.cover(type.getMedia()),
                 ServiceContentSupport.gallery(type.getMedia()),
-                ServiceContentSupport.responsibilities(type.getResponsibilities())
+                ServiceContentSupport.responsibilities(type.getResponsibilities()),
+                ServiceContentSupport.mapMarkerIcon(type.getMedia())
         );
     }
 

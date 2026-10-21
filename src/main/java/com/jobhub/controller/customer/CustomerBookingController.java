@@ -29,6 +29,13 @@ public class CustomerBookingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(user.id(), request));
     }
 
+    @PostMapping("/quote")
+    public ResponseEntity<com.jobhub.dto.job.BookingQuoteResponse> quote(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody CreateBookingRequest request) {
+        return ResponseEntity.ok(service.quote(user.id(), request));
+    }
+
     @GetMapping
     public ResponseEntity<List<BookingResponse>> list(
             @AuthenticationPrincipal AuthenticatedUser user) {

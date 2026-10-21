@@ -18,7 +18,25 @@ import java.util.Set;
 public class ServiceOption extends AuditedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long optionId;
+    // Original service retained for database compatibility; membership uses serviceTypes.
     private Long serviceProviderTypeId;
+
+    @ElementCollection
+    @CollectionTable(name = "service_type_option", joinColumns = @JoinColumn(name = "option_id"),
+            uniqueConstraints = @UniqueConstraint(name = "uk_service_type_option",
+                    columnNames = {"service_provider_type_id", "option_id"}))
+    private Set<ServiceTypeOption> serviceTypes = new LinkedHashSet<>();
+
+    public ServiceTypeOption serviceLink(Long typeId) {
+        return serviceTypes.stream().filter(link -> typeId.equals(link.getServiceProviderTypeId()))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("Option is not linked to this service"));
+    }
+
+    public boolean activeForService(Long typeId) {
+        return "ACTIVE".equals(status) && serviceTypes.stream().anyMatch(link ->
+                typeId.equals(link.getServiceProviderTypeId()) && "ACTIVE".equals(link.getStatus()));
+    }
+
     private String code;
     private String name;
     @Column(length = 1000)

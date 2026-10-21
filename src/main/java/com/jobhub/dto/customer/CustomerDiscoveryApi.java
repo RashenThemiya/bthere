@@ -45,7 +45,13 @@ public final class CustomerDiscoveryApi {
                             String displayName, String profilePhoto, BigDecimal averageRating,
                             Integer totalRatings, String locationLabel, Point mapPoint,
                             Double distanceKm, int remainingCapacity, List<String> languages,
-                            Map<Long, JsonNode> providerAttributes) {}
+                            Map<Long, JsonNode> providerAttributes, MapMarker mapMarker) {}
+    public record MapMarker(String source, ServiceMediaPayload icon, Long fieldId, String choiceValue,
+                            Long ruleId, List<com.jobhub.dto.market.PricingConditionRequest> conditions) {
+        public MapMarker(String source, ServiceMediaPayload icon, Long fieldId, String choiceValue) {
+            this(source, icon, fieldId, choiceValue, null, List.of());
+        }
+    }
     public record Results(Instant checkedAt, Long marketId, String timezone, OffsetDateTime startAt,
                           OffsetDateTime endAt, String providerSelectionMode, int requiredProviderCount,
                           String status, int totalCandidates, int page, int pageSize,

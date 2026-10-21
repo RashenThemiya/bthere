@@ -243,7 +243,7 @@ public class ProviderAvailabilityService {
         ServiceOption option = optionRepository
                 .findByOptionIdAndServiceProviderTypeId(
                         optionId, assignment.getServiceProviderTypeId())
-                .filter(item -> "ACTIVE".equals(item.getStatus()))
+                .filter(item -> item.activeForService(assignment.getServiceProviderTypeId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
         boolean selected = providerOptionRepository.findAllByAssignmentId(assignment.getAssignmentId())
                 .stream().anyMatch(item -> optionId.equals(item.getOptionId()));

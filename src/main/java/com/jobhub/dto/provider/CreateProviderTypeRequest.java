@@ -12,6 +12,10 @@ public record CreateProviderTypeRequest(
         String description,
 
         @Size(max = 2048, message = "Icon URL must not exceed 2048 characters")
-        String iconUrl
+        String iconUrl,
+        @jakarta.validation.Valid ServiceMediaPayload mapMarkerIcon
 ) {
+    public CreateProviderTypeRequest(String name, String description, String iconUrl) {
+        this(name, description, iconUrl, null);
+    }
 }

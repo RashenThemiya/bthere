@@ -27,7 +27,9 @@ public record ServiceOptionResponse(
         ServiceMediaPayload coverImage,
         List<ServiceMediaPayload> gallery,
         List<ServiceResponsibilityPayload> responsibilities,
-        List<ServiceCustomFieldResponse> dynamicFields
+        List<ServiceCustomFieldResponse> dynamicFields,
+        ServiceMediaPayload mapMarkerIcon,
+        Long mapMarkerFieldId
 ) {
     public record DeliveryModeConfiguration(
             String code,

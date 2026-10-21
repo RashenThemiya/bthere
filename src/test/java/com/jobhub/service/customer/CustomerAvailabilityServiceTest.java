@@ -63,6 +63,15 @@ class CustomerAvailabilityServiceTest {
         assertThat(CustomerAvailabilityService.peakOccupancy(List.of(job(1, start.minusHours(1), start, 2),
                 job(2, end, end.plusHours(1), 2)), start, end)).isZero();
     }
+    @Test void sharedOptionBookingInAnotherServiceStillReservesProvider() {
+        var shared = option();
+        shared.setBookingMode("ONE_AT_A_TIME");
+        var existing = job(1, start, end, 1);
+        existing.setServiceProviderTypeId(7L);
+        when(jobs.findReservedOverlaps(eq(15L), eq(start), eq(end), anySet()))
+                .thenReturn(List.of(existing));
+        assertThat(service.remaining(assignment(), shared, null, null, start, end, false)).isZero();
+    }
     @Test void adjoiningScheduleSlotsCoverWholeRequest() {
         schedule(List.of(slot(8, 10), slot(10, 12)));
         assertThat(service.scheduled(assignment(), start, end)).isTrue();

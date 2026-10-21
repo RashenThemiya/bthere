@@ -52,9 +52,12 @@ public class ServiceOptionService {
         option.setServiceProviderTypeId(serviceTypeId);
         apply(option, request);
         option.setStatus("ACTIVE");
+        option.getServiceTypes().add(new ServiceTypeOption(serviceTypeId, option.getDisplayOrder(), "ACTIVE"));
         option = optionRepository.save(option);
         customFieldService.saveForOption(serviceTypeId, option.getOptionId(), request.dynamicFields());
-        return response(option);
+        validateMarkerField(serviceTypeId, option.getOptionId(), request.mapMarkerFieldId());
+        option.serviceLink(serviceTypeId).setMapMarkerFieldId(request.mapMarkerFieldId());
+        return response(option, serviceTypeId, true);
     }
 
     @Transactional
@@ -62,15 +65,21 @@ public class ServiceOptionService {
             Long serviceTypeId, Long optionId, CreateServiceOptionRequest request) {
         ServiceOption option = requireOption(serviceTypeId, optionId);
         String code = normalizeCode(request.code());
-        if (!option.getCode().equalsIgnoreCase(code)
-                && optionRepository.existsByServiceProviderTypeIdAndCodeIgnoreCase(
-                serviceTypeId, code)) {
-            throw new ConflictException("Service option code already exists");
+        if (!option.getCode().equalsIgnoreCase(code)) {
+            for (ServiceTypeOption link : option.getServiceTypes()) {
+                if (optionRepository.existsByServiceProviderTypeIdAndCodeIgnoreCase(
+                        link.getServiceProviderTypeId(), code)) {
+                    throw new ConflictException("Service option code already exists in a linked service");
+                }
+            }
         }
         apply(option, request);
+        option.serviceLink(serviceTypeId).setDisplayOrder(option.getDisplayOrder());
         option = optionRepository.save(option);
         customFieldService.saveForOption(serviceTypeId, optionId, request.dynamicFields());
-        return response(option);
+        validateMarkerField(serviceTypeId, optionId, request.mapMarkerFieldId());
+        option.serviceLink(serviceTypeId).setMapMarkerFieldId(request.mapMarkerFieldId());
+        return response(option, serviceTypeId, true);
     }
 
     @Transactional
@@ -81,8 +90,8 @@ public class ServiceOptionService {
             throw new IllegalArgumentException("Status must be ACTIVE or INACTIVE");
         }
         ServiceOption option = requireOption(serviceTypeId, optionId);
-        option.setStatus(status);
-        return response(optionRepository.save(option));
+        option.serviceLink(serviceTypeId).setStatus(status);
+        return response(optionRepository.save(option), serviceTypeId, true);
     }
 
     @Transactional(readOnly = true)
@@ -92,7 +101,48 @@ public class ServiceOptionService {
                 ? optionRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscNameAsc(serviceTypeId)
                 : optionRepository.findAllByServiceProviderTypeIdAndStatusOrderByDisplayOrderAscNameAsc(
                         serviceTypeId, "ACTIVE");
-        return options.stream().map(option -> response(option, includeInactive)).toList();
+        return options.stream().map(option -> response(option, serviceTypeId, includeInactive)).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SharedServiceOptionResponse> catalog(Pageable pageable) {
+        return optionRepository.findAll(pageable).map(option -> new SharedServiceOptionResponse(
+                option.getOptionId(), option.getCode(), option.getName(), option.getDescription(),
+                option.getServiceTypes().stream()
+                        .sorted(Comparator.comparing(ServiceTypeOption::getServiceProviderTypeId))
+                        .map(link -> new SharedServiceOptionResponse.ServiceLink(
+                                link.getServiceProviderTypeId(), link.getDisplayOrder(), link.getStatus(), link.getMapMarkerFieldId()))
+                        .toList()));
+    }
+
+    @Transactional
+    public ServiceOptionResponse link(Long serviceTypeId, Long optionId, LinkServiceOptionRequest request) {
+        requireType(serviceTypeId);
+        ServiceOption option = optionRepository.findById(optionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Service option not found"));
+        Optional<ServiceTypeOption> existing = option.getServiceTypes().stream()
+                .filter(link -> serviceTypeId.equals(link.getServiceProviderTypeId())).findFirst();
+        if (existing.isPresent()) {
+            existing.get().setStatus("ACTIVE");
+            if (request.displayOrder() != null) existing.get().setDisplayOrder(request.displayOrder());
+        } else {
+            if (optionRepository.existsByServiceProviderTypeIdAndCodeIgnoreCase(serviceTypeId, option.getCode())) {
+                throw new ConflictException("Service option code already exists in this service");
+            }
+            option.getServiceTypes().add(new ServiceTypeOption(serviceTypeId,
+                    request.displayOrder() == null ? 0 : request.displayOrder(), "ACTIVE"));
+        }
+        if (request.mapMarkerFieldId() != null) {
+            validateMarkerField(serviceTypeId, optionId, request.mapMarkerFieldId());
+            option.serviceLink(serviceTypeId).setMapMarkerFieldId(request.mapMarkerFieldId());
+        }
+        return response(optionRepository.save(option), serviceTypeId, true);
+    }
+
+    @Transactional
+    public void unlink(Long serviceTypeId, Long optionId) {
+        // Keep history and provider approvals for existing bookings.
+        updateStatus(serviceTypeId, optionId, "INACTIVE");
     }
 
     @Transactional
@@ -316,7 +366,7 @@ public class ServiceOptionService {
         }
         option.setAllowedPaymentMethods(paymentMethods);
         ServiceContentSupport.replaceMedia(option.getMedia(), request.icon(),
-                request.coverImage(), request.gallery());
+                request.coverImage(), request.gallery(), request.mapMarkerIcon());
         ServiceContentSupport.replaceResponsibilities(option.getResponsibilities(),
                 request.responsibilities());
     }
@@ -329,14 +379,22 @@ public class ServiceOptionService {
 
     private String trim(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
-    private ServiceOptionResponse response(ServiceOption item) {
-        return response(item, true);
+    private void validateMarkerField(Long serviceTypeId, Long optionId, Long fieldId) {
+        if (fieldId == null) return;
+        boolean valid = customFieldService.listForOption(serviceTypeId, optionId, false).stream()
+                .anyMatch(field -> fieldId.equals(field.fieldId())
+                        && "PROVIDER_REQUIREMENT".equals(field.scope())
+                        && ("SELECT".equals(field.fieldType()) || "MULTI_SELECT".equals(field.fieldType()))
+                        && field.customerVisible() && field.searchable()
+                        && (field.condition() == null || field.condition().isNull()));
+        if (!valid) throw new IllegalArgumentException("Map marker field must be an active searchable provider choice field for this service option");
     }
 
-    private ServiceOptionResponse response(ServiceOption item, boolean includeInactiveFields) {
-        return new ServiceOptionResponse(item.getOptionId(), item.getServiceProviderTypeId(),
-                item.getCode(), item.getName(), item.getDescription(), item.getDisplayOrder(),
-                item.getStatus(), item.getSchedulingModel() == null
+    private ServiceOptionResponse response(ServiceOption item, Long serviceTypeId, boolean includeInactiveFields) {
+        ServiceTypeOption link = item.serviceLink(serviceTypeId);
+        return new ServiceOptionResponse(item.getOptionId(), serviceTypeId,
+                item.getCode(), item.getName(), item.getDescription(), link.getDisplayOrder(),
+                "ACTIVE".equals(item.getStatus()) ? link.getStatus() : item.getStatus(), item.getSchedulingModel() == null
                         ? "TIME_BASED" : item.getSchedulingModel(), item.getRouteAverageSpeedKmh(),
                 item.isLocationEnabled(), Set.copyOf(item.getDeliveryModes()),
                 item.getFulfillmentModel() == null ? "ONE_TO_ONE" : item.getFulfillmentModel(),
@@ -355,8 +413,9 @@ public class ServiceOptionService {
                 ServiceContentSupport.cover(item.getMedia()),
                 ServiceContentSupport.gallery(item.getMedia()),
                 ServiceContentSupport.responsibilities(item.getResponsibilities()),
-                customFieldService.listForOption(item.getServiceProviderTypeId(),
-                        item.getOptionId(), includeInactiveFields));
+                customFieldService.listForOption(serviceTypeId,
+                        item.getOptionId(), includeInactiveFields),
+                ServiceContentSupport.mapMarkerIcon(item.getMedia()), link.getMapMarkerFieldId());
     }
 
     private ServiceOptionResponse.DeliveryModeConfiguration deliveryConfiguration(
