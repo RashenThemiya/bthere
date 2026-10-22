@@ -52,12 +52,14 @@ class CustomerBookingCombinationPricingTest {
         var customer = new Customer(); customer.setCustomerId(25L);
         when(customerRepository.findByUserId(5L)).thenReturn(Optional.of(customer));
         var option = new ServiceOption(); option.setOptionId(12L); option.setStatus("ACTIVE");
+        option.setServiceProviderTypeId(2L);
         option.setDeliveryModes(Set.of("ONLINE"));
         option.getServiceTypes().add(new ServiceTypeOption(2L, 0, "ACTIVE"));
         when(optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 2L)).thenReturn(Optional.of(option));
         assignment = new ServiceProviderTypeAssignment(); assignment.setAssignmentId(14L);
         assignment.setServiceProviderId(15L); assignment.setServiceProviderTypeId(2L);
         assignment.setStatus("ACTIVE"); assignment.setVerificationStatus("APPROVED");
+        assignment.setProviderStatus("ACTIVE"); assignment.setAdminStatus("ACTIVE");
         when(assignmentRepository.findByServiceProviderIdAndServiceProviderTypeId(15L, 2L)).thenReturn(Optional.of(assignment));
         var selected = new ProviderServiceOption(); selected.setProviderStatus("ACTIVE");
         selected.setAdminStatus("ACTIVE"); selected.setVerificationStatus("APPROVED");
@@ -86,6 +88,18 @@ class CustomerBookingCombinationPricingTest {
         verify(providerSearchFields).requirePricingSelections(assignment, 12L, selections);
         verifyNoInteractions(jobRepository, jobProviderRepository, answerRepository, walletService);
         verify(availabilityService, never()).lockProviders(any());
+    }
+
+    @Test void linkedEntryUsesTheOriginalRegistrationAnswersAndExactlyTheSameFare() {
+        var option = optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 2L).orElseThrow();
+        option.getServiceTypes().add(new ServiceTypeOption(3L, 0, "ACTIVE"));
+        when(optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 3L)).thenReturn(Optional.of(option));
+        var linked = new CreateBookingRequest(3L, 12L, 15L, null, "ONLINE", request.startDatetime(),
+                request.expectedEndDatetime(), null, null, null, null, null, null, List.of(), "CASH", selections);
+        assertThat(service.quote(5L, linked)).isEqualTo(service.quote(5L, request));
+        verify(assignmentRepository, never()).findByServiceProviderIdAndServiceProviderTypeId(15L, 3L);
+        verify(providerSearchFields, times(2)).requirePricingSelections(assignment, 12L, selections);
+        verifyNoInteractions(jobRepository, walletService);
     }
 
     @Test void bookingPersistsSelectionsAndAppliedPriceSnapshot() {

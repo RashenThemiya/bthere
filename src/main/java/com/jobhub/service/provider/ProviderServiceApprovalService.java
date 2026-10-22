@@ -74,8 +74,7 @@ public class ProviderServiceApprovalService {
 
     public Set<Long> requiredDocumentTypeIds(ServiceProviderTypeAssignment assignment) {
         Set<Long> selectedOptions = selectedOptionIds(assignment.getAssignmentId());
-        return requirementRepository.findAllByServiceProviderTypeId(
-                        assignment.getServiceProviderTypeId()).stream()
+        return sharedDocumentRequirements(assignment, selectedOptions).stream()
                 .filter(ServiceTypeDocumentRequirement::isMandatory)
                 .filter(item -> item.getOptionId() == null
                         || selectedOptions.contains(item.getOptionId()))
@@ -127,9 +126,8 @@ public class ProviderServiceApprovalService {
 
     private Set<Long> approvedOrAcceptedDocumentTypeIds(
             Long providerId, ServiceProviderTypeAssignment assignment, Set<Long> requiredIds) {
-        List<ServiceTypeDocumentRequirement> requirements = requirementRepository
-                .findAllByServiceProviderTypeId(assignment.getServiceProviderTypeId());
         Set<Long> selectedOptions = selectedOptionIds(assignment.getAssignmentId());
+        List<ServiceTypeDocumentRequirement> requirements = sharedDocumentRequirements(assignment, selectedOptions);
         List<ServiceProviderDocument> documents = documentRepository
                 .findAllByServiceProviderIdOrderByCreatedAtDesc(providerId);
         Set<Long> result = new HashSet<>();
@@ -247,13 +245,28 @@ public class ProviderServiceApprovalService {
     }
 
     public boolean customRequirementsComplete(ServiceProviderTypeAssignment assignment) {
-        List<ServiceCustomField> fields = customFieldRepository
-                .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
-                        assignment.getServiceProviderTypeId(), "PROVIDER_REQUIREMENT", "ACTIVE");
         Set<Long> selectedOptions = providerOptionRepository
                 .findAllByAssignmentId(assignment.getAssignmentId()).stream()
                 .map(ProviderServiceOption::getOptionId)
                 .collect(java.util.stream.Collectors.toSet());
+        Map<Long, ServiceCustomField> definitions = new java.util.LinkedHashMap<>();
+        customFieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                        assignment.getServiceProviderTypeId(), "PROVIDER_REQUIREMENT", "ACTIVE")
+                .stream().filter(f -> f.effectiveOptionIds().isEmpty())
+                .forEach(f -> definitions.put(f.getFieldId(), f));
+        for (Long optionId : selectedOptions) {
+            var option = optionRepository.findById(optionId).orElseThrow(() ->
+                    new IllegalArgumentException("Selected service option no longer exists"));
+            customFieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                            option.getServiceProviderTypeId(), "PROVIDER_REQUIREMENT", "ACTIVE").stream()
+                    .filter(f -> f.appliesToOptions(Set.of(optionId)))
+                    .forEach(f -> definitions.put(f.getFieldId(), f));
+            customFieldRepository.findSharedForOption(optionId).stream()
+                    .filter(f -> "PROVIDER_REQUIREMENT".equals(f.getScope()) && "ACTIVE".equals(f.getStatus())
+                            && f.appliesToOptions(Set.of(optionId)))
+                    .forEach(f -> definitions.put(f.getFieldId(), f));
+        }
+        List<ServiceCustomField> fields = List.copyOf(definitions.values());
         Map<Long, ProviderCustomFieldSubmission> submissions = new java.util.HashMap<>();
         customSubmissionRepository.findAllByAssignmentId(assignment.getAssignmentId())
                 .forEach(item -> submissions.put(item.getFieldId(), item));
@@ -283,16 +296,32 @@ public class ProviderServiceApprovalService {
         if (field.isProfileBacked()) return java.util.Optional.empty();
         String reuseScope = field.getReuseScope() == null
                 ? "ASSIGNMENT" : field.getReuseScope();
-        if ("ASSIGNMENT".equals(reuseScope)) return java.util.Optional.empty();
         return customSubmissionRepository
                 .findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
                         assignment.getServiceProviderId(), field.getCode(), "APPROVED")
                 .stream()
                 .filter(item -> field.getFieldType().equals(item.getReusableFieldType()))
-                .filter(item -> "PROVIDER".equals(reuseScope)
+                .filter(item -> field.getFieldId().equals(item.getFieldId())
+                        || !"ASSIGNMENT".equals(reuseScope) && ("PROVIDER".equals(reuseScope)
                         || assignment.getServiceProviderTypeId()
-                        .equals(item.getServiceProviderTypeId()))
+                        .equals(item.getServiceProviderTypeId())))
                 .findFirst();
+    }
+
+    private List<ServiceTypeDocumentRequirement> sharedDocumentRequirements(
+            ServiceProviderTypeAssignment assignment, Set<Long> selectedOptions) {
+        Map<String, ServiceTypeDocumentRequirement> result = new java.util.LinkedHashMap<>();
+        requirementRepository.findAllByServiceProviderTypeId(assignment.getServiceProviderTypeId()).stream()
+                .filter(r -> r.getOptionId() == null)
+                .forEach(r -> result.put("common:" + r.getDocumentTypeId(), r));
+        for (Long optionId : selectedOptions) {
+            var option = optionRepository.findById(optionId).orElseThrow(() ->
+                    new IllegalArgumentException("Selected service option no longer exists"));
+            requirementRepository.findAllByServiceProviderTypeId(option.getServiceProviderTypeId()).stream()
+                    .filter(r -> optionId.equals(r.getOptionId()))
+                    .forEach(r -> result.put(optionId + ":" + r.getDocumentTypeId(), r));
+        }
+        return List.copyOf(result.values());
     }
 
     public boolean conditionApplies(

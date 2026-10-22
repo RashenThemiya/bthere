@@ -20,41 +20,42 @@ public class MapMarkerRuleService {
 
     @Transactional(readOnly = true)
     public List<MapMarkerRuleResponse> list(Long serviceTypeId, Long optionId) {
-        requireOption(serviceTypeId, optionId, false);
-        return rules.findAllByServiceProviderTypeIdAndOptionIdOrderByMarkerRuleIdAsc(serviceTypeId, optionId)
+        Long owner = requireOption(serviceTypeId, optionId, false);
+        return rules.findAllByServiceProviderTypeIdAndOptionIdOrderByMarkerRuleIdAsc(owner, optionId)
                 .stream().map(this::response).toList();
     }
 
     @Transactional
     public MapMarkerRuleResponse create(Long serviceTypeId, Long optionId, MapMarkerRuleRequest request) {
-        requireOption(serviceTypeId, optionId, true);
+        Long owner = requireOption(serviceTypeId, optionId, true);
         var rule = new ServiceOptionMapMarkerRule();
-        rule.setServiceProviderTypeId(serviceTypeId); rule.setOptionId(optionId);
+        rule.setServiceProviderTypeId(owner); rule.setOptionId(optionId);
         apply(rule, request);
         return response(rules.save(rule));
     }
 
     @Transactional
     public MapMarkerRuleResponse update(Long serviceTypeId, Long optionId, Long ruleId, MapMarkerRuleRequest request) {
-        requireOption(serviceTypeId, optionId, true);
-        var rule = requireRule(serviceTypeId, optionId, ruleId);
+        Long owner = requireOption(serviceTypeId, optionId, true);
+        var rule = requireRule(owner, optionId, ruleId);
         apply(rule, request);
         return response(rules.save(rule));
     }
 
     @Transactional
     public void delete(Long serviceTypeId, Long optionId, Long ruleId) {
-        requireOption(serviceTypeId, optionId, true);
-        rules.delete(requireRule(serviceTypeId, optionId, ruleId));
+        Long owner = requireOption(serviceTypeId, optionId, true);
+        rules.delete(requireRule(owner, optionId, ruleId));
     }
 
-    private void requireOption(Long serviceTypeId, Long optionId, boolean lock) {
+    private Long requireOption(Long serviceTypeId, Long optionId, boolean lock) {
         var option = (lock ? options.findLockedById(optionId)
                 : options.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId))
                 .orElseThrow(() -> new ResourceNotFoundException("Service option not found"));
         if (option.getServiceTypes().stream().noneMatch(l -> serviceTypeId.equals(l.getServiceProviderTypeId()))) {
             throw new ResourceNotFoundException("Service option not found for this service");
         }
+        return option.getServiceProviderTypeId();
     }
 
     private ServiceOptionMapMarkerRule requireRule(Long serviceTypeId, Long optionId, Long ruleId) {

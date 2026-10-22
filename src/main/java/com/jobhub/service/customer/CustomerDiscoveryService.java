@@ -99,7 +99,7 @@ public class CustomerDiscoveryService {
         }
         List<Long> requiredSkills = request.requiredSkillIds() == null ? List.of() : request.requiredSkillIds();
         Set<Long> allowedSkills = new HashSet<>();
-        configuredSkills.findAllByServiceProviderTypeIdOrderByNameAsc(request.serviceTypeId()).forEach(s -> allowedSkills.add(s.getSkillId()));
+        configuredSkills.findAllByServiceProviderTypeIdOrderByNameAsc(option.getServiceProviderTypeId()).forEach(s -> allowedSkills.add(s.getSkillId()));
         if (!allowedSkills.containsAll(requiredSkills)) throw new IllegalArgumentException("Skill is not configured for this service");
         LocalDateTime start = request.startAt().atZoneSameInstant(zone).toLocalDateTime();
         LocalDateTime end = endAt.atZoneSameInstant(zone).toLocalDateTime();
@@ -108,7 +108,7 @@ public class CustomerDiscoveryService {
         requireUnambiguous(zone, start, end);
         double radius = request.radiusKm() == null ? 50 : request.radiusKm().doubleValue();
         List<Candidate> candidates = new ArrayList<>();
-        for (var assignment : assignments.findAllByServiceProviderTypeId(request.serviceTypeId())) {
+        for (var assignment : sharedRegistrations(option, request.marketId())) {
             if (!availability.qualified(assignment, option, request.marketId()) || !availability.scheduled(assignment, start, end)) continue;
             List<String> spoken = languages.findAllByAssignmentIdOrderByLanguageCodeAsc(assignment.getAssignmentId())
                     .stream().map(ProviderServiceLanguage::getLanguageCode).toList();
@@ -161,6 +161,20 @@ public class CustomerDiscoveryService {
                 option.getProviderSelectionMode(), count, distinct < count ? "NO_AVAILABLE_PROVIDERS" : "AVAILABLE",
                 candidates.size(), page, size, until < candidates.size(),
                 distinct < count ? List.of() : candidates.subList(from, until));
+    }
+
+    private List<ServiceProviderTypeAssignment> sharedRegistrations(ServiceOption option, Long marketId) {
+        LinkedHashSet<Long> services = new LinkedHashSet<>();
+        services.add(option.getServiceProviderTypeId());
+        option.getServiceTypes().stream().map(ServiceTypeOption::getServiceProviderTypeId)
+                .sorted().forEach(services::add);
+        Map<Long, ServiceProviderTypeAssignment> registrations = new LinkedHashMap<>();
+        for (Long serviceId : services) {
+            assignments.findAllByServiceProviderTypeId(serviceId).stream()
+                    .filter(a -> availability.qualified(a, option, marketId))
+                    .forEach(a -> registrations.putIfAbsent(a.getServiceProviderId(), a));
+        }
+        return List.copyOf(registrations.values());
     }
     public static void requireUnambiguous(ZoneId zone, LocalDateTime start, LocalDateTime end) {
         var transition = zone.getRules().nextTransition(start.atZone(zone).toInstant().minusNanos(1));

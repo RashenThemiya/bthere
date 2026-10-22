@@ -82,6 +82,8 @@ class ServiceCustomFieldServiceTest {
     @BeforeEach
     void typeExists() {
         lenient().when(typeRepository.findById(1L)).thenReturn(Optional.of(new ServiceProviderType()));
+        activeOption(12L);
+        activeOption(13L);
     }
 
     private ServiceCustomFieldRequest request(String options) throws Exception {
@@ -94,10 +96,49 @@ class ServiceCustomFieldServiceTest {
     private void activeOption(long id) {
         ServiceOption option = new ServiceOption();
         option.setOptionId(id);
+        option.setServiceProviderTypeId(1L);
         option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(1L, 0, "ACTIVE"));
         option.setStatus("ACTIVE");
-        when(optionRepository.findByOptionIdAndServiceProviderTypeId(id, 1L))
+        lenient().when(optionRepository.findByOptionIdAndServiceProviderTypeId(id, 1L))
                 .thenReturn(Optional.of(option));
+    }
+
+    @Test void linkedServiceCreatesAndReadsTheSameOptionOwnedField() throws Exception {
+        var option = optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 1L).orElseThrow();
+        option.getServiceTypes().add(new ServiceTypeOption(2L, 0, "ACTIVE"));
+        when(typeRepository.findById(2L)).thenReturn(Optional.of(new ServiceProviderType()));
+        when(optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 2L)).thenReturn(Optional.of(option));
+        when(fieldRepository.save(any())).thenAnswer(i -> {
+            ServiceCustomField field = i.getArgument(0); field.setFieldId(25L); return field;
+        });
+        var result = service.create(2L, request("\"optionIds\":[12]"));
+        assertThat(result.serviceTypeId()).isEqualTo(1L);
+        assertThat(result.optionIds()).containsExactly(12L);
+        var saved = org.mockito.ArgumentCaptor.forClass(ServiceCustomField.class);
+        verify(fieldRepository).save(saved.capture());
+        assertThat(saved.getValue().getServiceProviderTypeId()).isEqualTo(1L);
+        when(fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(1L))
+                .thenReturn(List.of(saved.getValue()));
+        assertThat(service.listForOption(2L, 12L, false)).containsExactly(result);
+    }
+
+    @Test void linkedAssignmentCanSubmitAnInheritedCommonRequirementWithoutCopyingItsField() {
+        var option=optionRepository.findByOptionIdAndServiceProviderTypeId(12L,1L).orElseThrow();
+        option.getServiceTypes().add(new ServiceTypeOption(2L,0,"ACTIVE"));
+        when(optionRepository.findByOptionIdAndServiceProviderTypeId(12L,2L)).thenReturn(Optional.of(option));
+        var provider=new ServiceProvider();provider.setServiceProviderId(15L);
+        when(profileService.findByUserId(5L)).thenReturn(provider);
+        var assignment=new ServiceProviderTypeAssignment();assignment.setAssignmentId(14L);
+        assignment.setServiceProviderId(15L);assignment.setServiceProviderTypeId(2L);
+        when(assignmentRepository.findByAssignmentIdAndServiceProviderId(14L,15L)).thenReturn(Optional.of(assignment));
+        var registration=new ProviderServiceOption();registration.setOptionId(12L);
+        when(providerOptionRepository.findAllByAssignmentId(14L)).thenReturn(List.of(registration));
+        var field=new ServiceCustomField();field.setFieldId(25L);field.setServiceProviderTypeId(1L);
+        field.setScope("PROVIDER_REQUIREMENT");field.setStatus("ACTIVE");field.setCode("EXPERIENCE");field.setFieldType("NUMBER");
+        when(fieldRepository.findAllByFieldIdIn(any())).thenReturn(List.of(field));
+        service.saveSubmissions(5L,14L,new com.jobhub.dto.provider.ProviderCustomSubmissionRequest(List.of(
+                new com.jobhub.dto.provider.ProviderCustomSubmissionRequest.Entry(25L,new com.fasterxml.jackson.databind.node.IntNode(1)))));
+        verify(submissionRepository).save(argThat(a -> a.getFieldId().equals(25L) && a.getAssignmentId().equals(14L)));
     }
 
     @Test
@@ -333,6 +374,8 @@ class ServiceCustomFieldServiceTest {
         ServiceCustomField field = new ServiceCustomField();
         field.setFieldId(25L);
         field.setOptionIds(Set.of(12L, 13L));
+        field.setScope("PROVIDER_REQUIREMENT"); field.setStatus("ACTIVE");
+        when(fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(1L)).thenReturn(List.of(field));
         when(fieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
                 1L, "PROVIDER_REQUIREMENT", "ACTIVE")).thenReturn(List.of(field));
         var options = List.of(optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 1L).orElseThrow(),

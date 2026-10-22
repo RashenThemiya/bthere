@@ -318,7 +318,10 @@ public class ProviderTypeService {
             throw new IllegalArgumentException("One or more document types are invalid or inactive");
         }
 
-        requirementRepository.deleteAllByServiceProviderTypeId(providerTypeId);
+        // Service-wide replacement must not erase independently shared option documents.
+        requirementRepository.deleteAll(requirementRepository.findAllByServiceProviderTypeId(providerTypeId)
+                .stream().filter(r -> r.getOptionId() == null).toList());
+        requirementRepository.flush();
         for (Long documentTypeId : request.documentTypeIds()) {
             ServiceTypeDocumentRequirement requirement =
                     new ServiceTypeDocumentRequirement();

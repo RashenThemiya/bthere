@@ -166,6 +166,13 @@ public class ServiceSetupService {
             throw new IllegalArgumentException(
                     "One or more document requirement options are invalid or inactive");
         }
+        for (Long optionId : optionIds) {
+            var option = optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId).orElseThrow();
+            if (!serviceTypeId.equals(option.getServiceProviderTypeId())) {
+                throw new IllegalArgumentException("Configure shared option documents through /admin/service-options/"
+                        + optionId + "/document-requirements");
+            }
+        }
 
         Set<String> skillNames = new HashSet<>();
         for (ServiceSetupRequest.SkillRequirement item : request.skills()) {
@@ -174,7 +181,9 @@ public class ServiceSetupService {
             }
         }
 
-        requirementRepository.deleteAllByServiceProviderTypeId(serviceTypeId);
+        // Omitted options keep their shared requirements; clear explicitly through the option API.
+        requirementRepository.deleteAll(requirementRepository.findAllByServiceProviderTypeId(serviceTypeId)
+                .stream().filter(r -> r.getOptionId() == null || optionIds.contains(r.getOptionId())).toList());
         requirementRepository.flush();
         for (ServiceSetupRequest.DocumentRequirement item : request.documents()) {
             ServiceTypeDocumentRequirement requirement = new ServiceTypeDocumentRequirement();

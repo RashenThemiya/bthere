@@ -132,7 +132,7 @@ public class CustomerBookingService {
         BigDecimal pricingLongitude = "ROUTE_BASED".equals(schedulingModel(option))
                 ? route.destinationLongitude() : location.longitude();
         ServicePricingService.Price price = pricingService.calculate(
-                market.getMarketId(), request.serviceTypeId(), request.optionId(),
+                market.getMarketId(), option.getServiceProviderTypeId(), request.optionId(),
                 schedulingModel(option), time.start(), time.end(), route.distanceKm(),
                 pricingLatitude, pricingLongitude, request.pricingSelections());
         for (var selected : assignments) {
@@ -243,11 +243,20 @@ public class CustomerBookingService {
     private Map<ServiceCustomField, JsonNode> validateAnswers(
             Long userId, Long serviceTypeId, Long optionId,
             List<CreateBookingRequest.Answer> submitted) {
-        List<ServiceCustomField> applicable = customFieldRepository
+        Long owner = optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"))
+                .getServiceProviderTypeId();
+        Map<Long, ServiceCustomField> definitions = new LinkedHashMap<>();
+        customFieldRepository
                 .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
-                        serviceTypeId, "BOOKING_FIELD", "ACTIVE").stream()
+                        owner, "BOOKING_FIELD", "ACTIVE").stream()
                 .filter(field -> field.appliesToOptions(Set.of(optionId)))
-                .toList();
+                .forEach(f -> definitions.put(f.getFieldId(), f));
+        customFieldRepository.findSharedForOption(optionId).stream()
+                .filter(f -> "BOOKING_FIELD".equals(f.getScope()) && "ACTIVE".equals(f.getStatus())
+                        && f.appliesToOptions(Set.of(optionId)))
+                .forEach(f -> definitions.put(f.getFieldId(), f));
+        List<ServiceCustomField> applicable = List.copyOf(definitions.values());
         Map<Long, ServiceCustomField> byId = new HashMap<>();
         Map<String, ServiceCustomField> byCode = new HashMap<>();
         applicable.forEach(field -> {
@@ -441,20 +450,25 @@ public class CustomerBookingService {
 
     private ServiceProviderTypeAssignment requireApprovedProvider(
             Long providerId, Long serviceTypeId, Long optionId) {
-        ServiceProviderTypeAssignment assignment = assignmentRepository
-                .findByServiceProviderIdAndServiceProviderTypeId(providerId, serviceTypeId)
-                .filter(item -> "ACTIVE".equals(item.getStatus())
-                        && "APPROVED".equals(item.getVerificationStatus()))
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Provider " + providerId + " is not approved for this service"));
-        ProviderServiceOption selected = providerOptionRepository
-                .findByAssignmentIdAndOptionId(assignment.getAssignmentId(), optionId)
-                .filter(item -> "APPROVED".equals(item.getVerificationStatus())
-                        && "ACTIVE".equals(item.getProviderStatus())
-                        && "ACTIVE".equals(item.getAdminStatus()))
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Provider " + providerId + " is not active for this service option"));
-        return assignment;
+        ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
+        LinkedHashSet<Long> services = new LinkedHashSet<>();
+        services.add(option.getServiceProviderTypeId());
+        option.getServiceTypes().stream().map(ServiceTypeOption::getServiceProviderTypeId)
+                .sorted().forEach(services::add);
+        for (Long id : services) {
+            var assignment = assignmentRepository.findByServiceProviderIdAndServiceProviderTypeId(providerId, id)
+                    .filter(item -> "ACTIVE".equals(item.getStatus())
+                            && "ACTIVE".equals(item.getProviderStatus()) && "ACTIVE".equals(item.getAdminStatus())
+                            && "APPROVED".equals(item.getVerificationStatus()));
+            if (assignment.isEmpty()) continue;
+            if (providerOptionRepository.findByAssignmentIdAndOptionId(assignment.get().getAssignmentId(), optionId)
+                    .filter(item -> "APPROVED".equals(item.getVerificationStatus())
+                            && "ACTIVE".equals(item.getProviderStatus()) && "ACTIVE".equals(item.getAdminStatus())).isPresent()) {
+                return assignment.get();
+            }
+        }
+        throw new IllegalArgumentException("Provider " + providerId + " is not active for this shared service option");
     }
 
     private void saveProviderAssignments(Long jobId, List<Long> providerIds) {

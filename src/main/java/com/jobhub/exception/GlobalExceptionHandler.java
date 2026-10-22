@@ -14,6 +14,13 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ProblemDetail handleConstraintConflict(org.springframework.dao.DataIntegrityViolationException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "A conflicting record already exists or a referenced record is still in use; reload before retrying");
+        problem.setTitle("Record conflict");
+        return problem;
+    }
     @ExceptionHandler(PaymentUnavailableException.class)
     public ProblemDetail handlePaymentUnavailable(PaymentUnavailableException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());

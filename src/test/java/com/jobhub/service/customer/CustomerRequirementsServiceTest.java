@@ -59,6 +59,7 @@ class CustomerRequirementsServiceTest {
         lenient().when(services.findById(3L)).thenReturn(Optional.of(type));
         var option = new ServiceOption(); option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(3L, 0, "ACTIVE"));
         option.setStatus("ACTIVE");
+        option.setOptionId(12L); option.setServiceProviderTypeId(3L);
         lenient().when(options.findByOptionIdAndServiceProviderTypeId(12L, 3L)).thenReturn(Optional.of(option));
     }
 

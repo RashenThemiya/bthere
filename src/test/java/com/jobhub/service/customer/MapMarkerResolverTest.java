@@ -19,6 +19,8 @@ class MapMarkerResolverTest {
     ServiceOption option() {
         var option = new ServiceOption();
         option.setOptionId(12L);
+        option.setServiceProviderTypeId(1L);
+        option.setMapMarkerFieldId(45L);
         option.getServiceTypes().add(new ServiceTypeOption(1L, 0, "ACTIVE"));
         option.serviceLink(1L).setMapMarkerFieldId(45L);
         return option;
@@ -140,12 +142,14 @@ class MapMarkerResolverTest {
         assertThat(resolver.resolve(1L, option, List.of(privateField), List.of(filter(45, "[\"CAR\"]"))).source()).isEqualTo("OPTION");
     }
 
-    @Test void sharedOptionUsesEachServiceOwnMarkerFieldAndFallback() throws Exception {
+    @Test void sharedOptionUsesOneMarkerFieldAcrossEveryServiceLink() throws Exception {
         var option = option(); option.getServiceTypes().add(new ServiceTypeOption(2L, 0, "ACTIVE"));
         option.serviceLink(2L).setMapMarkerFieldId(55L);
+        option.setMapMarkerFieldId(55L);
         var field = field(55, "[{\"value\":\"BIKE\",\"mapMarkerIcon\":{\"key\":\"bike.png\",\"url\":\"https://example.com/bike.png\"}}]");
         var filters = List.of(filter(55, "[\"BIKE\"]"));
         assertThat(resolver.resolve(2L, option, List.of(field), filters).source()).isEqualTo("CHOICE");
-        assertThat(resolver.resolve(1L, option, List.of(field), filters).source()).isEqualTo("DEFAULT");
+        assertThat(resolver.resolve(1L, option, List.of(field), filters)).isEqualTo(
+                resolver.resolve(2L, option, List.of(field), filters));
     }
 }

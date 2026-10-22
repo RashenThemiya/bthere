@@ -239,6 +239,10 @@ public class CustomerRequirementsService {
     @Transactional
     public Rule configureRule(Target target, AgeRule request) {
         validateTarget(target);
+        if ("OPTION".equals(target.scope())) target = new Target("OPTION",
+                options.findByOptionIdAndServiceProviderTypeId(target.optionId(), target.serviceTypeId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Service option not found"))
+                        .getServiceProviderTypeId(), target.optionId());
         if (request.enabled()) {
             if (request.minimumAge() == null && request.requiredCodes().isEmpty()) {
                 throw new IllegalArgumentException("Enabled rule requires minimumAge or requiredCodes");
@@ -415,6 +419,11 @@ public class CustomerRequirementsService {
                 new Target(r.getScope(), r.getServiceTypeId(), r.getOptionId()), serviceId, optionId)).toList();
     }
     private boolean matches(Target t, Long serviceId, Long optionId) {
+        if (optionId != null && "OPTION".equals(t.scope())) return optionId.equals(t.optionId());
+        if (optionId != null && serviceId != null) serviceId = options
+                .findByOptionIdAndServiceProviderTypeId(optionId, serviceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Service option not found"))
+                .getServiceProviderTypeId();
         return "GLOBAL".equals(t.scope()) || Objects.equals(t.serviceTypeId(), serviceId) && serviceId != null
                 && ("SERVICE".equals(t.scope()) || optionId != null && Objects.equals(t.optionId(), optionId));
     }

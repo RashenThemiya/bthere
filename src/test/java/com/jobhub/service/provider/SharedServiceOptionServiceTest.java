@@ -98,7 +98,7 @@ class SharedServiceOptionServiceTest {
         verify(options, never()).save(any());
     }
 
-    @Test void markerIconsAndFieldSelectionUpdateIndependentlyForEachLinkedService() throws Exception {
+    @Test void markerIconsAndFieldSelectionAreSharedDespiteLegacyLinkMetadata() throws Exception {
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         var option = option();
         option.getServiceTypes().add(new ServiceTypeOption(2L, 8, "ACTIVE"));
@@ -119,6 +119,8 @@ class SharedServiceOptionServiceTest {
         assertThat(response.icon().key()).isEqualTo("card.png");
         assertThat(response.mapMarkerIcon().key()).isEqualTo("marker.png");
         assertThat(response.mapMarkerFieldId()).isEqualTo(45);
+        assertThat(option.getMapMarkerFieldId()).isEqualTo(45);
+        assertThat(response.configurationServiceTypeId()).isEqualTo(1L);
         assertThat(option.serviceLink(2L).getMapMarkerFieldId()).isEqualTo(55);
 
         var cleared = mapper.readValue("""

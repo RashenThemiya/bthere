@@ -1,5 +1,10 @@
 # Shared service options
 
+23 October update: option configuration, prices, markers and provider enrollment are
+now shared too. The authoritative contract and migration prerequisites are in
+[FULLY_SHARED_OPTIONS_API.md](FULLY_SHARED_OPTIONS_API.md). Older service-local
+descriptions below document the earlier implementation.
+
 An option can belong to multiple main services using the same option ID. Its name,
 description, media, responsibilities, delivery, booking and payment configuration are
 shared. Status and display order belong to each service–option link.

@@ -54,9 +54,9 @@ public class ServiceOptionService {
         option.setStatus("ACTIVE");
         option.getServiceTypes().add(new ServiceTypeOption(serviceTypeId, option.getDisplayOrder(), "ACTIVE"));
         option = optionRepository.save(option);
-        customFieldService.saveForOption(serviceTypeId, option.getOptionId(), request.dynamicFields());
+        customFieldService.saveForOption(option.getServiceProviderTypeId(), option.getOptionId(), request.dynamicFields());
         validateMarkerField(serviceTypeId, option.getOptionId(), request.mapMarkerFieldId());
-        option.serviceLink(serviceTypeId).setMapMarkerFieldId(request.mapMarkerFieldId());
+        option.setMapMarkerFieldId(request.mapMarkerFieldId());
         return response(option, serviceTypeId, true);
     }
 
@@ -76,9 +76,9 @@ public class ServiceOptionService {
         apply(option, request);
         option.serviceLink(serviceTypeId).setDisplayOrder(option.getDisplayOrder());
         option = optionRepository.save(option);
-        customFieldService.saveForOption(serviceTypeId, optionId, request.dynamicFields());
+        customFieldService.saveForOption(option.getServiceProviderTypeId(), optionId, request.dynamicFields());
         validateMarkerField(serviceTypeId, optionId, request.mapMarkerFieldId());
-        option.serviceLink(serviceTypeId).setMapMarkerFieldId(request.mapMarkerFieldId());
+        option.setMapMarkerFieldId(request.mapMarkerFieldId());
         return response(option, serviceTypeId, true);
     }
 
@@ -111,8 +111,8 @@ public class ServiceOptionService {
                 option.getServiceTypes().stream()
                         .sorted(Comparator.comparing(ServiceTypeOption::getServiceProviderTypeId))
                         .map(link -> new SharedServiceOptionResponse.ServiceLink(
-                                link.getServiceProviderTypeId(), link.getDisplayOrder(), link.getStatus(), link.getMapMarkerFieldId()))
-                        .toList()));
+                                link.getServiceProviderTypeId(), link.getDisplayOrder(), link.getStatus(), option.getMapMarkerFieldId()))
+                        .toList(), option.getServiceProviderTypeId()));
     }
 
     @Transactional
@@ -134,7 +134,7 @@ public class ServiceOptionService {
         }
         if (request.mapMarkerFieldId() != null) {
             validateMarkerField(serviceTypeId, optionId, request.mapMarkerFieldId());
-            option.serviceLink(serviceTypeId).setMapMarkerFieldId(request.mapMarkerFieldId());
+            option.setMapMarkerFieldId(request.mapMarkerFieldId());
         }
         return response(optionRepository.save(option), serviceTypeId, true);
     }
@@ -161,6 +161,12 @@ public class ServiceOptionService {
         if (options.size() != ids.size()) {
             throw new IllegalArgumentException("One or more service options are invalid or inactive");
         }
+        for (Long id : ids) {
+            providerOptionRepository.findByProviderIdAndOptionId(assignment.getServiceProviderId(), id)
+                    .filter(item -> !assignmentId.equals(item.getAssignmentId()))
+                    .ifPresent(item -> { throw new ConflictException("This option is already registered; reuse assignment "
+                            + item.getAssignmentId() + " instead of submitting it again"); });
+        }
 
         Map<Long, ProviderServiceOption> existing = new HashMap<>();
         providerOptionRepository.findAllByAssignmentId(assignmentId)
@@ -171,6 +177,7 @@ public class ServiceOptionService {
             if (!existing.containsKey(id)) {
                 ProviderServiceOption item = new ProviderServiceOption();
                 item.setAssignmentId(assignmentId);
+                item.setProviderId(assignment.getServiceProviderId());
                 item.setOptionId(id);
                 item.setProviderStatus("ACTIVE");
                 item.setAdminStatus("PENDING");
@@ -180,6 +187,20 @@ public class ServiceOptionService {
         }
         approvalService.refreshProviderApprovals(assignment.getServiceProviderId());
         return providerOptions(assignmentId);
+    }
+
+    @Transactional(readOnly = true)
+    public SharedProviderOptionRegistrationResponse sharedRegistration(Long userId, Long optionId) {
+        ServiceProvider provider = profileService.findByUserId(userId);
+        ProviderServiceOption registration = providerOptionRepository
+                .findByProviderIdAndOptionId(provider.getServiceProviderId(), optionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shared option is not registered for this provider"));
+        ServiceProviderTypeAssignment assignment = assignmentRepository
+                .findByAssignmentIdAndServiceProviderId(registration.getAssignmentId(), provider.getServiceProviderId())
+                .orElseThrow(() -> new ResourceNotFoundException("Provider service not found"));
+        return new SharedProviderOptionRegistrationResponse(optionId, registration.getProviderOptionId(),
+                assignment.getAssignmentId(), assignment.getServiceProviderTypeId(),
+                registration.getProviderStatus(), registration.getAdminStatus(), registration.getVerificationStatus());
     }
 
     @Transactional(readOnly = true)
@@ -415,7 +436,7 @@ public class ServiceOptionService {
                 ServiceContentSupport.responsibilities(item.getResponsibilities()),
                 customFieldService.listForOption(serviceTypeId,
                         item.getOptionId(), includeInactiveFields),
-                ServiceContentSupport.mapMarkerIcon(item.getMedia()), link.getMapMarkerFieldId());
+                ServiceContentSupport.mapMarkerIcon(item.getMedia()), item.getMapMarkerFieldId(), item.getServiceProviderTypeId());
     }
 
     private ServiceOptionResponse.DeliveryModeConfiguration deliveryConfiguration(

@@ -13,12 +13,13 @@ import java.util.List;
 
 public interface ProviderServiceOptionRepository extends JpaRepository<ProviderServiceOption, Long> {
     List<ProviderServiceOption> findAllByAssignmentId(Long assignmentId);
+    Optional<ProviderServiceOption> findByProviderIdAndOptionId(Long providerId, Long optionId);
     List<ProviderServiceOption> findAllByVerificationStatus(String status);
     Page<ProviderServiceOption> findAllByVerificationStatus(String status, Pageable pageable);
     List<ProviderServiceOption> findAllByOptionIdIn(Collection<Long> optionIds);
     void deleteAllByAssignmentId(Long assignmentId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    // Also used by read-only discovery. Booking capacity is serialized with provider locks.
     Optional<ProviderServiceOption> findByAssignmentIdAndOptionId(Long assignmentId, Long optionId);
     long countByVerificationStatus(String status);
 }

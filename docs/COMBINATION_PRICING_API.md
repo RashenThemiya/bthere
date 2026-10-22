@@ -1,5 +1,9 @@
 # Pricing based on provider requirement choices
 
+23 October update: rates and condition fields are shared by market + option across
+linked main services. See [FULLY_SHARED_OPTIONS_API.md](FULLY_SHARED_OPTIONS_API.md)
+for canonical ownership, linked-offering behavior and required migration.
+
 Configure one rate for a combination such as Caregiver → Ride → Car + Male driver.
 This uses existing SELECT/MULTI_SELECT provider requirement choice values; no
 duplicate vehicle catalog or separate variant entity is required. Icons and labels

@@ -43,6 +43,8 @@ public class ServiceOption extends AuditedEntity {
     private String description;
     private Integer displayOrder;
     private String status;
+    // Shared by every service link; link rows retain only presentation order/status.
+    private Long mapMarkerFieldId;
     private String schedulingModel = "TIME_BASED";
     private Integer routeAverageSpeedKmh;
     private boolean locationEnabled;

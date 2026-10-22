@@ -75,12 +75,14 @@ public class MarketServiceOfferingService {
     @Transactional
     public JobRateResponse addRate(Long actorId, Long offeringId, CreateJobRateRequest request) {
         MarketServiceOffering offering = requireOfferingForPricing(offeringId);
+        lockSharedOption(request.optionId());
         ServiceOption option = validateRate(offering, request);
         if (request.effectiveFrom() != null && request.effectiveTo() != null
                 && request.effectiveTo().isBefore(request.effectiveFrom()))
             throw new IllegalArgumentException("Effective-to cannot be before effective-from");
         JobRate rate = new JobRate();
-        rate.setMarketId(offering.getMarketId()); rate.setServiceProviderTypeId(offering.getServiceProviderTypeId());
+        rate.setMarketId(offering.getMarketId()); rate.setServiceProviderTypeId(
+                option == null ? offering.getServiceProviderTypeId() : option.getServiceProviderTypeId());
         rate.setServiceOptionId(option == null ? null : option.getOptionId());
         rate.setCurrencyCode(offering.getCurrencyCode()); rate.setBillingType(request.billingType().trim().toUpperCase());
         rate.setDurationMinutes(request.durationMinutes()); rate.setRate(request.rate());
@@ -96,7 +98,7 @@ public class MarketServiceOfferingService {
     @Transactional(readOnly = true)
     public Page<JobRateResponse> rates(Long offeringId, Pageable pageable) {
         MarketServiceOffering item = requireOffering(offeringId);
-        return rateRepository.findAllByMarketIdAndServiceProviderTypeId(
+        return rateRepository.findSharedRates(
                 item.getMarketId(), item.getServiceProviderTypeId(), pageable).map(this::rateResponse);
     }
 
@@ -104,7 +106,7 @@ public class MarketServiceOfferingService {
     public JobRateResponse updateRate(Long actorId, Long offeringId, Long rateId,
                                       UpdateJobRateRequest request) {
         MarketServiceOffering offering = requireOfferingForPricing(offeringId);
-        JobRate rate = requireRate(offering, rateId);
+        JobRate rate = requireRate(offering, rateId, request.optionId());
         ServiceOption option = validateUpdateRate(offering, request);
         if (request.effectiveTo() != null
                 && request.effectiveTo().isBefore(request.effectiveFrom()))
@@ -112,6 +114,7 @@ public class MarketServiceOfferingService {
         var old = rateResponse(rate);
         rate.setBillingType(request.billingType().trim().toUpperCase());
         rate.setServiceOptionId(option == null ? null : option.getOptionId());
+        rate.setServiceProviderTypeId(option == null ? offering.getServiceProviderTypeId() : option.getServiceProviderTypeId());
         rate.setDurationMinutes(request.durationMinutes()); rate.setRate(request.rate());
         applyPricing(rate, request);
         rate.setEffectiveFrom(request.effectiveFrom());
@@ -128,7 +131,7 @@ public class MarketServiceOfferingService {
         if (!Set.of("ACTIVE", "INACTIVE").contains(status))
             throw new IllegalArgumentException("Status must be ACTIVE or INACTIVE");
         MarketServiceOffering offering = requireOfferingForPricing(offeringId);
-        JobRate rate = requireRate(offering, rateId);
+        JobRate rate = requireRate(offering, rateId, null);
         String old = rate.getStatus(); rate.setStatus(status);
         if ("ACTIVE".equals(status)) pricingRules.configure(rate, pricingRules.conditions(rate));
         rateRepository.save(rate);
@@ -149,11 +152,24 @@ public class MarketServiceOfferingService {
         return offeringRepository.findLockedById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Market service was not found"));
     }
-    private JobRate requireRate(MarketServiceOffering offering, Long id) {
-        JobRate rate = rateRepository.findById(id)
+    private void lockSharedOption(Long optionId) {
+        if (optionId != null) optionRepository.findLockedById(optionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Service option was not found"));
+    }
+    private JobRate requireRate(MarketServiceOffering offering, Long id, Long targetOptionId) {
+        JobRate rate = rateRepository.findLockedById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Job rate was not found"));
+        // Lock before ordinary reads establish a MySQL repeatable-read snapshot.
+        // Stable ordering also covers updates which move a rate between options.
+        var optionIds = new java.util.TreeSet<Long>();
+        if (rate.getServiceOptionId() != null) optionIds.add(rate.getServiceOptionId());
+        if (targetOptionId != null) optionIds.add(targetOptionId);
+        optionIds.forEach(this::lockSharedOption);
+        boolean shared = rate.getServiceOptionId() != null && optionRepository
+                .findByOptionIdAndServiceProviderTypeId(rate.getServiceOptionId(), offering.getServiceProviderTypeId())
+                .filter(option -> option.getServiceProviderTypeId().equals(rate.getServiceProviderTypeId())).isPresent();
         if (!rate.getMarketId().equals(offering.getMarketId())
-                || !rate.getServiceProviderTypeId().equals(offering.getServiceProviderTypeId()))
+                || !shared && !rate.getServiceProviderTypeId().equals(offering.getServiceProviderTypeId()))
             throw new ResourceNotFoundException("Job rate was not found for this market service");
         return rate;
     }

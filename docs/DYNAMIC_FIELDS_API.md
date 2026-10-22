@@ -1,5 +1,9 @@
 # Admin-managed service fields
 
+23 October update: option-scoped definitions/IDs are shared across linked services.
+See [FULLY_SHARED_OPTIONS_API.md](FULLY_SHARED_OPTIONS_API.md) for shared field APIs
+and provider answer/approval reuse. Service-common configuration remains distinct.
+
 This module lets Super Admin configure provider requirements and customer
 booking schemas without backend code changes.
 

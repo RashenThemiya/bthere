@@ -38,12 +38,33 @@ class MarketServiceOfferingServiceTest {
     @InjectMocks
     private MarketServiceOfferingService service;
 
+    @Test void creatingRateThroughLinkedOfferingStoresOneSharedOptionRate() {
+        var offering = offering(); offering.setServiceProviderTypeId(4L);
+        var option = new com.jobhub.entity.provider.ServiceOption();
+        option.setOptionId(44L); option.setServiceProviderTypeId(3L); option.setSchedulingModel("TIME_BASED");
+        option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(3L, 0, "ACTIVE"));
+        option.getServiceTypes().add(new com.jobhub.entity.provider.ServiceTypeOption(4L, 0, "ACTIVE"));
+        when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering));
+        when(optionRepository.findByOptionIdAndServiceProviderTypeId(44L, 4L)).thenReturn(Optional.of(option));
+        when(optionRepository.findLockedById(44L)).thenReturn(Optional.of(option));
+        when(rateRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(i -> {
+            JobRate rate = i.getArgument(0); rate.setRateId(9L); return rate;
+        });
+        var response = service.addRate(1L, 7L, new com.jobhub.dto.market.CreateJobRateRequest(
+                "HOURLY", 60, new BigDecimal("1000"), null, null, 44L,
+                null, null, null, null, null, null, null));
+        assertThat(response.serviceTypeId()).isEqualTo(3L);
+        assertThat(response.optionId()).isEqualTo(44L);
+        verify(optionRepository).findLockedById(44L);
+    }
+
     @Test
     void updateIsACompleteReplacementAndNullOptionClearsExistingOption() {
         MarketServiceOffering offering = offering();
         JobRate rate = rate();
         when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering));
-        when(rateRepository.findById(9L)).thenReturn(Optional.of(rate));
+        when(rateRepository.findLockedById(9L)).thenReturn(Optional.of(rate));
+        when(optionRepository.findLockedById(44L)).thenReturn(Optional.of(new com.jobhub.entity.provider.ServiceOption()));
 
         LocalDateTime effectiveFrom = LocalDateTime.of(2026, 11, 1, 0, 0);
         UpdateJobRateRequest request = new UpdateJobRateRequest(
@@ -69,7 +90,8 @@ class MarketServiceOfferingServiceTest {
         MarketServiceOffering offering = offering();
         JobRate rate = rate();
         when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering));
-        when(rateRepository.findById(9L)).thenReturn(Optional.of(rate));
+        when(rateRepository.findLockedById(9L)).thenReturn(Optional.of(rate));
+        when(optionRepository.findLockedById(44L)).thenReturn(Optional.of(new com.jobhub.entity.provider.ServiceOption()));
 
         UpdateJobRateRequest request = new UpdateJobRateRequest(
                 "HOURLY", 60, new BigDecimal("1000"),

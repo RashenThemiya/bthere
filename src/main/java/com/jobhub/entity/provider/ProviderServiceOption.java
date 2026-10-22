@@ -9,13 +9,16 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "provider_service_option", uniqueConstraints = @UniqueConstraint(
-        name = "uk_provider_assignment_option", columnNames = {"assignment_id", "option_id"}))
+@Table(name = "provider_service_option", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_provider_assignment_option", columnNames = {"assignment_id", "option_id"}),
+        @UniqueConstraint(name = "uk_provider_shared_option", columnNames = {"provider_id", "option_id"})})
 @Getter @Setter @NoArgsConstructor
 public class ProviderServiceOption extends AuditedEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long providerOptionId;
     private Long assignmentId;
+    @Column(nullable = false)
+    private Long providerId;
     private Long optionId;
     private String providerStatus;
     private String adminStatus;

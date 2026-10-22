@@ -78,6 +78,29 @@ class CustomerDiscoveryServiceTest {
         assertThat(result.candidates().get(0).mapPoint()).isNull();
     }
 
+    @Test void linkedServiceReturnsTheSameRegistrationWithoutAnotherApprovalOrSchedule() {
+        option.getServiceTypes().add(new ServiceTypeOption(4L, 7, "ACTIVE"));
+        when(options.findByOptionIdAndServiceProviderTypeId(12L, 4L)).thenReturn(Optional.of(option));
+        var original = search("ONLINE", null);
+        var linked = new Search(1L, 4L, 12L, "ONLINE", original.startAt(), original.endAt(),
+                null, null, null, null, List.of(), List.of(), 0, 20);
+        assertThat(service.search(25L, linked).candidates()).isEqualTo(service.search(25L, original).candidates());
+        verify(availability, atLeastOnce()).scheduled(eq(assignment), any(), any());
+        verify(areas, never()).findAllByAssignmentIdAndOptionIdAndDeliveryModeOrderByLocationNameAsc(any(), any(), any());
+    }
+
+    @Test void legacyDuplicateAssignmentsCannotInflateProviderOrTeamCounts() {
+        option.getServiceTypes().add(new ServiceTypeOption(4L, 7, "ACTIVE"));
+        var duplicate = new ServiceProviderTypeAssignment(); duplicate.setAssignmentId(99L);
+        duplicate.setServiceProviderId(15L); duplicate.setServiceProviderTypeId(4L);
+        when(assignments.findAllByServiceProviderTypeId(4L)).thenReturn(List.of(duplicate));
+        when(availability.qualified(duplicate, option, 1L)).thenReturn(true);
+        var result = service.search(25L, search("ONLINE", null));
+        assertThat(result.totalCandidates()).isEqualTo(1);
+        assertThat(result.candidates()).extracting(Candidate::assignmentId).containsExactly(14L);
+        verify(availability, never()).scheduled(eq(duplicate), any(), any());
+    }
+
     @Test void mapResultsIncludeConfiguredMarkerWithoutChangingProviderDetailsOrCoordinates() {
         var marker = new MapMarker("OPTION", new ServiceMediaPayload("ride.png", "https://example.com/ride.png", "Ride", 0), null, null);
         when(mapMarkerResolver.resolve(eq(3L), eq(option), anyList(), isNull())).thenReturn(marker);

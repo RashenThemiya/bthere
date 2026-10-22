@@ -75,6 +75,9 @@ class ProviderServiceApprovalServiceTest {
         ProviderServiceOption selected = new ProviderServiceOption();
         selected.setAssignmentId(7L);
         selected.setOptionId(30L);
+        var sharedOption = new com.jobhub.entity.provider.ServiceOption();
+        sharedOption.setOptionId(30L); sharedOption.setServiceProviderTypeId(20L);
+        when(optionRepository.findById(30L)).thenReturn(java.util.Optional.of(sharedOption));
 
         ServiceTypeDocumentRequirement common = requirement(20L, 1L, null);
         ServiceTypeDocumentRequirement optionSpecific = requirement(20L, 2L, 30L);
@@ -186,5 +189,30 @@ class ProviderServiceApprovalServiceTest {
         requirement.setMandatory(true);
         requirement.setRequiresApproval(true);
         return requirement;
+    }
+
+    @Test void sameSharedFieldReusesApprovalButAnotherFieldWithTheSameCodeDoesNot() {
+        var assignment=new ServiceProviderTypeAssignment();assignment.setAssignmentId(8L);
+        assignment.setServiceProviderId(10L);assignment.setServiceProviderTypeId(21L);
+        var registration=new ProviderServiceOption();registration.setAssignmentId(8L);registration.setOptionId(30L);
+        when(providerOptionRepository.findAllByAssignmentId(8L)).thenReturn(List.of(registration));
+        var option=new com.jobhub.entity.provider.ServiceOption();option.setOptionId(30L);option.setServiceProviderTypeId(20L);
+        when(optionRepository.findById(30L)).thenReturn(java.util.Optional.of(option));
+        var field=new ServiceCustomField();field.setFieldId(50L);field.setServiceProviderTypeId(20L);
+        field.setScope("PROVIDER_REQUIREMENT");field.setCode("EQUIPMENT");field.setFieldType("NUMBER");
+        field.setOptionIds(java.util.Set.of(30L));field.setReuseScope("ASSIGNMENT");
+        field.setRequired(true);field.setRequiresApproval(true);
+        when(customFieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                21L,"PROVIDER_REQUIREMENT","ACTIVE")).thenReturn(List.of());
+        when(customFieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                20L,"PROVIDER_REQUIREMENT","ACTIVE")).thenReturn(List.of(field));
+        var approved=new com.jobhub.entity.provider.ProviderCustomFieldSubmission();approved.setFieldId(50L);
+        approved.setReusableFieldType("NUMBER");approved.setVerificationStatus("APPROVED");
+        var unrelated=new com.jobhub.entity.provider.ProviderCustomFieldSubmission();unrelated.setFieldId(51L);
+        unrelated.setReusableFieldType("NUMBER");unrelated.setVerificationStatus("APPROVED");
+        when(customSubmissionRepository.findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
+                10L,"EQUIPMENT","APPROVED")).thenReturn(List.of(approved),List.of(unrelated));
+        assertThat(service.customRequirementsComplete(assignment)).isTrue();
+        assertThat(service.customRequirementsComplete(assignment)).isFalse();
     }
 }

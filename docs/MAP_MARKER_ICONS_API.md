@@ -1,5 +1,8 @@
 # Separate service icons and map marker icons
 
+23 October update: `mapMarkerFieldId` is now option-owned, not a link override.
+See [FULLY_SHARED_OPTIONS_API.md](FULLY_SHARED_OPTIONS_API.md) and its migration.
+
 `icon` remains the asset for cards, lists and selection controls. `mapMarkerIcon`
 is a separate asset used on maps. Provider photos do not determine marker icons.
 

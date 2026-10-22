@@ -45,6 +45,8 @@ public class CombinationPricingRules {
         }
         for (var selection : selections) {
             var field = fields.findByFieldIdAndServiceProviderTypeId(selection.fieldId(), serviceTypeId)
+                    .or(() -> fields.findById(selection.fieldId())
+                            .filter(f -> !f.effectiveOptionIds().isEmpty() && f.appliesToOptions(Set.of(optionId))))
                     .orElseThrow(() -> new IllegalArgumentException("Pricing field does not belong to this service"));
             if (!"ACTIVE".equals(field.getStatus()) || !"PROVIDER_REQUIREMENT".equals(field.getScope())
                     || field.getFieldType() == null || !Set.of("SELECT", "MULTI_SELECT").contains(field.getFieldType())

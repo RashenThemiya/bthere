@@ -24,6 +24,7 @@ class MapMarkerRuleServiceTest {
 
     void scope() throws Exception {
         var option = new ServiceOption(); option.setOptionId(12L);
+        option.setServiceProviderTypeId(1L);
         option.getServiceTypes().add(new ServiceTypeOption(1L, 0, "ACTIVE"));
         when(options.findLockedById(12L)).thenReturn(Optional.of(option));
     }

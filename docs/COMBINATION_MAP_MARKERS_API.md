@@ -1,5 +1,9 @@
 # Combination map marker rules
 
+23 October update: rules are option-owned and identical across linked services.
+See [FULLY_SHARED_OPTIONS_API.md](FULLY_SHARED_OPTIONS_API.md); prior service-local
+scope descriptions below are superseded.
+
 Markers can now depend on multiple existing provider requirement choices, such as
 Car + Electric. Rules belong to a main service and service option and are independent
 of pricing rules. Sharing an option does not share its service-specific marker rules.

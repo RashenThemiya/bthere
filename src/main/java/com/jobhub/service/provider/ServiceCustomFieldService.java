@@ -44,6 +44,7 @@ public class ServiceCustomFieldService {
     @Transactional
     public ServiceCustomFieldResponse create(Long serviceTypeId, ServiceCustomFieldRequest request) {
         requireType(serviceTypeId);
+        serviceTypeId = definitionServiceTypeId(serviceTypeId, request);
         ValidatedDefinition definition = validateDefinition(serviceTypeId, null, request);
         validateUniqueCode(serviceTypeId, null, definition);
         ServiceCustomField item = new ServiceCustomField();
@@ -52,6 +53,7 @@ public class ServiceCustomFieldService {
         item.setStatus("ACTIVE");
         apply(item, request, definition);
         item = fieldRepository.save(item);
+        refreshSharedOptionProviders(item);
         if (item.isProfileBacked()) refreshProfileAssignments(serviceTypeId);
         return response(item);
     }
@@ -62,10 +64,12 @@ public class ServiceCustomFieldService {
         ServiceCustomField item = requireField(serviceTypeId, fieldId);
         boolean wasProfileBacked = item.isProfileBacked();
         ValidatedDefinition definition = validateDefinition(serviceTypeId, item, request);
+        serviceTypeId = item.getServiceProviderTypeId();
         validateUniqueCode(serviceTypeId, fieldId, definition);
         apply(item, request, definition);
         item = fieldRepository.save(item);
         synchronizeExistingSubmissionIdentity(item);
+        refreshSharedOptionProviders(item);
         if (wasProfileBacked || item.isProfileBacked()) refreshProfileAssignments(serviceTypeId);
         return response(item);
     }
@@ -81,6 +85,7 @@ public class ServiceCustomFieldService {
         item.setStatus(status);
         item.setVersion((item.getVersion() == null ? 1 : item.getVersion()) + 1);
         item = fieldRepository.save(item);
+        refreshSharedOptionProviders(item);
         if (item.isProfileBacked()) refreshProfileAssignments(serviceTypeId);
         return response(item);
     }
@@ -88,14 +93,26 @@ public class ServiceCustomFieldService {
     @Transactional(readOnly = true)
     public List<ServiceCustomFieldResponse> listAdmin(Long serviceTypeId) {
         requireType(serviceTypeId);
-        return fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(serviceTypeId)
-                .stream().map(this::response).toList();
+        Map<Long, ServiceCustomFieldResponse> result = new LinkedHashMap<>();
+        fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(serviceTypeId)
+                .stream().filter(f -> f.effectiveOptionIds().isEmpty()).map(this::response)
+                .forEach(f -> result.put(f.fieldId(), f));
+        for (var option : optionRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscNameAsc(serviceTypeId)) {
+            listForOption(serviceTypeId, option.getOptionId(), true).forEach(f -> result.put(f.fieldId(), f));
+        }
+        return List.copyOf(result.values());
     }
 
     @Transactional(readOnly = true)
     public List<ServiceCustomFieldResponse> listForOption(
             Long serviceTypeId, Long optionId, boolean includeInactive) {
-        return fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(serviceTypeId)
+        Long configurationId = configurationServiceTypeId(serviceTypeId, optionId);
+        Map<Long, ServiceCustomField> definitions = new LinkedHashMap<>();
+        fieldRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscLabelAsc(configurationId)
+                .forEach(f -> definitions.put(f.getFieldId(), f));
+        fieldRepository.findSharedForOption(optionId).stream().filter(f -> f.appliesToOptions(Set.of(optionId)))
+                .forEach(f -> definitions.put(f.getFieldId(), f));
+        return definitions.values()
                 .stream().filter(field -> includeInactive || "ACTIVE".equals(field.getStatus()))
                 .filter(field -> field.appliesToOptions(Set.of(optionId)))
                 .map(this::response).toList();
@@ -141,9 +158,11 @@ public class ServiceCustomFieldService {
             Long serviceTypeId, String scope, Long selectedOptionId) {
         ServiceProviderType type = requireType(serviceTypeId);
         String normalizedScope = normalizeScope(scope);
+        Long configurationId = selectedOptionId == null ? serviceTypeId
+                : configurationServiceTypeId(serviceTypeId, selectedOptionId);
         List<ServiceCustomField> fields = fieldRepository
                 .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
-                        serviceTypeId, normalizedScope, "ACTIVE");
+                        configurationId, normalizedScope, "ACTIVE");
         List<ServiceCustomFieldResponse> common = fields.stream()
                 .filter(item -> item.effectiveOptionIds().isEmpty()).map(this::response).toList();
         List<ServiceDynamicSchemaResponse.OptionSchema> optionSchemas = optionRepository
@@ -153,14 +172,17 @@ public class ServiceCustomFieldService {
                         || selectedOptionId.equals(option.getOptionId()))
                 .map(option -> new ServiceDynamicSchemaResponse.OptionSchema(
                         option.getOptionId(), option.getCode(), option.getName(),
-                        fields.stream().filter(field -> field.effectiveOptionIds().contains(option.getOptionId()))
-                                .map(this::response).toList()))
+                        listForOption(serviceTypeId, option.getOptionId(), false).stream()
+                                .filter(field -> normalizedScope.equals(field.scope()))
+                                .filter(field -> !field.optionIds().isEmpty()
+                                        || !configurationId.equals(option.getServiceProviderTypeId()))
+                                .toList()))
                 .toList();
         if (selectedOptionId != null && optionSchemas.isEmpty()) {
             throw new ResourceNotFoundException("Active service option not found");
         }
         return new ServiceDynamicSchemaResponse(
-                serviceTypeId, type.getName(), serviceSetupService.get(serviceTypeId),
+                serviceTypeId, type.getName(), serviceSetupService.get(configurationId),
                 common, optionSchemas);
     }
 
@@ -244,7 +266,12 @@ public class ServiceCustomFieldService {
     private void validateProviderField(Long userId, ServiceProviderTypeAssignment assignment,
                                        Set<Long> selectedOptionIds,
                                        ServiceCustomField field, JsonNode value) {
-        if (!assignment.getServiceProviderTypeId().equals(field.getServiceProviderTypeId())
+        boolean sharedField = selectedOptionIds.stream().anyMatch(id ->
+                field.appliesToOptions(Set.of(id))
+                        && optionRepository.findByOptionIdAndServiceProviderTypeId(id, assignment.getServiceProviderTypeId())
+                            .filter(o -> !field.effectiveOptionIds().isEmpty()
+                                    || field.getServiceProviderTypeId().equals(o.getServiceProviderTypeId())).isPresent());
+        if ((!assignment.getServiceProviderTypeId().equals(field.getServiceProviderTypeId()) && !sharedField)
                 || !PROVIDER_REQUIREMENT.equals(field.getScope())
                 || !"ACTIVE".equals(field.getStatus())) {
             throw new IllegalArgumentException("Custom field is not available for this provider service");
@@ -334,8 +361,10 @@ public class ServiceCustomFieldService {
         Set<Long> optionIds = requestedOptionIds(request);
         for (Long optionId : optionIds) {
             ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId)
+                    .or(() -> existing != null && existing.effectiveOptionIds().contains(optionId)
+                            ? optionRepository.findById(optionId) : Optional.empty())
                     .orElseThrow(() -> new IllegalArgumentException("Service option is invalid"));
-            if (!option.activeForService(serviceTypeId)) {
+            if (!"ACTIVE".equals(option.getStatus())) {
                 throw new IllegalArgumentException("Service option must be active");
             }
         }
@@ -403,10 +432,24 @@ public class ServiceCustomFieldService {
                 .findAllByAssignmentId(assignment.getAssignmentId()).stream()
                 .map(ProviderServiceOption::getOptionId)
                 .collect(java.util.stream.Collectors.toSet());
-        List<ServiceCustomField> fields = fieldRepository
+        Map<Long, ServiceCustomField> definitions = new LinkedHashMap<>();
+        fieldRepository
                 .findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
                         assignment.getServiceProviderTypeId(), PROVIDER_REQUIREMENT, "ACTIVE")
-                .stream().filter(field -> field.appliesToOptions(selectedOptions)).toList();
+                .stream().filter(field -> field.effectiveOptionIds().isEmpty())
+                .forEach(field -> definitions.put(field.getFieldId(), field));
+        for (Long optionId : selectedOptions) {
+            Long owner = configurationServiceTypeId(assignment.getServiceProviderTypeId(), optionId);
+            fieldRepository.findAllByServiceProviderTypeIdAndScopeAndStatusOrderByDisplayOrderAscLabelAsc(
+                            owner, PROVIDER_REQUIREMENT, "ACTIVE").stream()
+                    .filter(field -> field.appliesToOptions(Set.of(optionId)))
+                    .forEach(field -> definitions.put(field.getFieldId(), field));
+            fieldRepository.findSharedForOption(optionId).stream()
+                    .filter(f -> PROVIDER_REQUIREMENT.equals(f.getScope()) && "ACTIVE".equals(f.getStatus())
+                            && f.appliesToOptions(Set.of(optionId)))
+                    .forEach(f -> definitions.put(f.getFieldId(), f));
+        }
+        List<ServiceCustomField> fields = List.copyOf(definitions.values());
         List<ProviderCustomSubmissionResponse> result = new ArrayList<>();
         for (ServiceCustomField field : fields) {
             ProviderCustomFieldSubmission own = byField.remove(field.getFieldId());
@@ -485,8 +528,30 @@ public class ServiceCustomFieldService {
     }
 
     private ServiceCustomField requireField(Long serviceTypeId, Long fieldId) {
-        return fieldRepository.findByFieldIdAndServiceProviderTypeId(fieldId, serviceTypeId)
+        var own = fieldRepository.findByFieldIdAndServiceProviderTypeId(fieldId, serviceTypeId);
+        if (own.isPresent()) return own.get();
+        var shared = fieldRepository.findById(fieldId)
                 .orElseThrow(() -> new ResourceNotFoundException("Custom field not found"));
+        boolean linked = shared.effectiveOptionIds().stream().anyMatch(id -> optionRepository
+                .findByOptionIdAndServiceProviderTypeId(id, serviceTypeId)
+                .isPresent());
+        if (!linked) throw new ResourceNotFoundException("Custom field not found");
+        return shared;
+    }
+
+    public Long configurationServiceTypeId(Long serviceTypeId, Long optionId) {
+        return optionRepository.findByOptionIdAndServiceProviderTypeId(optionId, serviceTypeId)
+                .map(ServiceOption::getServiceProviderTypeId)
+                .orElseThrow(() -> new IllegalArgumentException("Service option is invalid"));
+    }
+
+    private Long definitionServiceTypeId(Long serviceTypeId, ServiceCustomFieldRequest request) {
+        Set<Long> owners = requestedOptionIds(request).stream()
+                .map(id -> configurationServiceTypeId(serviceTypeId, id))
+                .collect(java.util.stream.Collectors.toSet());
+        if (owners.size() > 1) throw new IllegalArgumentException(
+                "Configure options with different configuration owners separately");
+        return owners.isEmpty() ? serviceTypeId : owners.iterator().next();
     }
 
     private String normalizeScope(String value) {
@@ -526,15 +591,14 @@ public class ServiceCustomFieldService {
     private Optional<ProviderCustomFieldSubmission> findReusableSubmission(
             ServiceProviderTypeAssignment assignment, ServiceCustomField field) {
         String reuseScope = normalizedReuseScope(field);
-        if ("ASSIGNMENT".equals(reuseScope)) return Optional.empty();
         return submissionRepository
                 .findAllByProviderIdAndReusableCodeAndVerificationStatusOrderByUpdatedAtDesc(
                         assignment.getServiceProviderId(), field.getCode(), "APPROVED")
                 .stream()
                 .filter(item -> field.getFieldType().equals(item.getReusableFieldType()))
-                .filter(item -> "PROVIDER".equals(reuseScope)
-                        || assignment.getServiceProviderTypeId()
-                        .equals(item.getServiceProviderTypeId()))
+                .filter(item -> field.getFieldId().equals(item.getFieldId())
+                        || !"ASSIGNMENT".equals(reuseScope) && ("PROVIDER".equals(reuseScope)
+                        || assignment.getServiceProviderTypeId().equals(item.getServiceProviderTypeId())))
                 .findFirst();
     }
 
@@ -557,6 +621,20 @@ public class ServiceCustomFieldService {
     private void refreshProfileAssignments(Long serviceTypeId) {
         assignmentRepository.findAllByServiceProviderTypeId(serviceTypeId).stream()
                 .map(ServiceProviderTypeAssignment::getServiceProviderId).distinct()
+                .forEach(approvalService::refreshProviderApprovals);
+    }
+
+    private void refreshSharedOptionProviders(ServiceCustomField field) {
+        if (!PROVIDER_REQUIREMENT.equals(field.getScope())) return;
+        Set<Long> optionIds = field.effectiveOptionIds();
+        if (optionIds.isEmpty()) optionIds = optionRepository
+                .findAllByServiceProviderTypeIdOrderByDisplayOrderAscNameAsc(field.getServiceProviderTypeId()).stream()
+                .filter(o -> field.getServiceProviderTypeId().equals(o.getServiceProviderTypeId()))
+                .map(ServiceOption::getOptionId).collect(java.util.stream.Collectors.toSet());
+        if (optionIds.isEmpty()) return;
+        providerOptionRepository.findAllByOptionIdIn(optionIds).stream()
+                .map(item -> assignmentRepository.findById(item.getAssignmentId()))
+                .flatMap(Optional::stream).map(ServiceProviderTypeAssignment::getServiceProviderId).distinct()
                 .forEach(approvalService::refreshProviderApprovals);
     }
 

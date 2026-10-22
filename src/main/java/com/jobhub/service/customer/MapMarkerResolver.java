@@ -24,7 +24,7 @@ public class MapMarkerResolver {
 
     public MapMarker resolve(Long serviceTypeId, ServiceOption option,
             List<ServiceCustomFieldResponse> fields, List<ProviderFilter> filters) {
-        Long fieldId = option.serviceLink(serviceTypeId).getMapMarkerFieldId();
+        Long fieldId = option.getMapMarkerFieldId();
         Map<Long, String> selected = new HashMap<>();
         if (filters != null) for (var filter : filters) {
             if (filter.value() == null || !filter.value().isArray() || filter.value().size() != 1
@@ -38,7 +38,7 @@ public class MapMarkerResolver {
                     .findFirst().ifPresent(f -> selected.put(filter.fieldId(), filter.value().get(0).asText()));
         }
         if (!selected.isEmpty()) {
-            var matching = markerRules.findAllByServiceProviderTypeIdAndOptionIdAndStatus(serviceTypeId, option.getOptionId(), "ACTIVE")
+            var matching = markerRules.findAllByServiceProviderTypeIdAndOptionIdAndStatus(option.getServiceProviderTypeId(), option.getOptionId(), "ACTIVE")
                     .stream().filter(rule -> !rule.getConditions().isEmpty()
                             && rule.getConditions().stream().allMatch(c -> c.getChoiceValue().equals(selected.get(c.getFieldId()))))
                     .sorted(Comparator.comparingInt((com.jobhub.entity.provider.ServiceOptionMapMarkerRule r) -> r.getConditions().size()).reversed())
@@ -73,7 +73,7 @@ public class MapMarkerResolver {
         }
         var optionIcon = ServiceContentSupport.mapMarkerIcon(option.getMedia());
         if (optionIcon != null) return new MapMarker("OPTION", optionIcon, null, null);
-        var serviceIcon = serviceTypes.findById(serviceTypeId)
+        var serviceIcon = serviceTypes.findById(option.getServiceProviderTypeId())
                 .map(type -> ServiceContentSupport.mapMarkerIcon(type.getMedia())).orElse(null);
         if (serviceIcon != null) return new MapMarker("SERVICE", serviceIcon, null, null);
         return new MapMarker("DEFAULT", null, null, null);
