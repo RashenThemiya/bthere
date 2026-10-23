@@ -7,6 +7,9 @@ public record ServiceDocumentRequirementResponse(
         boolean hasExpiry,
         Long optionId,
         boolean required,
-        boolean requiresApproval
+        boolean requiresApproval,
+        String issuedDateMode,
+        String expiryDateMode,
+        java.util.List<DocumentPartDefinition> parts
 ) {
 }

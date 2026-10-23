@@ -1,5 +1,9 @@
 # JobHub Administration API
 
+Document types support configurable named upload parts; see
+[DOCUMENT_PARTS_API.md](DOCUMENT_PARTS_API.md) for updated bodies, responses,
+compatibility rules and additive schema preparation. Deployment is pending.
+
 ## Super Admin tab update: fields, icons, search and document dates (2026-10-20)
 
 Implemented locally; deployment is not verified. Configuration requires SUPER_ADMIN.

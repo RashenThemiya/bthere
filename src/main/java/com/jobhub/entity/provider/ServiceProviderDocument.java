@@ -32,5 +32,13 @@ public class ServiceProviderDocument extends AuditedEntity {
     private Long verifiedBy;
     private LocalDateTime verifiedAt;
     private String rejectionReason;
+    @Column(columnDefinition = "LONGTEXT")
+    private String partsJson;
+    @Column(columnDefinition = "LONGTEXT")
+    private String partsDefinitionJson;
+
+    public java.util.List<com.jobhub.dto.provider.DocumentPartFiles> effectiveParts() {
+        return DocumentParts.files(partsJson);
+    }
 }
 

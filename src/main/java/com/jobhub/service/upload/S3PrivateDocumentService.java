@@ -136,6 +136,21 @@ public class S3PrivateDocumentService {
 
     public record CustomerFile(String contentType, long size) {}
 
+    public CustomerFile inspectProviderFile(Long userId, String key) {
+        if (key == null || key.contains("..")
+                || !key.matches("providers/" + userId + "/documents/[A-Za-z0-9/_-]+\\.[A-Za-z0-9]+")) {
+            throw new IllegalArgumentException("File must be a private document owned by this provider");
+        }
+        try {
+            var head = s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(requireBucket()).key(key).build());
+            return new CustomerFile(head.contentType(), head.contentLength());
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception exception) {
+            if (exception.statusCode() == 404) throw new IllegalArgumentException("Uploaded file does not exist");
+            throw exception;
+        }
+    }
+
     public CustomerFile inspectCustomerFile(Long userId, String key) {
         if (key == null || key.contains("..")
                 || !key.matches("customers/" + userId + "/documents/[A-Za-z0-9_-]+\\.[A-Za-z0-9]+")) {

@@ -74,7 +74,8 @@ public class AdminProviderApprovalService {
    String label=documentTypes.findById(def.getDocumentTypeId()).map(DocumentType::getName).orElse("Document "+def.getDocumentTypeId());
    docs.add(row("DOCUMENT",item==null?null:item.getDocumentId(),def.getRequirementId(),label,def.isMandatory(),def.isRequiresApproval(),
        item==null?null:item.getVerificationStatus(),item==null?null:item.getDocumentUrl(),item==null?null:item.getRejectionReason(),
-       item==null?null:item.getExpiryDate(),null,info("documentTypeId",def.getDocumentTypeId(),"optionId",def.getOptionId(),"documentNumber",item==null?null:item.getDocumentNumber())));
+       item==null?null:item.getExpiryDate(),null,info("documentTypeId",def.getDocumentTypeId(),"optionId",def.getOptionId(),"documentNumber",item==null?null:item.getDocumentNumber(),
+       "parts",item==null?List.of():item.effectiveParts(),"partDefinitions",item==null?List.of():DocumentParts.definitions(item.getPartsDefinitionJson()))));
   }
   var selectedSkills=skills.findAllByAssignmentId(a.getAssignmentId());
   for(var def:skillDefinitions.findAllByServiceProviderTypeIdOrderByNameAsc(a.getServiceProviderTypeId())) {

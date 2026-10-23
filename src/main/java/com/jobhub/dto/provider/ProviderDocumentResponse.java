@@ -17,6 +17,8 @@ public record ProviderDocumentResponse(
         Long verifiedBy,
         LocalDateTime verifiedAt,
         String rejectionReason,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        java.util.List<DocumentPartFiles> parts,
+        java.util.List<DocumentPartDefinition> partDefinitions
 ) {
 }

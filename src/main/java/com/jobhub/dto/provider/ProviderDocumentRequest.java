@@ -17,7 +17,6 @@ public record ProviderDocumentRequest(
         @Size(max = 150, message = "Document number must not exceed 150 characters")
         String documentNumber,
 
-        @NotBlank(message = "Document key is required")
         @Size(max = 2048, message = "Document key must not exceed 2048 characters")
         @Pattern(
                 regexp = "^(?!.*\\.\\.)providers/[A-Za-z0-9/_-]+\\.[A-Za-z0-9]+$",
@@ -26,6 +25,11 @@ public record ProviderDocumentRequest(
         String documentKey,
 
         LocalDate issuedDate,
-        LocalDate expiryDate
+        LocalDate expiryDate,
+        java.util.List<@jakarta.validation.Valid DocumentPartFiles> parts
 ) {
+    public ProviderDocumentRequest(Long documentTypeId, String documentName, String documentNumber,
+                                   String documentKey, LocalDate issuedDate, LocalDate expiryDate) {
+        this(documentTypeId,documentName,documentNumber,documentKey,issuedDate,expiryDate,null);
+    }
 }

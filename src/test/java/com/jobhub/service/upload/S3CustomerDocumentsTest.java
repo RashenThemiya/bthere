@@ -11,6 +11,21 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class S3CustomerDocumentsTest {
+    @Test void providerPartsInspectStoredMetadataAndRejectForeignKeys() {
+        ReflectionTestUtils.setField(service, "bucket", "test-private");
+        assertThatThrownBy(()->service.inspectProviderFile(25L,"providers/99/documents/front.jpg"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->service.inspectProviderFile(25L,"providers/25/documents/../front.jpg"))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(s3);
+        when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("image/jpeg").contentLength(100L).build());
+        assertThat(service.inspectProviderFile(25L,"providers/25/documents/front.jpg").size()).isEqualTo(100);
+        when(s3.headObject(any(HeadObjectRequest.class))).thenThrow(S3Exception.builder().statusCode(404).build());
+        assertThatThrownBy(()->service.inspectProviderFile(25L,"providers/25/documents/missing.jpg"))
+                .hasMessageContaining("does not exist");
+    }
+
     S3Client s3 = mock(S3Client.class);
     S3PrivateDocumentService service = new S3PrivateDocumentService(s3, mock(S3Presigner.class));
 

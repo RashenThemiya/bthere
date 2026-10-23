@@ -40,6 +40,7 @@ public class ProviderDocumentService {
     private final DocumentTypeRepository documentTypeRepository;
     private final ServiceProviderDocumentRepository documentRepository;
     private final ProviderServiceApprovalService approvalService;
+    private final DocumentPartService documentParts;
 
     @Transactional(readOnly = true)
     public List<DocumentTypeResponse> listDocumentTypes() {
@@ -69,6 +70,7 @@ public class ProviderDocumentService {
         type.setDescription(optional(request.description()));
         type.setRequired(false);
         configureDateModes(type, request);
+        configureParts(type, request);
         type.setStatus("ACTIVE");
         return toTypeResponse(documentTypeRepository.save(type));
     }
@@ -87,6 +89,7 @@ public class ProviderDocumentService {
         type.setName(name);
         type.setDescription(optional(request.description()));
         configureDateModes(type, request);
+        configureParts(type, request);
         return toTypeResponse(documentTypeRepository.save(type));
     }
 
@@ -118,12 +121,6 @@ public class ProviderDocumentService {
             Long userId,
             ProviderDocumentRequest request
     ) {
-        String expectedPrefix = "providers/" + userId + "/documents/";
-        if (!request.documentKey().startsWith(expectedPrefix)) {
-            throw new IllegalArgumentException(
-                    "Document key does not belong to this provider"
-            );
-        }
         ServiceProvider provider = providerProfileService.findByUserId(userId);
         DocumentType type = documentTypeRepository.findById(request.documentTypeId())
                 .filter(value -> "ACTIVE".equals(value.getStatus()))
@@ -131,6 +128,7 @@ public class ProviderDocumentService {
                         "Document type was not found or is inactive"
                 ));
 
+        var parts = documentParts.validateSubmission(userId, type, request);
         validateDate("Issued date", type.effectiveIssuedDateMode(), request.issuedDate());
         validateDate("Expiry date", type.effectiveExpiryDateMode(), request.expiryDate());
         if (request.issuedDate() != null
@@ -150,7 +148,9 @@ public class ProviderDocumentService {
         document.setDocumentName(optional(request.documentName()) == null
                 ? type.getName() : request.documentName().trim());
         document.setDocumentNumber(optional(request.documentNumber()));
-        document.setDocumentUrl(request.documentKey().trim());
+        document.setDocumentUrl(parts.isEmpty() ? request.documentKey().trim() : parts.get(0).documentKeys().get(0));
+        document.setPartsJson(com.jobhub.entity.provider.DocumentParts.write(parts));
+        document.setPartsDefinitionJson(com.jobhub.entity.provider.DocumentParts.write(type.effectiveParts()));
         document.setIssuedDate(request.issuedDate());
         document.setExpiryDate(request.expiryDate());
         document.setVerificationStatus("PENDING");
@@ -263,7 +263,9 @@ public class ProviderDocumentService {
                 document.getVerifiedBy(),
                 document.getVerifiedAt(),
                 document.getRejectionReason(),
-                document.getCreatedAt()
+                document.getCreatedAt(),
+                document.effectiveParts(),
+                com.jobhub.entity.provider.DocumentParts.definitions(document.getPartsDefinitionJson())
         );
     }
 
@@ -275,7 +277,8 @@ public class ProviderDocumentService {
                 type.isHasExpiry(),
                 type.getStatus(),
                 type.effectiveIssuedDateMode(),
-                type.effectiveExpiryDateMode()
+                type.effectiveExpiryDateMode(),
+                type.effectiveParts()
         );
     }
 
@@ -290,6 +293,13 @@ public class ProviderDocumentService {
         type.setIssuedDateMode(issued);
         type.setExpiryDateMode(expiry);
         type.setHasExpiry("REQUIRED".equals(expiry));
+    }
+
+    private void configureParts(DocumentType type, CreateDocumentTypeRequest request) {
+        // Omitted on a legacy PUT: preserve the configured parts. [] explicitly restores single-file mode.
+        if (request.parts() == null) return;
+        documentParts.validateDefinitions(request.parts());
+        type.setPartsJson(com.jobhub.entity.provider.DocumentParts.write(request.parts()));
     }
 
     private void validateDate(String label, String mode, java.time.LocalDate value) {

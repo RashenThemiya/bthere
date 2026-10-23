@@ -296,7 +296,8 @@ public class ProviderTypeService {
                             type.isHasExpiry(),
                             requirement.getOptionId(),
                             requirement.isMandatory(),
-                            requirement.isRequiresApproval()
+                            requirement.isRequiresApproval(),
+                            type.effectiveIssuedDateMode(), type.effectiveExpiryDateMode(), type.effectiveParts()
                     );
                 })
                 .toList();

@@ -15,6 +15,11 @@ public record CreateDocumentTypeRequest(
         @jakarta.validation.constraints.Pattern(regexp = "HIDDEN|OPTIONAL|REQUIRED")
         String issuedDateMode,
         @jakarta.validation.constraints.Pattern(regexp = "HIDDEN|OPTIONAL|REQUIRED")
-        String expiryDateMode
+        String expiryDateMode,
+        java.util.List<@jakarta.validation.Valid DocumentPartDefinition> parts
 ) {
+    public CreateDocumentTypeRequest(String name, String description, boolean hasExpiry,
+                                     String issuedDateMode, String expiryDateMode) {
+        this(name, description, hasExpiry, issuedDateMode, expiryDateMode, null);
+    }
 }

@@ -27,7 +27,8 @@ public class SharedOptionDocumentService {
                     var type = documentTypes.findById(r.getDocumentTypeId()).orElseThrow(() ->
                             new ResourceNotFoundException("Document type not found"));
                     return new ServiceDocumentRequirementResponse(type.getDocumentTypeId(), type.getName(),
-                            type.getDescription(), type.isHasExpiry(), optionId, r.isMandatory(), r.isRequiresApproval());
+                            type.getDescription(), type.isHasExpiry(), optionId, r.isMandatory(), r.isRequiresApproval(),
+                            type.effectiveIssuedDateMode(), type.effectiveExpiryDateMode(), type.effectiveParts());
                 }).toList();
     }
 

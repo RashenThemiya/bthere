@@ -26,6 +26,12 @@ public class DocumentType extends AuditedEntity {
     private String status;
     private String issuedDateMode;
     private String expiryDateMode;
+    @Column(columnDefinition = "LONGTEXT")
+    private String partsJson;
+
+    public java.util.List<com.jobhub.dto.provider.DocumentPartDefinition> effectiveParts() {
+        return DocumentParts.definitions(partsJson);
+    }
 
     public String effectiveIssuedDateMode() {
         return issuedDateMode == null ? "OPTIONAL" : issuedDateMode;

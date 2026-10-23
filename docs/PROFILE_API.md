@@ -1,5 +1,8 @@
 # JobHub Profile and Provider Setup API
 
+For named multi-file provider document parts and legacy single-file compatibility,
+see [DOCUMENT_PARTS_API.md](DOCUMENT_PARTS_API.md). Deployment is pending.
+
 Base URL: `https://jobhub.pentarixlabs.com`
 
 For one mobile request registering a service, options, and supporting details,

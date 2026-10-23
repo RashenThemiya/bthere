@@ -7,6 +7,7 @@ public record DocumentTypeResponse(
         boolean hasExpiry,
         String status,
         String issuedDateMode,
-        String expiryDateMode
+        String expiryDateMode,
+        java.util.List<DocumentPartDefinition> parts
 ) {
 }
