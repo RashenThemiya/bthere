@@ -22,6 +22,41 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ServiceCustomFieldServiceTest {
+    @Test void linkedContextMutatesTheSameFieldAndUnrelatedContextCannot() throws Exception {
+        var field = new ServiceCustomField();
+        field.setFieldId(5L); field.setServiceProviderTypeId(2L);
+        field.setOptionIds(Set.of(12L)); field.setVersion(1); field.setStatus("ACTIVE");
+        when(fieldRepository.findById(5L)).thenReturn(Optional.of(field));
+        when(fieldRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        var updated = service.update(1L, 5L, request("\"optionIds\":[12]"));
+        assertThat(updated.fieldId()).isEqualTo(5L);
+        assertThat(updated.ownerServiceTypeId()).isEqualTo(2L);
+        assertThat(updated.configurationScope()).isEqualTo("SHARED_OPTION");
+        var inactive = service.updateStatus(1L, 5L, "INACTIVE");
+        assertThat(inactive.status()).isEqualTo("INACTIVE");
+        assertThat(field.getStatus()).isEqualTo("INACTIVE");
+        assertThatThrownBy(() -> service.updateStatus(99L, 5L, "ACTIVE"))
+                .isInstanceOf(com.jobhub.exception.ResourceNotFoundException.class);
+        assertThat(field.getStatus()).isEqualTo("INACTIVE");
+    }
+
+    @Test void sharedFieldJsonExposesHistoricalOwnerWithoutChangingNavigationContext() throws Exception {
+        var field = new ServiceCustomField();
+        field.setFieldId(5L); field.setServiceProviderTypeId(2L);
+        field.setScope("PROVIDER_REQUIREMENT"); field.setStatus("ACTIVE"); field.setOptionIds(Set.of(12L));
+        var option = optionRepository.findByOptionIdAndServiceProviderTypeId(12L, 1L).orElseThrow();
+        when(optionRepository.findAllByServiceProviderTypeIdOrderByDisplayOrderAscNameAsc(1L))
+                .thenReturn(List.of(option));
+        when(fieldRepository.findSharedForOption(12L)).thenReturn(List.of(field));
+        var fields = service.listAdmin(1L);
+        assertThat(fields).hasSize(1);
+        var json = new ObjectMapper().valueToTree(fields.get(0));
+        assertThat(json.path("serviceTypeId").asLong()).isEqualTo(2L);
+        assertThat(json.path("ownerServiceTypeId").asLong()).isEqualTo(2L);
+        assertThat(json.path("configurationScope").asText()).isEqualTo("SHARED_OPTION");
+        assertThat(json.path("optionIds").get(0).asLong()).isEqualTo(12L);
+    }
+
     @Mock ObjectMapper objectMapper;
     @Mock ServiceProviderTypeRepository typeRepository;
     @Mock ServiceOptionRepository optionRepository;

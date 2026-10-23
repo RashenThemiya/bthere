@@ -6,6 +6,29 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 
 class SharedOptionAutoMergeTest {
+    @Test void explicitAliasesMergeDifferentCodesAndRemapExistingReferences() throws Exception {
+        try(var db=fixture()) {
+            sql(db,"UPDATE service_custom_field SET code='CG_CARE_RIDE_VEHICLE_TYPE' WHERE field_id=20");
+            new SharedOptionAutoMerge(db, SharedOptionAutoMerge.parseAliases("20:10")).apply();
+            assertThat(scalar(db,"SELECT COUNT(*) FROM service_custom_field WHERE status='ACTIVE'")).isEqualTo("1");
+            assertThat(scalar(db,"SELECT field_id FROM provider_custom_field_submission WHERE submission_id=2222")).isEqualTo("10");
+            assertThat(scalar(db,"SELECT COUNT(*) FROM job_rate_condition WHERE field_id=20")).isEqualTo("0");
+            assertThat(scalar(db,"SELECT COUNT(*) FROM service_option_map_marker_condition WHERE field_id=20")).isEqualTo("0");
+            assertThat(scalar(db,"SELECT verification_status FROM provider_service_option")).isEqualTo("APPROVED");
+            assertThat(scalar(db,"SELECT payload_json FROM shared_option_merge_archive WHERE table_name='service_custom_field' AND payload_json LIKE '%CG_CARE_RIDE_VEHICLE_TYPE%'")).contains("CG_CARE_RIDE_VEHICLE_TYPE");
+        }
+    }
+
+    @Test void invalidAliasesRollbackWithoutMergingUnrelatedDefinitions() throws Exception {
+        try(var db=fixture()) {
+            assertThatThrownBy(()->new SharedOptionAutoMerge(db, java.util.Map.of(10L,999L)).apply())
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThat(scalar(db,"SELECT COUNT(*) FROM service_custom_field WHERE status='ACTIVE'")).isEqualTo("2");
+            assertThat(scalar(db,"SELECT COUNT(*) FROM shared_option_merge_archive")).isEqualTo("0");
+        }
+        assertThatThrownBy(()->SharedOptionAutoMerge.parseAliases("5:7,5:8")).isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void mergesDuplicateConfigurationAndPreservesHistoryAndDistinctCombinations() throws Exception {
         try(var db=fixture()) {
             var report=new SharedOptionAutoMerge(db).apply();

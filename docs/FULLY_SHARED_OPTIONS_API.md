@@ -1,6 +1,8 @@
 # Fully shared service options — 23 October 2026
 
 Implemented in the working tree. Not deployed; the production migration has not been run.
+For shared-field owner metadata, cross-service edit examples and legacy field reconciliation,
+see [SHARED_FIELD_FRONTEND_CONTRACT.md](SHARED_FIELD_FRONTEND_CONTRACT.md).
 This supersedes the former service-local option fields, rates and marker behavior.
 There are no per-service overrides for an option. Only membership `displayOrder`
 and `status` vary between linked main services.

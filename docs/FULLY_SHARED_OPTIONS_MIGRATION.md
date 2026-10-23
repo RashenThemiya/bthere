@@ -1,6 +1,10 @@
 # Automatic merge of existing shared options — 23 October 2026
 
 Duplicate configuration no longer stops migration for manual selection.
+Different-code duplicates require an explicit equivalence, e.g.
+`SHARED_OPTION_FIELD_ALIASES=5:7` before the first run. Pairs use the same winner
+policy and must share scope and option applicability. See
+[SHARED_FIELD_FRONTEND_CONTRACT.md](SHARED_FIELD_FRONTEND_CONTRACT.md).
 The offline JDBC runner com.jobhub.migration.SharedOptionAutoMerge applies
 deterministic priorities, archives original rows, and records completion.
 Existing option IDs and service links remain. Production has not been migrated.

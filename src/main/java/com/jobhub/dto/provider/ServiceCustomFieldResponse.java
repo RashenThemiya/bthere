@@ -32,4 +32,14 @@ public record ServiceCustomFieldResponse(
         ServiceMediaPayload icon,
         String valueSource,
         String profileField
-) {}
+) {
+    /** serviceTypeId remains the historical owner, never the requested navigation context. */
+    @com.fasterxml.jackson.annotation.JsonProperty("ownerServiceTypeId")
+    public Long ownerServiceTypeId() { return serviceTypeId; }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("configurationScope")
+    public String configurationScope() {
+        return optionId != null || optionIds != null && !optionIds.isEmpty()
+                ? "SHARED_OPTION" : "SERVICE";
+    }
+}

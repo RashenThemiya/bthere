@@ -27,20 +27,39 @@ public final class SharedOptionAutoMerge {
         IDS.put("service_provider_document","document_id");
     }
     private final Connection db;
+    private final Map<Long,Long> fieldAliases;
     private Map<Long,Map<String,Object>> options, fields, assignments;
     private Map<Long,Map<String,Object>> mergedFields;
     private final Map<Long,Set<Long>> fieldOptions = new HashMap<>();
     private final Map<Long,Long> fieldMap = new LinkedHashMap<>();
     private final Set<String> pending = new HashSet<>();
 
-    public SharedOptionAutoMerge(Connection db) { this.db=db; }
+    public SharedOptionAutoMerge(Connection db) { this(db, Map.of()); }
+
+    /** Explicit equivalences for legacy duplicates whose codes differ; normal winner policy still applies. */
+    public SharedOptionAutoMerge(Connection db, Map<Long,Long> fieldAliases) {
+        this.db=db;
+        this.fieldAliases=Map.copyOf(fieldAliases);
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length!=1 || !"--apply".equals(args[0]))
             throw new IllegalArgumentException("Use --apply with DB_URL, DB_USERNAME and DB_PASSWORD for an offline migration");
         try (var db=DriverManager.getConnection(required("DB_URL"),required("DB_USERNAME"),required("DB_PASSWORD"))) {
-            System.out.println(new SharedOptionAutoMerge(db).apply());
+            System.out.println(new SharedOptionAutoMerge(db, parseAliases(System.getenv("SHARED_OPTION_FIELD_ALIASES"))).apply());
         }
+    }
+    static Map<Long,Long> parseAliases(String value) {
+        var aliases=new LinkedHashMap<Long,Long>();
+        if(value==null || value.isBlank()) return aliases;
+        for(String pair:value.split(",",-1)) {
+            String[] ids=pair.trim().split(":",-1);
+            if(ids.length!=2) throw new IllegalArgumentException("Field aliases must use fieldId:equivalentFieldId pairs");
+            long a=Long.parseLong(ids[0].trim()), b=Long.parseLong(ids[1].trim());
+            if(a<=0 || b<=0 || a==b || aliases.putIfAbsent(a,b)!=null)
+                throw new IllegalArgumentException("Invalid or repeated field alias");
+        }
+        return aliases;
     }
     private static String required(String key) {
         var value=System.getenv(key);
@@ -85,6 +104,14 @@ public final class SharedOptionAutoMerge {
     private int mergeFields() throws Exception {
         var scoped=fields.values().stream().filter(f->!fieldOptions.getOrDefault(id(f,"field_id"),Set.of()).isEmpty()).toList();
         var parent=new HashMap<Long,Long>(); scoped.forEach(f->parent.put(id(f,"field_id"),id(f,"field_id")));
+        for(var alias:fieldAliases.entrySet()) {
+            var a=fields.get(alias.getKey()); var b=fields.get(alias.getValue());
+            if(!parent.containsKey(alias.getKey()) || !parent.containsKey(alias.getValue())
+                    || !Objects.equals(a.get("scope"),b.get("scope"))
+                    || Collections.disjoint(fieldOptions.get(alias.getKey()),fieldOptions.get(alias.getValue())))
+                throw new IllegalArgumentException("Field aliases must reference existing fields of the same scope sharing an option");
+            parent.put(root(parent,alias.getKey()),root(parent,alias.getValue()));
+        }
         for(int i=0;i<scoped.size();i++) for(int j=0;j<i;j++) {
             var a=scoped.get(i);var b=scoped.get(j);
             if(Objects.equals(a.get("scope"),b.get("scope")) && Objects.equals(a.get("code"),b.get("code"))
