@@ -80,14 +80,36 @@ public class WalletService {
 
     @Transactional
     public Operation reserveBooking(Long userId, Long jobId) {
+        requireLegacyBooking(jobId);
+        return reserve(userId,jobId,false);
+    }
+    /** Internal request confirmation hook; its caller owns the surrounding atomic confirmation. */
+    @Transactional
+    public Operation reserveRequestBooking(Long userId,Long jobId) {
+        var r=bookingRequests.lockByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking request not found"));
+        if(!userId.equals(r.getUserId()))throw new ResourceNotFoundException("Booking not found");
+        if(!"AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) || r.getConfirmationExpiresAt()==null
+                || !java.time.Instant.now().isBefore(r.getConfirmationExpiresAt()))
+            throw new ConflictException("Wallet reservation requires timely customer confirmation after provider acceptance");
+        return reserve(userId,jobId,true);
+    }
+    private Operation reserve(Long userId,Long jobId,boolean requestFlow) {
         var job = job(jobId);
         var customer = customers.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Customer profile not found"));
         if (!customer.getCustomerId().equals(job.getCustomerId())) throw new ResourceNotFoundException("Booking not found");
         if (!"WALLET".equals(job.getPaymentMethod())) throw new IllegalArgumentException("This booking does not use WALLET");
         String key = "BOOKING:" + jobId + ":RESERVE";
-        var previous = operations.findByOperationKey(key);
-        if (previous.isPresent()) return response(previous.get());
-        if (!Set.of("PENDING", "ACCEPTED", "CONFIRMED").contains(job.getJobStatus()) || !"PENDING".equals(job.getPaymentStatus())) {
+        var previous = operations.findLockedByOperationKey(key);
+        if (previous.isPresent()) {
+            var op=previous.get();
+            if(requestFlow && (!"BOOKING_RESERVE".equals(op.getType()) || !"POSTED".equals(op.getStatus())
+                    || !userId.equals(op.getOwnerUserId()) || !"RESERVED".equals(job.getPaymentStatus())
+                    || !Objects.equals(op.getCurrencyCode(),job.getCurrencyCode())
+                    || money(job.getExpectedAmount(),job.getCurrencyCode()).compareTo(op.getAmount())!=0))
+                throw new ConflictException("Existing wallet reservation does not match the booking");
+            return response(op);
+        }
+        if (!(requestFlow ? Set.of("AWAITING_PAYMENT") : Set.of("PENDING", "ACCEPTED", "CONFIRMED")).contains(job.getJobStatus()) || !"PENDING".equals(job.getPaymentStatus())) {
             throw new ConflictException("Booking cannot be reserved in its current state");
         }
         String currency = currency(job.getCurrencyCode());
@@ -95,8 +117,12 @@ public class WalletService {
         lockUsers(List.of(userId));
         var wallet = lockedWallet(userId, currency);
         if("PAYHERE_SANDBOX".equals(wallet.getFundingMode()))throw new ConflictException("Sandbox earnings cannot fund wallet bookings");
+        if(requestFlow && bucket(wallet,"AVAILABLE").compareTo(amount)<0)
+            throw new InsufficientWalletFundsException(currency,amount,bucket(wallet,"AVAILABLE"));
+        if(requestFlow && !Set.of("PAYHERE","MOCK").contains(wallet.getFundingMode()==null?"":wallet.getFundingMode()))
+            throw new ConflictException("Wallet funding source requires reconciliation before booking");
         var operation = operation(key, "BOOKING_RESERVE", userId, job, amount, userId, "POSTED");
-        if("PAYHERE".equals(wallet.getFundingMode()))operation.setFundingMode("PAYHERE");
+        if("PAYHERE".equals(wallet.getFundingMode()) || requestFlow)operation.setFundingMode(wallet.getFundingMode());
         post(operation, List.of(new Posting(wallet, "AVAILABLE", amount.negate()), new Posting(wallet, "RESERVED", amount)));
         job.setPaymentStatus("RESERVED"); jobs.save(job);
         return response(operation);
@@ -132,6 +158,7 @@ public class WalletService {
 
     @Transactional
     public Operation releaseCancelledBooking(Long actorId, Long jobId) {
+        requireLegacyBooking(jobId);
         var job = job(jobId);
         if (!Set.of("CANCELLED", "REJECTED", "EXPIRED").contains(job.getJobStatus())) {
             throw new ConflictException("Only cancelled, rejected or expired bookings can release reserved funds");
@@ -154,6 +181,7 @@ public class WalletService {
 
     @Transactional
     public Operation requestSettlement(Long actorId, Long jobId) {
+        requireLegacyBooking(jobId);
         var job = job(jobId);
         String key = "BOOKING:" + jobId + ":SETTLE";
         var previous = operations.findByOperationKey(key);
@@ -170,6 +198,7 @@ public class WalletService {
 
     @Transactional
     public Operation approveSettlement(Long actorId, Long jobId) {
+        requireLegacyBooking(jobId);
         var job = job(jobId);
         var op = operations.findByOperationKey("BOOKING:" + jobId + ":SETTLE")
                 .orElseThrow(() -> new ResourceNotFoundException("Settlement request not found"));
@@ -215,23 +244,38 @@ public class WalletService {
 
     /** Internal completion hook. Payment proof is persisted by the verified PayHere callback only. */
     @Transactional
-    public Operation settleCardBooking(Long customerUserId,Long jobId) {
+    public Operation settleCardBooking(Long customerUserId,Long jobId) {return settleRequestBooking(customerUserId,jobId,false);}
+    @Transactional
+    public Operation settleRequestWalletBooking(Long customerUserId,Long jobId) {return settleRequestBooking(customerUserId,jobId,true);}
+    private Operation settleRequestBooking(Long customerUserId,Long jobId,boolean walletPayment) {
         var request=bookingRequests.lockByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking request not found"));
         if(!customerUserId.equals(request.getUserId()))throw new ResourceNotFoundException("Booking not found");
         var job=job(jobId);
         var customer=customers.findByUserId(customerUserId).orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
         if(!customer.getCustomerId().equals(job.getCustomerId()))throw new ResourceNotFoundException("Booking not found");
-        if(!"CARD".equals(job.getPaymentMethod()) || !"COMPLETED".equals(job.getJobStatus())
-                || !"COMPLETED".equals(request.getStatus()) || !"PAID".equals(request.getPaymentStatus()))
-            throw new ConflictException("Card settlement requires customer-confirmed completion and verified payment");
-        var reference=request.getGatewayPaymentId();
-        if(reference==null || paymentNotices.findByPaymentIdAndStatusCode(reference,"2")
-                .filter(n -> request.getRequestId().equals(n.getRequestId())).isEmpty()
-                || paymentNotices.findByPaymentIdAndStatusCode(reference,"-3").isPresent())
-            throw new ConflictException("Verified successful card payment is required for settlement");
+        String expectedMethod=walletPayment?"WALLET":"CARD";
+        if(!expectedMethod.equals(job.getPaymentMethod()) || !"COMPLETED".equals(job.getJobStatus())
+                || !"COMPLETED".equals(request.getStatus())
+                || !(walletPayment?Set.of("RESERVED","SETTLED"):Set.of("PAID")).contains(request.getPaymentStatus()))
+            throw new ConflictException("Settlement requires customer-confirmed completion and verified payment");
+        WalletOperation reserved=null;
+        String reference;
         String mode=request.getPaymentFundingMode();
-        if(!Set.of("PAYHERE","PAYHERE_SANDBOX").contains(mode==null?"":mode))
-            throw new ConflictException("Payment environment is missing; merchant reconciliation is required");
+        if(walletPayment) {
+            reserved=reservation(jobId);requireReservationCurrency(job,reserved);
+            if(!customerUserId.equals(reserved.getOwnerUserId()) || !"WALLET".equals(job.getPaymentMethod())
+                    || !Objects.equals(mode,reserved.getFundingMode()) || !Set.of("PAYHERE","MOCK").contains(mode==null?"":mode))
+                throw new ConflictException("Wallet reservation funding proof does not match the booking");
+            reference="WALLET_RESERVATION:"+reserved.getOperationId();
+        } else {
+            reference=request.getGatewayPaymentId();
+            if(reference==null || paymentNotices.findByPaymentIdAndStatusCode(reference,"2")
+                    .filter(n -> request.getRequestId().equals(n.getRequestId())).isEmpty()
+                    || paymentNotices.findByPaymentIdAndStatusCode(reference,"-3").isPresent())
+                throw new ConflictException("Verified successful card payment is required for settlement");
+            if(!Set.of("PAYHERE","PAYHERE_SANDBOX").contains(mode==null?"":mode))
+                throw new ConflictException("Payment environment is missing; merchant reconciliation is required");
+        }
         String currency=currency(job.getCurrencyCode());
         BigDecimal gross=money(request.getQuotedAmount(),currency);
         if(gross.compareTo(money(job.getExpectedAmount(),currency))!=0 || gross.compareTo(money(job.getTotalAmount(),currency))!=0
@@ -245,42 +289,49 @@ public class WalletService {
                 || split.providerEarnings().compareTo(nonnegative(job.getProviderEarnings(),currency))!=0
                 || split.providerEarnings().compareTo(nonnegative(request.getProviderEarnings(),currency))!=0)
             throw new ConflictException("Saved booking fee split does not reconcile");
+        if(walletPayment && gross.compareTo(reserved.getAmount())!=0)throw new ConflictException("Wallet reserved amount changed");
+        String settlementType=walletPayment?"WALLET_BOOKING_SETTLE":"CARD_BOOKING_SETTLE";
         String key="BOOKING:"+jobId+":SETTLE";
         var previous=operations.findLockedByOperationKey(key);
         if(previous.isPresent()) {
             var op=previous.get();
-            if(!"CARD_BOOKING_SETTLE".equals(op.getType()) || !"POSTED".equals(op.getStatus())
+            if(!settlementType.equals(op.getType()) || !"POSTED".equals(op.getStatus())
                     || !"SETTLED".equals(job.getPaymentStatus()) || !reference.equals(op.getPaymentReference())
                     || !mode.equals(op.getFundingMode()) || !currency.equals(op.getCurrencyCode())
                     || gross.compareTo(op.getAmount())!=0 || split.platformFee().compareTo(op.getPlatformFee())!=0
                     || split.providerEarnings().compareTo(op.getProviderEarnings())!=0)
                 throw new ConflictException("An incompatible settlement already exists");
             request.setSettlementStatus("POSTED");request.setSettlementOperationId(op.getOperationId());
+            if(walletPayment)request.setPaymentStatus("SETTLED");
             return response(op);
         }
-        if(!"PAID".equals(job.getPaymentStatus()))throw new ConflictException("Card booking is not available for settlement");
+        if(!(walletPayment?"RESERVED":"PAID").equals(job.getPaymentStatus()))throw new ConflictException("Booking is not available for settlement");
         var assigned=jobProviders.findAllByJobIdOrderByJobProviderAssignmentIdAsc(jobId).stream()
                 .filter(a -> Set.of("ASSIGNED","COMPLETED").contains(a.getStatus()))
                 .map(a -> a.getServiceProviderId()).distinct().toList();
         if(job.getAssignedServiceProviderId()==null || assigned.size()>1
                 || assigned.size()==1 && !assigned.get(0).equals(job.getAssignedServiceProviderId()))
-            throw new ConflictException("Automatic card settlement supports one assigned provider");
+            throw new ConflictException("Automatic request settlement supports one assigned provider");
         var provider=providers.findById(job.getAssignedServiceProviderId()).orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
         if(customerUserId.equals(provider.getUserId()))throw new ConflictException("Customer cannot settle earnings to themselves");
         lockUsers(List.of(customerUserId,provider.getUserId()));
         var wallet=lockedWallet(provider.getUserId(),currency);
-        var op=operation(key,"CARD_BOOKING_SETTLE",customerUserId,job,gross,customerUserId,"PROCESSING");
+        Wallet payer=walletPayment?lockedWallet(customerUserId,currency):null;
+        if(walletPayment && !mode.equals(payer.getFundingMode()))throw new ConflictException("Wallet funding source changed");
+        var op=operation(key,settlementType,customerUserId,job,gross,customerUserId,"PROCESSING");
         op.setFundingMode(mode);op.setPaymentReference(reference);op.setPlatformFeePercentage(split.percentage());
         op.setPlatformFee(split.platformFee());op.setProviderEarnings(split.providerEarnings());
         var postings=new ArrayList<Posting>();
-        postings.add(new Posting(null,"PAYHERE_SANDBOX".equals(mode)?"PAYHERE_SANDBOX_CLEARING":"PAYHERE_CLEARING",gross.negate()));
+        postings.add(walletPayment?new Posting(payer,"RESERVED",gross.negate()):
+            new Posting(null,"PAYHERE_SANDBOX".equals(mode)?"PAYHERE_SANDBOX_CLEARING":"PAYHERE_CLEARING",gross.negate()));
         postings.add(new Posting(wallet,"AVAILABLE",split.providerEarnings()));
         if(split.platformFee().signum()>0)postings.add(new Posting(null,
-                "PAYHERE_SANDBOX".equals(mode)?"SANDBOX_PLATFORM_FEE":"PLATFORM_FEE",split.platformFee()));
+                "PAYHERE_SANDBOX".equals(mode)?"SANDBOX_PLATFORM_FEE":"MOCK".equals(mode)?"MOCK_PLATFORM_FEE":"PLATFORM_FEE",split.platformFee()));
         post(op,postings);
         job.setPaymentStatus("SETTLED");jobs.save(job);
         request.setSettlementStatus("POSTED");request.setSettlementOperationId(op.getOperationId());
-        audit.record(customerUserId,"CARD_BOOKING_SETTLED","WALLET_OPERATION",op.getOperationId(),null,response(op));
+        if(walletPayment)request.setPaymentStatus("SETTLED");
+        audit.record(customerUserId,walletPayment?"WALLET_REQUEST_BOOKING_SETTLED":"CARD_BOOKING_SETTLED","WALLET_OPERATION",op.getOperationId(),null,response(op));
         return response(op);
     }
 
@@ -384,6 +435,10 @@ public class WalletService {
             wallet.setFundingMode("UNFUNDED");
             return wallets.save(wallet);
         });
+    }
+    private void requireLegacyBooking(Long jobId) {
+        if(bookingRequests.findByJobId(jobId).isPresent())
+            throw new ConflictException("Use the booking-request confirmation and completion flow for this booking");
     }
     private Wallet owned(Long userId, String currency) {
         return wallets.findByUserIdAndCurrencyCode(userId, currency).orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));

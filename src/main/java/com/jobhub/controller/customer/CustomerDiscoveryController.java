@@ -25,8 +25,10 @@ public class CustomerDiscoveryController {
             @PathVariable Long serviceTypeId) { return service.options(user.id(), marketId, serviceTypeId); }
     @GetMapping("/booking-context")
     public Context context(@AuthenticationPrincipal AuthenticatedUser user, @RequestParam Long marketId,
-            @RequestParam Long serviceTypeId, @RequestParam Long optionId) {
-        return service.context(user.id(), marketId, serviceTypeId, optionId);
+            @RequestParam Long serviceTypeId, @RequestParam Long optionId,
+            @RequestParam(required = false) java.math.BigDecimal pricingLatitude,
+            @RequestParam(required = false) java.math.BigDecimal pricingLongitude) {
+        return service.context(user.id(), marketId, serviceTypeId, optionId, pricingLatitude, pricingLongitude);
     }
     @PostMapping("/provider-search")
     public Results search(@AuthenticationPrincipal AuthenticatedUser user, @Valid @RequestBody Search request) {

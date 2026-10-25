@@ -24,7 +24,7 @@ public final class BookingRequestsApi {
                        Long providerId, Instant offerExpiresAt, Instant confirmationExpiresAt,
                        Long jobId, String paymentStatus, BigDecimal expectedAmount, String currencyCode,
                        BigDecimal platformFeePercentage,BigDecimal platformFee,BigDecimal providerEarnings,
-                       String settlementStatus,Long settlementOperationId,String paymentFundingMode) {}
+                       String settlementStatus,Long settlementOperationId,String paymentFundingMode,String paymentMethod) {}
     public record Offer(Long offerId, Long requestId, String status, Instant expiresAt,
                         Long serviceTypeId, Long optionId, String deliveryMode,
                         LocalDateTime startDatetime, LocalDateTime expectedEndDatetime,

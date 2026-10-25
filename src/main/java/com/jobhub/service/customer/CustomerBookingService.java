@@ -60,7 +60,7 @@ public class CustomerBookingService {
     @Transactional
     public BookingResponse create(Long userId, CreateBookingRequest request) {
         if (requestPolicies.findById(request.optionId()).filter(com.jobhub.entity.job.BookingRequestPolicy::isEnabled).isPresent()) {
-            throw new com.jobhub.exception.ConflictException("Use booking-requests for this option; provider acceptance and card checkout are required");
+            throw new com.jobhub.exception.ConflictException("Use booking-requests for this option; provider acceptance and payment confirmation are required");
         }
         PreparedBooking prepared = prepare(userId, request, true);
         Job job = jobRepository.save(prepared.job());
@@ -70,10 +70,10 @@ public class CustomerBookingService {
         return response(job);
     }
 
-    /** Internal dispatch entry point: saved jobs reserve capacity before hosted payment starts. */
+    /** Internal dispatch entry point: saved jobs reserve capacity before customer payment confirmation. */
     @Transactional
-    public Job reserveCardRequest(Long userId, CreateBookingRequest request) {
-        if (!"CARD".equals(request.paymentMethod())) throw new IllegalArgumentException("Booking requests support CARD only");
+    public Job reserveRequestBooking(Long userId, CreateBookingRequest request) {
+        if (!Set.of("CARD","WALLET").contains(request.paymentMethod())) throw new IllegalArgumentException("Booking requests support CARD or WALLET");
         PreparedBooking prepared = prepare(userId, request, true);
         Job job = prepared.job();
         job.setJobStatus("AWAITING_PAYMENT");

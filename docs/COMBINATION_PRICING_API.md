@@ -181,3 +181,68 @@ Apply [COMBINATION_PRICING_SCHEMA.sql](COMBINATION_PRICING_SCHEMA.sql) once befo
 deploying against an existing MySQL database. Existing rates need no condition
 backfill. Hibernate schema update can create the additions in development. The
 shared-service-option migration remains a separate prerequisite for that feature.
+
+
+## Customer pricing field discovery
+
+`GET /api/v1/customers/me/booking-context?marketId=1&serviceTypeId=3&optionId=12`
+now includes top-level `pricingFieldIds`: the sorted, unique field IDs referenced
+by currently effective ACTIVE rates for this market, service, option and scheduling
+model. These use the same candidate-rate selection as quote/booking validation.
+No conditional rates (or no applicable rates) returns `[]`; this does not guarantee
+a price is configured. An unconditional fallback does not remove IDs required by
+other applicable conditional rates.
+
+Partial response (other booking-context properties omitted):
+
+```json
+{
+  "marketId": 1,
+  "timezone": "Asia/Colombo",
+  "pricingFieldIds": [45, 46],
+  "providerFilters": [
+    {
+      "fieldId": 45,
+      "code": "VEHICLE_TYPE",
+      "label": "Vehicle type",
+      "fieldType": "SELECT",
+      "options": ["CAR", "BIKE"],
+      "filterOperator": "IN",
+      "icon": null
+    },
+    {
+      "fieldId": 46,
+      "code": "GENDER",
+      "label": "Gender",
+      "fieldType": "SELECT",
+      "options": ["MALE", "FEMALE"],
+      "filterOperator": "IN",
+      "icon": null
+    }
+  ]
+}
+```
+
+Join `pricingFieldIds` to `providerFilters[].fieldId` for labels, choices and icons.
+Only these IDs require pricing selections; other provider filters remain search
+filters. Collect exactly one string choice per pricing ID, including MULTI_SELECT
+fields, and submit through the separate quote/booking `pricingSelections` property:
+
+```json
+{
+  "pricingSelections": [
+    {"fieldId": 45, "choiceValue": "CAR"},
+    {"fieldId": 46, "choiceValue": "MALE"}
+  ]
+}
+```
+
+Optional query parameters `pricingLatitude` and `pricingLongitude` must be supplied
+together, within [-90,90] and [-180,180]; invalid pairs return 400. Without them,
+only general rates participate. With them, applicable geographical rates also
+participate. Use the same pricing coordinates as quote/booking (route pickup or
+the applicable booking pricing location). Reload context after market, service,
+option or pricing location changes. Effective windows are evaluated at request
+time, matching existing quote/booking behavior. Quote/booking always revalidate;
+metadata does not reserve a price or promise availability. Marker rules are
+independent and must not be used to discover pricing fields.

@@ -347,3 +347,15 @@ in memory. Before large-scale deployment, replace the candidate scan and repeate
 lookups with batched/spatial queries and load-test it. Repository locks/current-read
 query contracts and ordering are unit tested; production MySQL contention tests
 are still needed to validate deployed isolation/indexing behavior.
+
+
+## Pricing field discovery in booking context
+
+Booking context includes `pricingFieldIds` (sorted unique IDs; `[]` when none).
+Join these IDs to `providerFilters[].fieldId` to render pricing choices and send
+one choice per ID via `pricingSelections` on quote/booking. Provider filter and
+marker fields alone do not identify pricing fields.
+
+Optional paired `pricingLatitude`/`pricingLongitude` query parameters include
+applicable area rates; omit both for general rates only. Refresh context when
+pricing location changes. See [exact contract and sample response](COMBINATION_PRICING_API.md#customer-pricing-field-discovery).

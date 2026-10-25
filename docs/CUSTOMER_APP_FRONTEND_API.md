@@ -1,5 +1,9 @@
 # Customer App — full frontend API reference
 
+The new booking-request lifecycle now supports WALLET as well as CARD. See
+[wallet request payments](WALLET_BOOKING_REQUESTS_API.md) for the confirmation endpoint,
+reservation states, funding rules and WALLET_BOOKING_SETTLE accounting.
+
 PayHere customer-confirmed bookings now support automatic provider earnings credit.
 See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
 payment references, earnings history and environment separation.
@@ -1868,3 +1872,14 @@ Current APIs support customer authentication/profile, market catalog, dynamic re
 
 Source of truth for this reference: AuthController and auth DTOs; CustomerProfileController/Service and profile DTOs; MarketController/MarketResponse; CustomerDiscoveryController/Service and CustomerDiscoveryApi; CustomerRequirementsController/Service and CustomerRequirementsApi; FileUploadController and S3 private/image services; ServiceOptionResponse, ServiceDynamicSchemaResponse, ServiceCustomFieldResponse, ServiceSetupResponse; CustomerBookingController/Service, CreateBookingRequest and BookingResponse; GlobalExceptionHandler and security configuration. This document changes documentation only, not runtime APIs. Dates and deployment configuration must be verified separately before release.
 
+
+
+## Pricing field discovery metadata
+
+`GET /api/v1/customers/me/booking-context` returns top-level `pricingFieldIds`,
+for example `[45, 46]`. Join to `providerFilters[].fieldId` for field definitions;
+collect exactly one choice per ID in quote/booking `pricingSelections`.
+Optional paired `pricingLatitude` and `pricingLongitude` query parameters include
+applicable area rates. Without coordinates only general rates participate.
+Refresh after pricing-location changes; marker fields are independent.
+See [full contract and JSON sample](COMBINATION_PRICING_API.md#customer-pricing-field-discovery).

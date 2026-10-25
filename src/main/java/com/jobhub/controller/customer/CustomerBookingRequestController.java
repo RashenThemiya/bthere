@@ -26,6 +26,8 @@ public class CustomerBookingRequestController {
     public Checkout confirm(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id,@Valid @RequestBody Confirm input) {
         return service.confirm(user.id(),id,input);
     }
+    @PostMapping("/booking-requests/{id}/confirm-wallet")
+    public View confirmWallet(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.confirmWallet(user.id(),id);}
     @PostMapping("/booking-requests/{id}/cancel")
     public View cancel(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.cancel(user.id(),id);}
     @GetMapping("/bookings/{jobId}/verification-codes")

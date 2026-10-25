@@ -33,6 +33,7 @@ public class CustomerDiscoveryService {
     private final ServiceTypeSkillRepository configuredSkills;
     private final ProviderSearchFields providerSearchFields;
     private final MapMarkerResolver mapMarkerResolver;
+    private final com.jobhub.service.market.ServicePricingService pricing;
 
     public List<ServiceCard> services(Long userId, Long marketId) {
         profiles.get(userId); availability.market(marketId);
@@ -55,11 +56,17 @@ public class CustomerDiscoveryService {
                 access(requirements.eligibility(userId, serviceId, o.optionId())))).toList();
     }
     public Context context(Long userId, Long marketId, Long serviceId, Long optionId) {
+        return context(userId, marketId, serviceId, optionId, null, null);
+    }
+    public Context context(Long userId, Long marketId, Long serviceId, Long optionId,
+                           BigDecimal pricingLatitude, BigDecimal pricingLongitude) {
         var card = options(userId, marketId, serviceId).stream().filter(o -> optionId.equals(o.option().optionId()))
                 .findFirst().orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
         return new Context(marketId, availability.market(marketId).getTimezone(), card,
                 fields.schema(serviceId, "BOOKING_FIELD", optionId), List.of("languages", "requiredSkillIds", "providerFilters"), false,
-                providerSearchFields.schema(providerSearchFields.definitions(serviceId, optionId)));
+                providerSearchFields.schema(providerSearchFields.definitions(serviceId, optionId)),
+                pricing.pricingFieldIds(marketId, serviceId, optionId, card.option().schedulingModel(),
+                        pricingLatitude, pricingLongitude));
     }
     public Results search(Long userId, Search request) {
         return search(userId, request, null);

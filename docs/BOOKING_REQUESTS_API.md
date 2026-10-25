@@ -1,4 +1,7 @@
-# Scheduled booking requests: customer, provider and card payment APIs
+# Scheduled booking requests: customer, provider, card and wallet payment APIs
+
+WALLET is now supported alongside CARD. See [WALLET_BOOKING_REQUESTS_API.md](WALLET_BOOKING_REQUESTS_API.md)
+for confirm-wallet, structured shortfalls, reserved payment states and automatic settlement.
 
 Superadmin read-only request/booking/offer/payment/settlement monitoring is documented
 in [ADMIN_BOOKING_MONITOR_API.md](ADMIN_BOOKING_MONITOR_API.md).
@@ -6,7 +9,7 @@ in [ADMIN_BOOKING_MONITOR_API.md](ADMIN_BOOKING_MONITOR_API.md).
 Implemented locally, 25 October 2026. Not deployed or tested against a live
 PayHere merchant account or mobile device. Apply BOOKING_REQUESTS_SCHEMA.sql
 before rollout. This opt-in flow supports a single provider, scheduled bookings,
-LKR and Visa/Mastercard credit or debit card checkout. No balance check or hold is
+LKR, Visa/Mastercard credit or debit card checkout, and existing wallet funds. No card balance check or hold is
 made before matching. Existing wallet/mock capability APIs do not describe this
 new hosted checkout integration.
 
@@ -57,9 +60,9 @@ PUT /api/v1/admin/service-options/{optionId}/booking-request-policy
 }
 ```
 
-Missing policy means disabled with the displayed defaults. Enabling requires CARD
+Missing policy means disabled with the displayed defaults. Enabling requires CARD or WALLET
 in the option's allowedPaymentMethods, ADMIN pricing, supported single-provider
-fulfillment, configured PayHere checkout, and an encryption key for codes. Team
+fulfillment and an encryption key for codes. CARD requires configured PayHere checkout; WALLET-only does not. Team
 options are rejected explicitly. Policies are shared across linked services.
 For an enabled option, the legacy POST /customers/me/bookings endpoint returns
 409 directing the customer to booking-requests; it cannot bypass this lifecycle.
@@ -99,7 +102,8 @@ application/json. Paths below begin /api/v1/customers/me.
 | GET /booking-requests/policy?optionId=12 | 200 policy |
 | POST /booking-requests | 201 request View; requires Idempotency-Key header |
 | GET /booking-requests/{requestId} | 200 current View |
-| POST /booking-requests/{requestId}/confirm | 200 hosted Checkout |
+| POST /booking-requests/{requestId}/confirm | 200 hosted Checkout for CARD |
+| POST /booking-requests/{requestId}/confirm-wallet | 200 View for WALLET; no body |
 | POST /booking-requests/{requestId}/cancel | 200 cancelled View where allowed |
 | GET /bookings/{jobId}/verification-codes | 200 currently available own code |
 | POST /bookings/{jobId}/confirm-completion | 200 confirms provider-requested completion; no body or code |
@@ -148,7 +152,8 @@ search/request is required to discover providers outside the original queue.
 
 View fields: requestId, status, selectionMode, offerId, providerId,
 offerExpiresAt, confirmationExpiresAt, jobId, paymentStatus, expectedAmount and
-currencyCode, platformFeePercentage, platformFee and providerEarnings. An active
+currencyCode, platformFeePercentage, platformFee, providerEarnings, settlementStatus,
+settlementOperationId, paymentFundingMode and paymentMethod. An active
 offer identifies a candidate, not a confirmed booking.
 jobId appears after provider acceptance; AWAITING_PAYMENT is a capacity
 reservation, not paid/confirmed service. Amount/currency can be null when no
@@ -308,7 +313,8 @@ Automatic PayHere retrieval/refunds, customer cancellation after successful
 payment, provider cancellation after acceptance, automatic provider payouts,
 team dispatch and live Ride Now matching remain outside this MVP. Resolve paid
 cancellations, duplicate payments and refund/chargeback review through merchant
-operations; do not advertise automatic refunds or provider earnings distribution.
+operations; do not advertise automatic refunds or bank payouts. Customer-confirmed
+CARD and WALLET request bookings do automatically distribute saved provider earnings to the wallet.
 
 References: PayHere [Checkout API](https://support.payhere.lk/api-%26-mobile-sdk/checkout-api),
 [hold limitations](https://support.payhere.lk/hold-on-card), Firebase

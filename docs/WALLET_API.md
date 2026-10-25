@@ -1,5 +1,9 @@
 # Initial wallet and booking-payment foundation
 
+The new booking-request lifecycle now supports WALLET as well as CARD. See
+[wallet request payments](WALLET_BOOKING_REQUESTS_API.md) for the confirmation endpoint,
+reservation states, funding rules and WALLET_BOOKING_SETTLE accounting.
+
 PayHere customer-confirmed bookings now support automatic provider earnings credit.
 See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
 payment references, earnings history and environment separation.

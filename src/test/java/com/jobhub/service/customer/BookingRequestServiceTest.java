@@ -61,7 +61,7 @@ class BookingRequestServiceTest {
         var provider=new ServiceProvider();provider.setServiceProviderId(15L);provider.setUserId(9L);
         var booking=new CreateBookingRequest(3L,12L,null,null,"ONLINE",start,start.plusHours(1),null,null,null,null,null,null,List.of(),"CARD",null);
         input=new Create(1L,booking,null,null,null,null,null);
-        job=new Job();job.setJobId(70L);job.setMarketId(1L);job.setAssignedServiceProviderId(15L);job.setExpectedAmount(new BigDecimal("1000.00"));
+        job=new Job();job.setPaymentMethod("CARD");job.setJobId(70L);job.setMarketId(1L);job.setAssignedServiceProviderId(15L);job.setExpectedAmount(new BigDecimal("1000.00"));
         job.setCurrencyCode("LKR");job.setStartDatetime(start);job.setExpectedEndDatetime(start.plusHours(1));job.setJobStatus("AWAITING_PAYMENT");job.setPaymentStatus("PENDING");
         lenient().when(users.lockById(5L)).thenReturn(Optional.of(new User()));
         lenient().when(options.findByOptionIdAndServiceProviderTypeId(12L,3L)).thenReturn(Optional.of(option));
@@ -74,7 +74,7 @@ class BookingRequestServiceTest {
         lenient().when(discovery.search(eq(5L),any())).thenReturn(results);
         lenient().when(discovery.searchForProvider(eq(5L),any(),eq(15L))).thenReturn(results);
         lenient().when(bookings.quote(eq(5L),any())).thenReturn(new BookingQuoteResponse(1L,"LKR",job.getExpectedAmount(),start,start.plusHours(1),null,null,null));
-        lenient().when(bookings.reserveCardRequest(eq(5L),any())).thenReturn(job);
+        lenient().when(bookings.reserveRequestBooking(eq(5L),any())).thenReturn(job);
         lenient().when(requests.saveAndFlush(any())).thenAnswer(i -> {request=i.getArgument(0);request.setRequestId(1L);return request;});
         lenient().when(requests.lockById(1L)).thenAnswer(i -> Optional.ofNullable(request));
         lenient().when(requests.findByJobId(70L)).thenAnswer(i -> Optional.ofNullable(request));
@@ -96,11 +96,59 @@ class BookingRequestServiceTest {
     void paying(){accepted();when(checkout.checkout(any(),any(),any())).thenReturn(new Checkout("https://sandbox.payhere.lk/pay/checkout",Map.of(),"PAYMENT_PENDING"));service.confirm(5L,1L,contact());}
     Map<String,String> notification(String status,String paymentId){return Map.of("order_id",request.getPaymentOrderId(),"payhere_amount","1000.00","payhere_currency","LKR","status_code",status,"payment_id",paymentId,"method","VISA");}
 
+    void walletInput() {
+        var b=input.booking();input=new Create(1L,new CreateBookingRequest(b.serviceTypeId(),b.optionId(),b.providerId(),b.providerIds(),
+            b.deliveryMode(),b.startDatetime(),b.expectedEndDatetime(),b.requestedPickupTime(),b.pickup(),b.destination(),b.providerLocationId(),
+            b.meetingPoint(),b.customerNote(),b.answers(),"WALLET",b.pricingSelections()),null,null,null,null,null);
+        job.setPaymentMethod("WALLET");
+        lenient().when(wallets.reserveRequestBooking(5L,70L)).thenAnswer(i -> {
+            job.setPaymentStatus("RESERVED");return new com.jobhub.dto.customer.WalletApi.Operation(50L,"BOOKING_RESERVE",70L,"LKR",
+                job.getExpectedAmount(),"POSTED",null,null,null,"PAYHERE",null);
+        });
+        lenient().when(wallets.settleRequestWalletBooking(5L,70L)).thenAnswer(i -> {
+            job.setPaymentStatus("SETTLED");request.setPaymentStatus("SETTLED");request.setSettlementStatus("POSTED");
+            return new com.jobhub.dto.customer.WalletApi.Operation(66L,"WALLET_BOOKING_SETTLE",70L,"LKR",job.getExpectedAmount(),"POSTED");
+        });
+    }
+    @Test void walletFlowReservesOnlyAfterAcceptanceAndCreditsOnlyAtCompletion() {
+        walletInput();accepted();verify(wallets,never()).reserveRequestBooking(any(),any());
+        var first=service.confirmWallet(5L,1L);assertThat(first.status()).isEqualTo("CONFIRMED");
+        assertThat(first.paymentStatus()).isEqualTo("RESERVED");assertThat(first.paymentMethod()).isEqualTo("WALLET");
+        assertThat(first.paymentFundingMode()).isEqualTo("PAYHERE");
+        assertThat(service.confirmWallet(5L,1L).status()).isEqualTo("CONFIRMED");verify(wallets,times(1)).reserveRequestBooking(5L,70L);
+        job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));service.verifyStartCode(9L,70L,codes.decrypt(request.getStartCode()));
+        service.requestCompletion(9L,70L);verify(wallets,never()).settleRequestWalletBooking(any(),any());
+        service.confirmCompletion(5L,70L);service.confirmCompletion(5L,70L);
+        assertThat(job.getPaymentStatus()).isEqualTo("SETTLED");assertThat(request.getPaymentStatus()).isEqualTo("SETTLED");
+        verify(wallets,never()).settleCardBooking(any(),any());verifyNoInteractions(checkout);
+    }
+    @Test void walletInsufficiencyKeepsConfirmationDeadlineAndDoesNotConfirm() {
+        walletInput();accepted();var deadline=request.getConfirmationExpiresAt();
+        doThrow(new InsufficientWalletFundsException("LKR",new BigDecimal("1000"),new BigDecimal("200"))).when(wallets).reserveRequestBooking(5L,70L);
+        assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(InsufficientWalletFundsException.class);
+        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");assertThat(request.getConfirmationExpiresAt()).isEqualTo(deadline);
+        assertThat(request.getStartCode()).isNull();assertThat(job.getPaymentStatus()).isEqualTo("PENDING");
+    }
+    @Test void walletOnlyRequestDoesNotRequirePayHereAndCannotUseCardCheckout() {
+        walletInput();option.setAllowedPaymentMethods(Set.of("WALLET"));
+        lenient().doThrow(new PaymentUnavailableException("not configured")).when(checkout).requireReady();
+        accepted();assertThatThrownBy(() -> service.confirm(5L,1L,contact())).isInstanceOf(ConflictException.class);
+        verify(checkout,never()).requireReady();
+        request.setConfirmationExpiresAt(Instant.now().minusSeconds(1));
+        assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(ConflictException.class);
+        verify(wallets,never()).reserveRequestBooking(any(),any());
+    }
+    @Test void cardRequestCannotBeConfirmedWithWalletAndUnacceptedWalletCannotConfirm() {
+        accepted();assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(ConflictException.class);
+        walletInput();request.setPayloadJson(writeWalletInput());request.setJobId(null);
+        assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(ConflictException.class);
+    }
+    String writeWalletInput(){try{return mapper.writeValueAsString(input);}catch(Exception e){throw new RuntimeException(e);}}
     @Test void openDispatchValidatesBeforeOfferingWithoutCreatingOrChargingJob(){
         var result=service.create(5L,"key",input);
         assertThat(result.status()).isEqualTo("MATCHING");assertThat(stored).hasSize(1);
         assertThat(result.expectedAmount()).isEqualByComparingTo("1000");
-        verify(bookings).validateRequestFields(5L,input.booking());verify(bookings,never()).reserveCardRequest(any(),any());
+        verify(bookings).validateRequestFields(5L,input.booking());verify(bookings,never()).reserveRequestBooking(any(),any());
         verify(checkout,never()).checkout(any(),any(),any());
     }
     @Test void invalidRequiredFieldsNeverCreateRequestOrOffers(){
@@ -128,12 +176,12 @@ class BookingRequestServiceTest {
     @Test void acceptingReservesCapacityAndWaitsForCustomerWithoutPayment(){
         accepted();assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");assertThat(request.getJobId()).isEqualTo(70L);
         assertThat(stored.get(0).getStatus()).isEqualTo("ACCEPTED");assertThat(request.getConfirmationExpiresAt()).isAfter(Instant.now());
-        service.accept(9L,1L);verify(bookings,times(1)).reserveCardRequest(any(),any());verify(checkout,never()).checkout(any(),any(),any());
+        service.accept(9L,1L);verify(bookings,times(1)).reserveRequestBooking(any(),any());verify(checkout,never()).checkout(any(),any(),any());
     }
     @Test void expiredOfferCannotReserveAndWorkerExpiresIt(){
         create();stored.get(0).setExpiresAt(Instant.now().minusSeconds(1));
         assertThatThrownBy(() -> service.accept(9L,1L)).isInstanceOf(ConflictException.class);
-        service.expire(1L);assertThat(request.getStatus()).isEqualTo("UNMATCHED");verify(bookings,never()).reserveCardRequest(any(),any());
+        service.expire(1L);assertThat(request.getStatus()).isEqualTo("UNMATCHED");verify(bookings,never()).reserveRequestBooking(any(),any());
     }
     @Test void expiredConfirmationReleasesPendingJob(){
         accepted();request.setConfirmationExpiresAt(Instant.now().minusSeconds(1));service.expire(1L);

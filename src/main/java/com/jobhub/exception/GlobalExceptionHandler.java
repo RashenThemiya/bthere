@@ -73,6 +73,15 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(InsufficientWalletFundsException.class)
+    public ProblemDetail handleInsufficientWalletFunds(InsufficientWalletFundsException exception) {
+        var problem=ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,exception.getMessage());
+        problem.setTitle("Insufficient wallet balance");problem.setProperty("code","INSUFFICIENT_WALLET_FUNDS");
+        problem.setProperty("currencyCode",exception.getCurrencyCode());problem.setProperty("requiredAmount",exception.getRequiredAmount());
+        problem.setProperty("availableAmount",exception.getAvailableAmount());problem.setProperty("shortfall",exception.getShortfall());
+        return problem;
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(

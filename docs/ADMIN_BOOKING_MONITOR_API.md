@@ -1,5 +1,9 @@
 # Superadmin booking and transaction monitoring
 
+The new booking-request lifecycle now supports WALLET as well as CARD. See
+[wallet request payments](WALLET_BOOKING_REQUESTS_API.md) for the confirmation endpoint,
+reservation states, funding rules and WALLET_BOOKING_SETTLE accounting.
+
 Implemented locally on 25 October 2026; not deployed. All routes are read-only and
 require `Authorization: Bearer <SUPER_ADMIN token>`. CUSTOMER, SERVICE_PROVIDER,
 ADMIN and FINANCE_ADMIN cannot use these monitoring endpoints. Existing audited

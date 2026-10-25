@@ -117,6 +117,8 @@ class JobhubApplicationTests {
         try {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerBookingRequestsController.confirmCompletion(null,70L))
                     .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerBookingRequestsController.confirmWallet(null,1L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
     }
 

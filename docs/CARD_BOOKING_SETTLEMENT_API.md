@@ -1,5 +1,9 @@
 # Automatic PayHere booking settlement
 
+The new booking-request lifecycle now supports WALLET as well as CARD. See
+[wallet request payments](WALLET_BOOKING_REQUESTS_API.md) for the confirmation endpoint,
+reservation states, funding rules and WALLET_BOOKING_SETTLE accounting.
+
 Superadmin read-only request/booking/offer/payment/settlement monitoring is documented
 in [ADMIN_BOOKING_MONITOR_API.md](ADMIN_BOOKING_MONITOR_API.md).
 

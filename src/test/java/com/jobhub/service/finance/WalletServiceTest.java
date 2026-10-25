@@ -50,6 +50,7 @@ class WalletServiceTest {
         var customer = new Customer(); customer.setCustomerId(7L);
         lenient().when(customers.findByUserId(25L)).thenReturn(Optional.of(customer));
         lenient().when(jobs.lockPaymentJob(100L)).thenReturn(Optional.of(job));
+        lenient().when(operations.findLockedByOperationKey(anyString())).thenAnswer(i -> Optional.ofNullable(ops.get(i.getArgument(0))));
         lenient().when(operations.findByOperationKey(anyString())).thenAnswer(i -> Optional.ofNullable(ops.get(i.getArgument(0))));
         lenient().when(operations.save(any())).thenAnswer(i -> {
             WalletOperation op = i.getArgument(0); if (op.getOperationId() == null) op.setOperationId((long)ops.size()+1);
@@ -114,6 +115,7 @@ class WalletServiceTest {
         assertThat(balances.get(42L).getFundingMode()).isEqualTo("PAYHERE_SANDBOX");
         job.setPaymentMethod("WALLET");job.setJobStatus("PENDING");job.setPaymentStatus("PENDING");
         balances.get(25L).setFundingMode("PAYHERE_SANDBOX");
+        when(bookingRequests.findByJobId(100L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.reserveBooking(25L,100L)).hasMessageContaining("Sandbox earnings");
     }
     @Test void fullCommissionStillRecordsZeroNetEarnings() {
@@ -151,6 +153,75 @@ class WalletServiceTest {
                 new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
         assertThatThrownBy(() -> ((WalletService)proxy.getProxy()).settleCardBooking(25L,100L)).hasMessageContaining("not active");
         verify(manager).rollback(tx);verify(manager,never()).commit(any());verify(ledger,never()).save(any());
+    }
+    com.jobhub.entity.job.BookingRequest walletRequestFixture(String mode) {
+        var r=cardFixture();r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");r.setPaymentStatus("NOT_STARTED");
+        r.setGatewayPaymentId(null);r.setPaymentFundingMode(null);r.setConfirmationExpiresAt(java.time.Instant.now().plusSeconds(120));
+        job.setPaymentMethod("WALLET");job.setJobStatus("AWAITING_PAYMENT");job.setPaymentStatus("PENDING");
+        balances.get(25L).setFundingMode(mode);return r;
+    }
+    @Test void requestWalletReservationAndCompletionSettleNetOnceWithoutCardProof() {
+        var r=walletRequestFixture("PAYHERE");var reservation=service.reserveRequestBooking(25L,100L);
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("80");
+        assertThat(balances.get(25L).getReservedBalance()).isEqualByComparingTo("20");
+        r.setPaymentFundingMode(reservation.fundingMode());r.setPaymentStatus("RESERVED");r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");
+        var first=service.settleRequestWalletBooking(25L,100L);int count=entries.size();
+        assertThat(service.settleRequestWalletBooking(25L,100L).operationId()).isEqualTo(first.operationId());
+        assertThat(entries).hasSize(count);assertThat(first.type()).isEqualTo("WALLET_BOOKING_SETTLE");
+        assertThat(first.paymentReference()).isEqualTo("WALLET_RESERVATION:"+reservation.operationId());
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("18");
+        assertThat(balances.get(25L).getReservedBalance()).isEqualByComparingTo("0");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("80");
+        assertThat(r.getPaymentStatus()).isEqualTo("SETTLED");verifyNoInteractions(paymentNotices);
+        assertThat(entries.stream().filter(e -> first.operationId().equals(e.getOperationId())).map(WalletLedgerEntry::getDelta)
+            .reduce(BigDecimal.ZERO,BigDecimal::add)).isEqualByComparingTo("0");
+    }
+    @Test void requestWalletInsufficiencyReportsRequiredAvailableAndShortfallWithoutPostings() {
+        walletRequestFixture("PAYHERE");entries.clear();seedTestFixture(25L,"5");balances.get(25L).setFundingMode("PAYHERE");
+        var error=catchThrowableOfType(() -> service.reserveRequestBooking(25L,100L),InsufficientWalletFundsException.class);
+        assertThat(error.getRequiredAmount()).isEqualByComparingTo("20");assertThat(error.getAvailableAmount()).isEqualByComparingTo("5");
+        assertThat(error.getShortfall()).isEqualByComparingTo("15");verify(ledger,never()).save(any());verify(operations,never()).save(any());
+    }
+    @Test void requestWalletCannotUseLegacyReservationOrFinanceApprovalEndpoints() {
+        walletRequestFixture("PAYHERE");
+        for(Runnable action:List.<Runnable>of(() -> service.reserveBooking(25L,100L),() -> service.requestSettlement(98L,100L),
+            () -> service.approveSettlement(99L,100L),() -> service.releaseCancelledBooking(99L,100L)))
+            assertThatThrownBy(action::run).hasMessageContaining("booking-request");
+        verify(ledger,never()).save(any());
+    }
+    @Test void requestWalletRejectsSandboxAndUnknownFundingAndExpiredConfirmation() {
+        var r=walletRequestFixture("PAYHERE_SANDBOX");
+        assertThatThrownBy(() -> service.reserveRequestBooking(25L,100L)).hasMessageContaining("Sandbox");
+        balances.get(25L).setFundingMode(null);
+        assertThatThrownBy(() -> service.reserveRequestBooking(25L,100L)).hasMessageContaining("funding source");
+        r.setConfirmationExpiresAt(java.time.Instant.now().minusSeconds(1));
+        assertThatThrownBy(() -> service.reserveRequestBooking(25L,100L)).hasMessageContaining("timely");
+        verify(ledger,never()).save(any());
+    }
+    @Test void mockWalletReservationWorksOnlyInMockModeAndCannotMixWithLiveEarnings() {
+        var r=walletRequestFixture("MOCK");
+        assertThatThrownBy(() -> service.reserveRequestBooking(25L,100L)).hasMessageContaining("outside mock mode");
+        ops.clear();org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");
+        service.reserveRequestBooking(25L,100L);r.setPaymentFundingMode("MOCK");r.setPaymentStatus("RESERVED");
+        r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");seedTestFixture(42L,"5");balances.get(42L).setFundingMode("PAYHERE");
+        assertThatThrownBy(() -> service.settleRequestWalletBooking(25L,100L)).hasMessageContaining("cannot be mixed");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("5");
+        assertThat(balances.get(25L).getReservedBalance()).isEqualByComparingTo("20");
+    }
+    @Test void mockRequestSettlementKeepsProviderEarningsAndPlatformFeeSynthetic() {
+        var r=walletRequestFixture("MOCK");org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");
+        service.reserveRequestBooking(25L,100L);r.setPaymentFundingMode("MOCK");r.setPaymentStatus("RESERVED");
+        r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");var op=service.settleRequestWalletBooking(25L,100L);
+        assertThat(op.fundingMode()).isEqualTo("MOCK");assertThat(balances.get(42L).getFundingMode()).isEqualTo("MOCK");
+        assertThat(entries).anyMatch(e -> "MOCK_PLATFORM_FEE".equals(e.getBucket()) && e.getDelta().compareTo(new BigDecimal("2"))==0);
+    }
+    @Test void requestWalletSettlementRejectsChangedFundingProofAndCommission() {
+        var r=walletRequestFixture("PAYHERE");service.reserveRequestBooking(25L,100L);
+        r.setPaymentFundingMode("MOCK");r.setPaymentStatus("RESERVED");r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");
+        assertThatThrownBy(() -> service.settleRequestWalletBooking(25L,100L)).hasMessageContaining("funding proof");
+        r.setPaymentFundingMode("PAYHERE");r.setPlatformFee(new BigDecimal("3"));
+        assertThatThrownBy(() -> service.settleRequestWalletBooking(25L,100L)).hasMessageContaining("reconcile");
+        assertThat(balances).doesNotContainKey(42L);
     }
     @Test void releaseOneRejectsOtherCurrenciesBeforeAccessingWallets() {
         org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");

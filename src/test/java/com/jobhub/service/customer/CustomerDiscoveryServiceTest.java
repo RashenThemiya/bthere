@@ -37,6 +37,7 @@ class CustomerDiscoveryServiceTest {
     @Mock ServiceTypeSkillRepository configuredSkills;
     @Mock ProviderSearchFields providerSearchFields;
     @Mock MapMarkerResolver mapMarkerResolver;
+    @Mock com.jobhub.service.market.ServicePricingService pricing;
     @InjectMocks CustomerDiscoveryService service;
     ServiceOption option;
     ServiceProviderTypeAssignment assignment;
@@ -66,6 +67,18 @@ class CustomerDiscoveryServiceTest {
         var a = new ServiceProviderServiceArea(); a.setServiceAreaId(50L); a.setMarketId(1L); a.setStatus("ACTIVE");
         a.setLatitude(new BigDecimal("6.9271")); a.setLongitude(new BigDecimal("79.8612")); a.setRadiusKm(BigDecimal.TEN); a.setCapacity(3); return a;
     }
+    @Test void bookingContextExposesPricingIdsAndForwardsCoordinates() {
+        var response = mock(com.jobhub.dto.provider.ServiceOptionResponse.class);
+        when(response.optionId()).thenReturn(12L);
+        when(response.schedulingModel()).thenReturn("TIME_BASED");
+        when(optionService.list(3L, false)).thenReturn(List.of(response));
+        when(requirements.eligibility(25L, 3L, 12L)).thenReturn(new Eligibility(true, List.of()));
+        when(pricing.pricingFieldIds(1L, 3L, 12L, "TIME_BASED", point().latitude(), point().longitude()))
+                .thenReturn(List.of(45L, 46L));
+        var context = service.context(25L, 1L, 3L, 12L, point().latitude(), point().longitude());
+        assertThat(context.pricingFieldIds()).containsExactly(45L, 46L);
+    }
+
     @Test void ineligibleSearchStopsBeforeReadingProviderCandidates() {
         doThrow(new CustomerEligibilityException(new Eligibility(false, List.of(new Reason("MISSING", "NIC", "Upload NIC")))))
                 .when(requirements).requireEligible(25L, 3L, 12L);

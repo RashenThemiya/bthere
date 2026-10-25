@@ -47,7 +47,8 @@ public class BookingRequestService {
     public Policy setPolicy(Long optionId, Policy input) {
         var option=options.findLockedById(optionId).orElseThrow(() -> new ResourceNotFoundException("Option not found"));
         if(input.enabled()) {
-            requireSupported(option); checkout.requireReady(); codes.requireReady();
+            requireSupported(option); codes.requireReady();
+            if(!option.getAllowedPaymentMethods().contains("WALLET"))checkout.requireReady();
         }
         var p=policies.findById(optionId).orElseGet(BookingRequestPolicy::new);
         p.setOptionId(optionId); p.setEnabled(input.enabled()); p.setMinimumNoticeMinutes(input.minimumNoticeMinutes());
@@ -82,10 +83,12 @@ public class BookingRequestService {
             throw new ConflictException("Resolve or cancel the existing active request for this option before creating another");
         var option=options.findByOptionIdAndServiceProviderTypeId(b.optionId(),b.serviceTypeId())
                 .filter(o -> o.activeForService(b.serviceTypeId())).orElseThrow(() -> new ResourceNotFoundException("Active option not found"));
-        requireSupported(option); checkout.requireReady(); codes.requireReady();
+        requireSupported(option); codes.requireReady();
+        if("CARD".equals(b.paymentMethod()))checkout.requireReady();
         var policy=policies.findById(option.getOptionId()).filter(BookingRequestPolicy::isEnabled)
                 .orElseThrow(() -> new ConflictException("Booking requests are not enabled for this option"));
-        if(!"CARD".equals(b.paymentMethod())) throw new IllegalArgumentException("Booking requests require CARD");
+        if(!Set.of("CARD","WALLET").contains(b.paymentMethod()==null?"":b.paymentMethod()))
+            throw new IllegalArgumentException("Booking requests require CARD or WALLET");
         if(b.providerIds()!=null && !b.providerIds().isEmpty()) throw new IllegalArgumentException("This MVP supports one provider per request");
         boolean direct="DIRECT_REQUEST".equals(option.getProviderSelectionMode());
         if(direct != (b.providerId()!=null)) throw new IllegalArgumentException("DIRECT_REQUEST requires providerId; OPEN_REQUEST must omit it");
@@ -137,14 +140,14 @@ public class BookingRequestService {
                 || "ONE_CUSTOMER_MANY_PROVIDERS".equals(option.getFulfillmentModel())
                 || option.getRequiredProviderCount()!=null && option.getRequiredProviderCount()>1)
             throw new IllegalArgumentException("Request MVP supports single-provider fulfillment only");
-        if(!option.getAllowedPaymentMethods().contains("CARD") || !"ADMIN".equals(option.getPricingOwner()))
-            throw new IllegalArgumentException("Request MVP requires CARD enabled and ADMIN pricing");
+        if(option.getAllowedPaymentMethods().stream().noneMatch(Set.of("CARD","WALLET")::contains) || !"ADMIN".equals(option.getPricingOwner()))
+            throw new IllegalArgumentException("Request MVP requires CARD or WALLET enabled and ADMIN pricing");
     }
     private CreateBookingRequest selected(BookingRequest r,Long providerId,Long locationId) {
         var b=read(r.getPayloadJson(),Create.class).booking();
         return new CreateBookingRequest(b.serviceTypeId(),b.optionId(),providerId,null,b.deliveryMode(),b.startDatetime(),
                 b.expectedEndDatetime(),b.requestedPickupTime(),b.pickup(),b.destination(),locationId,b.meetingPoint(),
-                b.customerNote(),b.answers(),"CARD",b.pricingSelections());
+                b.customerNote(),b.answers(),b.paymentMethod(),b.pricingSelections());
     }
     private void dispatch(BookingRequest r,BookingRequestPolicy p) {
         List<Candidate> candidates=readCandidates(r.getCandidatesJson());
@@ -203,7 +206,7 @@ public class BookingRequestService {
             throw new ConflictException("Offer is no longer available");
         var policy=policies.findById(r.getOptionId()).filter(BookingRequestPolicy::isEnabled)
                 .orElseThrow(() -> new ConflictException("Booking requests disabled for this option"));
-        var job=bookings.reserveCardRequest(r.getUserId(),selected(r,providerId,offer.getProviderLocationId()));
+        var job=bookings.reserveRequestBooking(r.getUserId(),selected(r,providerId,offer.getProviderLocationId()));
         if(r.getQuotedAmount()==null || r.getQuotedAmount().compareTo(job.getExpectedAmount())!=0
                 || !Objects.equals(r.getCurrencyCode(),job.getCurrencyCode())
                 || zero(r.getPlatformFeePercentage()).compareTo(zero(job.getPlatformFeePercentage()))!=0
@@ -243,6 +246,7 @@ public class BookingRequestService {
     @Transactional
     public Checkout confirm(Long userId,Long id,Confirm contact) {
         var r=owned(userId,id);
+        if(!"CARD".equals(requestMethod(r)))throw new ConflictException("Use confirm-wallet for a WALLET request");
         if("PAYMENT_PENDING".equals(r.getStatus())) {
             if(!contact.cardMethod().equals(r.getCheckoutMethod())) throw new ConflictException("Checkout already started with another card method");
             return read(r.getCheckoutJson(),Checkout.class);
@@ -258,6 +262,42 @@ public class BookingRequestService {
         r.setCheckoutJson(write(session)); r.setStatus("PAYMENT_PENDING"); r.setPaymentStatus("PENDING"); r.setPaymentStartedAt(Instant.now());
         return session;
     }
+    /** Reserve existing wallet funds only after provider acceptance and explicit customer confirmation. */
+    @Transactional
+    public View confirmWallet(Long userId,Long id) {
+        var r=owned(userId,id);
+        if(!"WALLET".equals(requestMethod(r)) || r.getJobId()==null)throw new ConflictException("Provider must accept a WALLET request first");
+        var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow();
+        if(!"WALLET".equals(job.getPaymentMethod()))
+            throw new ConflictException("This request does not use WALLET");
+        if(Set.of("CONFIRMED","IN_PROGRESS","AWAITING_COMPLETION_CONFIRMATION","COMPLETED").contains(r.getStatus())
+                && Set.of("RESERVED","SETTLED").contains(r.getPaymentStatus()))return view(r);
+        if(!"AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) || r.getConfirmationExpiresAt()==null
+                || !Instant.now().isBefore(r.getConfirmationExpiresAt()))
+            throw new ConflictException("Customer confirmation expired or provider has not accepted");
+        var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
+        if(!job.getStartDatetime().atZone(zone).toInstant().isAfter(Instant.now()))throw new ConflictException("Booking start time has passed");
+        var reservation=wallets.reserveRequestBooking(userId,job.getJobId());
+        r.setPaymentFundingMode(reservation.fundingMode());r.setPaymentStatus("RESERVED");r.setPaymentStartedAt(Instant.now());
+        confirmService(r,job);return view(r);
+    }
+    private String requestMethod(BookingRequest r) {return read(r.getPayloadJson(),Create.class).booking().paymentMethod();}
+    private boolean paymentReady(Job job) {
+        return "CARD".equals(job.getPaymentMethod()) && "PAID".equals(job.getPaymentStatus())
+            || "WALLET".equals(job.getPaymentMethod()) && "RESERVED".equals(job.getPaymentStatus());
+    }
+    private void settleRequest(Long userId,Job job) {
+        if("WALLET".equals(job.getPaymentMethod()))wallets.settleRequestWalletBooking(userId,job.getJobId());
+        else if("CARD".equals(job.getPaymentMethod()))wallets.settleCardBooking(userId,job.getJobId());
+        else throw new ConflictException("Unsupported booking payment method");
+    }
+    private void confirmService(BookingRequest r,Job job) {
+        r.setStatus("CONFIRMED");job.setJobStatus("CONFIRMED");r.setStartCode(codes.encrypt(codes.generate()));
+        var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
+        r.setCodeExpiresAt(job.getExpectedEndDatetime().atZone(zone).toInstant().plus(Duration.ofHours(24)));
+        event(r,r.getUserId(),null,"BOOKING_CONFIRMED",null);
+        event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"BOOKING_CONFIRMED",null);
+    }
     @Transactional
     public View cancel(Long userId,Long id) {
         var r=owned(userId,id);
@@ -271,6 +311,7 @@ public class BookingRequestService {
         checkout.verify(params);
         var found=requests.findByPaymentOrderId(params.get("order_id")).orElseThrow(() -> new ResourceNotFoundException("Payment order not found"));
         var r=locked(found.getRequestId()); var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow();
+        if(!"CARD".equals(job.getPaymentMethod()))throw new ConflictException("Gateway notifications cannot fund WALLET bookings");
         if(!job.getCurrencyCode().equals(params.get("payhere_currency"))
                 || job.getExpectedAmount().compareTo(new BigDecimal(params.get("payhere_amount")))!=0)
             throw new IllegalArgumentException("Payment amount or currency mismatch");
@@ -313,12 +354,8 @@ public class BookingRequestService {
                 r.setPaymentStatus("REFUND_REVIEW"); r.setGatewayPaymentId(params.get("payment_id"));
                 job.setPaymentStatus("PAID_REVIEW"); stop(r,"PAYMENT_REVIEW"); return;
             }
-            r.setGatewayPaymentId(params.get("payment_id")); r.setPaymentStatus("PAID"); r.setStatus("CONFIRMED");
-            job.setPaymentStatus("PAID"); job.setJobStatus("CONFIRMED");
-            r.setStartCode(codes.encrypt(codes.generate()));
-            r.setCodeExpiresAt(job.getExpectedEndDatetime().atZone(zone).toInstant().plus(Duration.ofHours(24)));
-            event(r,r.getUserId(),null,"BOOKING_CONFIRMED",null);
-            event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"BOOKING_CONFIRMED",null);
+            r.setGatewayPaymentId(params.get("payment_id"));r.setPaymentStatus("PAID");job.setPaymentStatus("PAID");
+            confirmService(r,job);
         } else if(Set.of("-1","-2").contains(status) && "PAYMENT_PENDING".equals(r.getStatus())) {
             r.setGatewayPaymentId(params.get("payment_id")); r.setPaymentStatus("FAILED"); job.setPaymentStatus("FAILED"); stop(r,"PAYMENT_FAILED");
         }
@@ -340,7 +377,7 @@ public class BookingRequestService {
         String expected="CONFIRMED", next="IN_PROGRESS";
         // Repeated successful transitions are idempotent; no second code can trigger another transition.
         if(next.equals(r.getStatus())) return new Transition(true,next);
-        if(!expected.equals(r.getStatus()) || !"PAID".equals(job.getPaymentStatus())) throw new ConflictException("Booking cannot transition in its current state");
+        if(!expected.equals(r.getStatus()) || !paymentReady(job)) throw new ConflictException("Booking cannot transition in its current state");
         requireCodeWindow(r,job);
         int attempts=r.getStartAttempts();
         if(attempts>=5) return new Transition(false,"CODE_LOCKED");
@@ -360,7 +397,7 @@ public class BookingRequestService {
         var r=locked(found.getRequestId());var job=jobs.lockPaymentJob(jobId).orElseThrow();
         if(!providerId(userId).equals(job.getAssignedServiceProviderId())) throw new ResourceNotFoundException("Booking not found");
         if(Set.of("AWAITING_COMPLETION_CONFIRMATION","COMPLETED").contains(r.getStatus()))return new Transition(true,r.getStatus());
-        if(!"IN_PROGRESS".equals(r.getStatus()) || !"IN_PROGRESS".equals(job.getJobStatus()) || !"PAID".equals(job.getPaymentStatus()))
+        if(!"IN_PROGRESS".equals(r.getStatus()) || !"IN_PROGRESS".equals(job.getJobStatus()) || !paymentReady(job))
             throw new ConflictException("Only an in-progress paid booking can request completion");
         r.setStatus("AWAITING_COMPLETION_CONFIRMATION");job.setJobStatus("AWAITING_COMPLETION_CONFIRMATION");
         var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
@@ -375,13 +412,13 @@ public class BookingRequestService {
         if(!userId.equals(r.getUserId()))throw new ResourceNotFoundException("Booking not found");
         var job=jobs.lockPaymentJob(jobId).orElseThrow();
         if("COMPLETED".equals(r.getStatus())){
-            wallets.settleCardBooking(userId,jobId);return new Transition(true,"COMPLETED");
+            settleRequest(userId,job);return new Transition(true,"COMPLETED");
         }
         if(!"AWAITING_COMPLETION_CONFIRMATION".equals(r.getStatus())
-                || !"AWAITING_COMPLETION_CONFIRMATION".equals(job.getJobStatus()) || !"PAID".equals(job.getPaymentStatus()))
+                || !"AWAITING_COMPLETION_CONFIRMATION".equals(job.getJobStatus()) || !paymentReady(job))
             throw new ConflictException("The provider must request completion before the customer confirms");
         r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");
-        wallets.settleCardBooking(userId,jobId);
+        settleRequest(userId,job);
         event(r,r.getUserId(),null,"BOOKING_COMPLETED",null);
         event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"BOOKING_COMPLETED",null);
         return new Transition(true,"COMPLETED");
@@ -390,7 +427,7 @@ public class BookingRequestService {
     public void resetCode(Long actorId,Long jobId,String reason) {
         var found=requests.findByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking request not found"));
         var r=locked(found.getRequestId());var job=jobs.lockPaymentJob(jobId).orElseThrow();
-        if(!"CONFIRMED".equals(r.getStatus()) || !"PAID".equals(job.getPaymentStatus()))
+        if(!"CONFIRMED".equals(r.getStatus()) || !paymentReady(job))
             throw new ConflictException("Only a paid booking waiting to start can receive a replacement start code");
         String replacement=codes.encrypt(codes.generate());
         r.setStartCode(replacement);r.setStartAttempts(0);
@@ -464,7 +501,7 @@ public class BookingRequestService {
                 active==null?null:active.getProviderId(),active==null?null:active.getExpiresAt(),r.getConfirmationExpiresAt(),
                 r.getJobId(),r.getPaymentStatus(),r.getQuotedAmount(),r.getCurrencyCode(),
                 r.getPlatformFeePercentage(),r.getPlatformFee(),r.getProviderEarnings(),
-                r.getSettlementStatus(),r.getSettlementOperationId(),r.getPaymentFundingMode());
+                r.getSettlementStatus(),r.getSettlementOperationId(),r.getPaymentFundingMode(),requestMethod(r));
     }
     private BigDecimal zero(BigDecimal value){return value==null?new BigDecimal("0.00"):value;}
     private BigDecimal net(BigDecimal gross,BigDecimal fee,BigDecimal saved){return saved==null?gross.subtract(zero(fee)):saved;}

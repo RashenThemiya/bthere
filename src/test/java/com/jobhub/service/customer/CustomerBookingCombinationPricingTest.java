@@ -128,7 +128,7 @@ class CustomerBookingCombinationPricingTest {
         var card=new CreateBookingRequest(b.serviceTypeId(),b.optionId(),b.providerId(),b.providerIds(),b.deliveryMode(),
                 b.startDatetime(),b.expectedEndDatetime(),null,null,null,null,null,null,List.of(),"CARD",selections);
         when(jobRepository.saveAndFlush(any())).thenAnswer(i -> {Job job=i.getArgument(0);job.setJobId(100L);return job;});
-        var reserved=service.reserveCardRequest(5L,card);
+        var reserved=service.reserveRequestBooking(5L,card);
         assertThat(reserved.getJobStatus()).isEqualTo("AWAITING_PAYMENT");assertThat(reserved.getPaymentStatus()).isEqualTo("PENDING");
         verify(availabilityService).lockProviders(List.of(15L));verifyNoInteractions(walletService);
     }

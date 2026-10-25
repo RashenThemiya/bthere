@@ -34,7 +34,7 @@ class ServicePricingServiceTest {
         var type=new com.jobhub.entity.provider.ServiceProviderType();type.setServiceProviderTypeId(2L);
         lenient().when(options.findById(12L)).thenReturn(Optional.of(option));
         lenient().when(services.findById(2L)).thenReturn(Optional.of(type));
-        when(rates.findAllByMarketIdAndServiceProviderTypeIdAndServiceOptionIdAndStatus(1L, 2L, 12L, "ACTIVE"))
+        lenient().when(rates.findAllByMarketIdAndServiceProviderTypeIdAndServiceOptionIdAndStatus(1L, 2L, 12L, "ACTIVE"))
                 .thenReturn(configured);
     }
 
@@ -55,6 +55,41 @@ class ServicePricingServiceTest {
 
     ServicePricingService.Price price(List<PricingConditionRequest> selections) {
         return service.calculate(1L, 2L, 12L, "TIME_BASED", start, start.plusHours(1), null, null, null, selections);
+    }
+
+    @Test void discoveryReturnsDistinctSortedApplicableFieldIdsAndExcludesOtherRates() {
+        rate(1, "100", choice(46, "MALE"), choice(45, "CAR"));
+        rate(2, "100", choice(45, "BIKE"));
+        rate(3, "100", choice(90, "FUTURE")).setEffectiveFrom(LocalDateTime.now().plusDays(1));
+        rate(4, "100", choice(91, "EXPIRED")).setEffectiveTo(LocalDateTime.now().minusDays(1));
+        rate(5, "100", choice(92, "ROUTE")).setBillingType("ROUTE_BASED");
+        var area = rate(6, "100", choice(47, "LOCAL"));
+        area.setAreaLatitude(new BigDecimal("6.9271"));
+        area.setAreaLongitude(new BigDecimal("79.8612"));
+        area.setAreaRadiusKm(BigDecimal.ONE);
+        assertThat(service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED", null, null))
+                .containsExactly(45L, 46L);
+        assertThat(service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED",
+                area.getAreaLatitude(), area.getAreaLongitude())).containsExactly(45L, 46L, 47L);
+        assertThat(service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED",
+                BigDecimal.ZERO, BigDecimal.ZERO)).containsExactly(45L, 46L);
+    }
+
+    @Test void discoveryReturnsEmptyForUnconditionalRates() {
+        rate(1, "100");
+        assertThat(service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED", null, null)).isEmpty();
+    }
+
+    @Test void discoveryRejectsPartialAndInvalidCoordinates() {
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED", BigDecimal.ONE, null));
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED", null, BigDecimal.ONE));
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED", new BigDecimal("91"), BigDecimal.ZERO));
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                service.pricingFieldIds(1L, 2L, 12L, "TIME_BASED", BigDecimal.ZERO, new BigDecimal("181")));
+        verifyNoInteractions(rates);
     }
 
     @Test void combinationOverridesSingleChoiceAndDefaultRateAndSnapshotsPrice() {
