@@ -18,4 +18,9 @@ public class WalletOperation extends CreatedEntity {
     @Column(precision = 19, scale = 4) private BigDecimal amount;
     private String status;
     private Long actorUserId;
+    @Column(precision=5,scale=2) private BigDecimal platformFeePercentage;
+    @Column(precision=19,scale=4) private BigDecimal platformFee;
+    @Column(precision=19,scale=4) private BigDecimal providerEarnings;
+    private String fundingMode;
+    @Column(length=100) private String paymentReference;
 }

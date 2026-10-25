@@ -1,0 +1,409 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" agent="CareHub workshop generator" version="24.7.17" type="device">
+  <diagram id="page-1" name="01 — System &amp; ownership map">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;01 — System &amp;amp; ownership map&lt;/b&gt;&lt;br&gt;&lt;br&gt;Start here: decide what belongs to the main service, shared option, provider and booking.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;MAIN SERVICE — navigation + common setup&lt;/b&gt;&lt;br&gt;&lt;br&gt;Examples: Caregiver / Ride / Cleaning&lt;br&gt;Identity: serviceTypeId, name, description&lt;br&gt;Media: icon, cover, gallery, marker default&lt;br&gt;Common registration: availability, areas, skills,&lt;br&gt;certificates, education, common documents&lt;br&gt;Option selection: required / min / max&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;SERVICE ↔ OPTION LINK&lt;/b&gt;&lt;br&gt;&lt;br&gt;One shared optionId can appear in many services.&lt;br&gt;Example: Care Ride → Ride AND Caregiver&lt;br&gt;Link settings: displayOrder + status&lt;br&gt;Do not copy option fields or prices per link.&lt;br&gt;Main-service common policies remain distinct.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;SHARED OPTION — reusable configuration&lt;/b&gt;&lt;br&gt;&lt;br&gt;Identity + media + responsibilities&lt;br&gt;Scheduling / delivery / fulfillment / capacity&lt;br&gt;Provider fields + booking fields + document rules&lt;br&gt;Payment configuration + price ownership&lt;br&gt;Conditional rates + combination marker rules&lt;br&gt;Historical owner = configuration namespace&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="contains links" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n4" target="n5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="references one optionId" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n5" target="n6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;PROVIDER REGISTRATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Provider selects option and supplies capabilities.&lt;br&gt;Requirements: answers + documents + reviews&lt;br&gt;Operational source: availability + areas + location&lt;br&gt;One provider enrollment per shared option&lt;br&gt;Find shared registration; do not register again&lt;br&gt;just because another main service links to it.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="670" width="490" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;CUSTOMER WORKFLOW&lt;/b&gt;&lt;br&gt;&lt;br&gt;Service → option → booking schema&lt;br&gt;Select time OR route + delivery details&lt;br&gt;Apply configured provider filters&lt;br&gt;Search eligible providers / configured team&lt;br&gt;Quote → select payment → create booking&lt;br&gt;Booking answers belong to the customer job.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="670" width="490" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;PRICING + MAP PRESENTATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Rate conditions reference fieldId + choiceValue.&lt;br&gt;CAR + MALE can have a specific fare.&lt;br&gt;Marker rules use a combination of choices.&lt;br&gt;Service icon ≠ map marker icon.&lt;br&gt;Shared option means consistent rules from&lt;br&gt;each linked service entry point.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="670" width="490" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="registration contract" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n6" target="n9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="customer schema" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n6" target="n10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="shared rules" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n6" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="eligible candidates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n9" target="n10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n16" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;EXAMPLE RELATIONSHIP&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ride (service 2) ─┐&lt;br&gt;                  ├─ Care Ride (option 4): ONE shared definition&lt;br&gt;Caregiver (1) ────┘&lt;br&gt;Vehicle Type + Licence requirements + Passenger Count + CAR pricing/marker rules are reused.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1060" width="1005" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="n17" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;DISCUSSION DECISIONS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Service list: ______________________&lt;br&gt;Shared option list: _________________&lt;br&gt;Who configures prices? ______________&lt;br&gt;Provider registration owner/source? ___&lt;br&gt;Decision owner / date: ______________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1060" width="490" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="n18" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;BOUNDARY / AVOID ASSUMPTIONS&lt;/b&gt;&lt;br&gt;&lt;br&gt;The proposed global FIELD catalog is a separate future layer (page 07). Shared OPTION configuration already exists locally.&lt;br&gt;An enum being accepted does not prove the complete matching/payment workflow is deployed.&lt;br&gt;Existing Front/Back document types are preserved; they are not automatically consolidated by name.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1340" width="1520" height="190" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-2" name="02 — Blank setup worksheet">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1810" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;02 — Blank setup worksheet&lt;/b&gt;&lt;br&gt;&lt;br&gt;Duplicate this page for each option. Replace underscores during the discussion.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;01 / MAIN SERVICE&lt;/b&gt;&lt;br&gt;&lt;br&gt;Name / serviceTypeId: ______________&lt;br&gt;Description / audience: ______________&lt;br&gt;Common requirements: ______________&lt;br&gt;Option min / max selections: _________&lt;br&gt;Availability / areas enabled: _________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;02 / OPTION &amp;amp; LINKS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Code / name / optionId: ______________&lt;br&gt;Original configuration service: _______&lt;br&gt;Linked main services: _______________&lt;br&gt;Link order / active status: ___________&lt;br&gt;Description / responsibilities: _________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;03 / DELIVERY &amp;amp; LOCATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;deliveryModes: _____________________&lt;br&gt;locationEnabled: ___________________&lt;br&gt;Provider address / meeting point: _____&lt;br&gt;Coverage centre + radius: ____________&lt;br&gt;Online or physical workflow: __________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;04 / SCHEDULING&lt;/b&gt;&lt;br&gt;&lt;br&gt;schedulingModel: __________________&lt;br&gt;TIME: start / end / duration: __________&lt;br&gt;ROUTE: pickup / destination: __________&lt;br&gt;Route average speed: _______________&lt;br&gt;Availability constraints: ______________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="625" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;05 / CAPACITY &amp;amp; SELECTION&lt;/b&gt;&lt;br&gt;&lt;br&gt;fulfillmentModel: ___________________&lt;br&gt;defaultCapacity: ___________________&lt;br&gt;requiredProviderCount: ______________&lt;br&gt;bookingMode: _____________________&lt;br&gt;providerSelectionMode: ______________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="625" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;06 / PROVIDER REQUIREMENTS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Field codes / types: _________________&lt;br&gt;MANUAL or PROVIDER_PROFILE: ______&lt;br&gt;Required / approval rules: ____________&lt;br&gt;reuseScope per field: ________________&lt;br&gt;Filter-visible choices: _______________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="625" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;07 / DOCUMENTS &amp;amp; PARTS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Document type(s): __________________&lt;br&gt;Parts: FRONT / BACK / other: _________&lt;br&gt;Required + count + MIME + size: ______&lt;br&gt;Issued/expiry date modes: ____________&lt;br&gt;Bundle review required? ______________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="950" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;08 / BOOKING TEMPLATE&lt;/b&gt;&lt;br&gt;&lt;br&gt;Customer fields / types: ______________&lt;br&gt;Required / optional: _________________&lt;br&gt;Conditional questions: _______________&lt;br&gt;Shared option scope: ________________&lt;br&gt;Example completed booking: __________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="950" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;09 / PRICING &amp;amp; PAYMENTS&lt;/b&gt;&lt;br&gt;&lt;br&gt;pricingOwner: _____________________&lt;br&gt;billingType / durationMinutes: _________&lt;br&gt;Rate or base/per-km/minimum: _________&lt;br&gt;Choice combinations / market / area: ___&lt;br&gt;Allowed methods / actual integration: ___&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="950" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n13" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;10 / MEDIA &amp;amp; MAP&lt;/b&gt;&lt;br&gt;&lt;br&gt;Service / option icon: ________________&lt;br&gt;Cover / gallery: _____________________&lt;br&gt;Default marker / choice marker: _______&lt;br&gt;Combination conditions → icon: _______&lt;br&gt;Fallback / unmatched cases: __________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1275" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;11 / SEARCH &amp;amp; QUOTE&lt;/b&gt;&lt;br&gt;&lt;br&gt;Public provider filters: _______________&lt;br&gt;Candidate attributes: ________________&lt;br&gt;Price selection combinations: _________&lt;br&gt;Quote totals / payment behavior: ______&lt;br&gt;Booking recovery / status UX: _________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1275" width="490" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n15" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;12 / SIGN-OFF / OPEN ITEMS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Unresolved questions: _______________&lt;br&gt;Backend / frontend owner: ____________&lt;br&gt;Migration / compatibility plan: _________&lt;br&gt;Acceptance example + expected result: __&lt;br&gt;Decision / next action / date: __________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1275" width="490" height="290" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-3" name="03 — Configuration enums">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="2250" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;03 — Configuration enums&lt;/b&gt;&lt;br&gt;&lt;br&gt;Values below are from local backend validation. Configuration support is not a deployment guarantee.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;schedulingModel&lt;/b&gt;&lt;br&gt;&lt;br&gt;TIME_BASED — reserve a time window&lt;br&gt;ROUTE_BASED — pickup + destination&lt;br&gt;Route restriction: locationEnabled=true&lt;br&gt;deliveryModes=[PROVIDER_TO_CUSTOMER]&lt;br&gt;fulfillmentModel=ONE_TO_ONE&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;deliveryModes (set)&lt;/b&gt;&lt;br&gt;&lt;br&gt;PROVIDER_TO_CUSTOMER&lt;br&gt;CUSTOMER_TO_PROVIDER&lt;br&gt;ONLINE&lt;br&gt;Online-only cannot enable physical locations.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;fulfillmentModel&lt;/b&gt;&lt;br&gt;&lt;br&gt;ONE_TO_ONE&lt;br&gt;MANY_CUSTOMERS_ONE_PROVIDER&lt;br&gt;ONE_CUSTOMER_MANY_PROVIDERS&lt;br&gt;Capacity uses defaultCapacity or&lt;br&gt;requiredProviderCount as applicable.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;bookingMode&lt;/b&gt;&lt;br&gt;&lt;br&gt;ONE_AT_A_TIME&lt;br&gt;MANY_AT_A_TIME&lt;br&gt;Choose the business concurrency behavior.&lt;br&gt;Do not equate this with fulfillmentModel.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="660" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;providerSelectionMode&lt;/b&gt;&lt;br&gt;&lt;br&gt;DIRECT_REQUEST&lt;br&gt;OPEN_REQUEST&lt;br&gt;These are accepted configuration values.&lt;br&gt;Verify invitations / acceptance / matching&lt;br&gt;implementation before promising that UX.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="660" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;pricingOwner / billingType&lt;/b&gt;&lt;br&gt;&lt;br&gt;pricingOwner: ADMIN | PROVIDER&lt;br&gt;TIME billing: HOURLY | DAILY | FIXED&lt;br&gt;ROUTE billing: ROUTE_BASED&lt;br&gt;Rates also have effective windows, market,&lt;br&gt;optional centre/radius and conditions.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="660" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;scope / reuseScope&lt;/b&gt;&lt;br&gt;&lt;br&gt;scope: PROVIDER_REQUIREMENT&lt;br&gt;or BOOKING_FIELD&lt;br&gt;reuseScope: ASSIGNMENT | SERVICE | PROVIDER&lt;br&gt;BOOKING_FIELD only allows ASSIGNMENT.&lt;br&gt;Same shared field identity also enables reuse.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1020" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;fieldType&lt;/b&gt;&lt;br&gt;&lt;br&gt;TEXT | TEXTAREA | NUMBER | BOOLEAN&lt;br&gt;DATE | TIME | PHONE | EMAIL&lt;br&gt;SELECT | MULTI_SELECT&lt;br&gt;IMAGE_UPLOAD | DOCUMENT_UPLOAD&lt;br&gt;FILE_UPLOAD&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1020" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;valueSource / profileField&lt;/b&gt;&lt;br&gt;&lt;br&gt;MANUAL | PROVIDER_PROFILE&lt;br&gt;Profile: firstName, lastName, nicNumber,&lt;br&gt;passportNumber, dateOfBirth, age, gender,&lt;br&gt;profilePhoto, bio, marketId&lt;br&gt;Profile fields cannot require approval.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1020" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n13" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;Public filters / operators&lt;/b&gt;&lt;br&gt;&lt;br&gt;NUMBER → RANGE&lt;br&gt;BOOLEAN → EQUALS&lt;br&gt;SELECT / MULTI_SELECT → IN&lt;br&gt;Searchable implies customerVisible.&lt;br&gt;Only profile gender/age can be published.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1380" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;allowedPaymentMethods (set)&lt;/b&gt;&lt;br&gt;&lt;br&gt;CASH | CARD | BANK_TRANSFER&lt;br&gt;WALLET | EZ_CASH | KOKO&lt;br&gt;Configured method ≠ working production gateway.&lt;br&gt;Verify actual processing separately.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1380" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n15" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;Section / date modes&lt;/b&gt;&lt;br&gt;&lt;br&gt;Certificates / education level:&lt;br&gt;DISABLED | OPTIONAL | REQUIRED&lt;br&gt;Issued/expiry date modes:&lt;br&gt;HIDDEN | OPTIONAL | REQUIRED&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1380" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n16" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;Review / configuration status&lt;/b&gt;&lt;br&gt;&lt;br&gt;Configuration: ACTIVE | INACTIVE&lt;br&gt;Document / requirement review:&lt;br&gt;PENDING | APPROVED | REJECTED&lt;br&gt;Profile-resolved value status:&lt;br&gt;PROVIDED | MISSING | INVALID&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1740" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n17" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;Documents: part configuration&lt;/b&gt;&lt;br&gt;&lt;br&gt;code: uppercase unique identifier&lt;br&gt;label; required; maximumFiles: 1–100&lt;br&gt;maximumFileSizeMb: 1–100&lt;br&gt;MIME: image/jpeg, image/png,&lt;br&gt;image/webp, application/pdf&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1740" width="490" height="325" as="geometry" />
+        </mxCell>
+        <mxCell id="n18" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;SOURCE / PLANNED ITEMS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Sources: ServiceOptionService;&lt;br&gt;ServiceCustomFieldService; ProviderProfileFields;&lt;br&gt;ServicePricingService; DocumentPartService.&lt;br&gt;Global field linking + auto profile choices:&lt;br&gt;PROPOSED, not part of these current enums.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1740" width="490" height="325" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-4" name="04 — Provider &amp; booking templates">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1720" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;04 — Provider &amp;amp; booking templates&lt;/b&gt;&lt;br&gt;&lt;br&gt;Two different form scopes; one shared option. Documents are reviewed as complete bundles.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;A / PROVIDER_REQUIREMENT&lt;/b&gt;&lt;br&gt;&lt;br&gt;Admin configures: code, label, type, choices&lt;br&gt;required, requiresApproval, reuseScope&lt;br&gt;Optional profile source / conditions / icons&lt;br&gt;Customer visibility + searchable operator&lt;br&gt;Example: vehicle type / driving experience&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;B / PROVIDER ANSWERS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Provider registers for the shared option.&lt;br&gt;Vehicle Type = CAR&lt;br&gt;Gender resolves from profile if configured.&lt;br&gt;Profile-backed fields are read-only here.&lt;br&gt;Exact answers take priority over reusable ones.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;C / REQUIREMENT REUSE&lt;/b&gt;&lt;br&gt;&lt;br&gt;ASSIGNMENT: registration-level behavior&lt;br&gt;SERVICE: compatible approved answers&lt;br&gt;within the same service&lt;br&gt;PROVIDER: across services for that provider&lt;br&gt;Different fields require matching code + type.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;D / DOCUMENT TYPE TEMPLATE&lt;/b&gt;&lt;br&gt;&lt;br&gt;Name: Driving Licence&lt;br&gt;Parts: FRONT (required), BACK (required)&lt;br&gt;Optional EXTRA: multiple files&lt;br&gt;Each part: MIME / max files / max size&lt;br&gt;Dates: issued OPTIONAL, expiry REQUIRED&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="700" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;E / SUBMISSION &amp;amp; REVIEW&lt;/b&gt;&lt;br&gt;&lt;br&gt;Upload each file privately → submit keys&lt;br&gt;POST one complete document bundle&lt;br&gt;Validate ownership, required parts, MIME, size&lt;br&gt;One bundle-level approval; replacement → PENDING&lt;br&gt;Existing uploads and approvals are preserved.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="700" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;F / DOCUMENT COMPATIBILITY&lt;/b&gt;&lt;br&gt;&lt;br&gt;Old single-file type: keep documentKey&lt;br&gt;Multipart type: send parts with documentKeys&lt;br&gt;Store partDefinitions snapshot per submission&lt;br&gt;Admin config changes apply next submission.&lt;br&gt;Old Front/Back types are not auto-combined.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="700" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;G / BOOKING_FIELD TEMPLATE&lt;/b&gt;&lt;br&gt;&lt;br&gt;Customer-facing question for this option&lt;br&gt;Example: Passenger Count → NUMBER&lt;br&gt;Example: Assistance Notes → TEXTAREA&lt;br&gt;Hospital Ward / Bed can be configured fields.&lt;br&gt;Conditions control when a question applies.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1100" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;H / BOOKING REQUEST SHAPE&lt;/b&gt;&lt;br&gt;&lt;br&gt;serviceTypeId + shared optionId&lt;br&gt;TIME: startDatetime + expectedEndDatetime&lt;br&gt;ROUTE: requestedPickupTime + points&lt;br&gt;answers: [{fieldId, value}]&lt;br&gt;pricingSelections: [{fieldId, choiceValue}]&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1100" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;I / DISCUSSION CHECKLIST&lt;/b&gt;&lt;br&gt;&lt;br&gt;Which fields must be provider capabilities? ___&lt;br&gt;Which are customer booking questions? ______&lt;br&gt;Which are profile values? __________________&lt;br&gt;Which need separately reviewed proof? ______&lt;br&gt;Do not collect the same value twice.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1100" width="490" height="365" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n4" target="n5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n7" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n10" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-5" name="05 — Price variants &amp; map rules">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1840" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;05 — Price variants &amp;amp; map rules&lt;/b&gt;&lt;br&gt;&lt;br&gt;A variant is a combination of configured choice values, not a duplicate service option.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;01 / SELECT THE CONTEXT&lt;/b&gt;&lt;br&gt;&lt;br&gt;Shared option: CARE_RIDE&lt;br&gt;Market: configured market ID&lt;br&gt;pricingOwner: ADMIN or PROVIDER&lt;br&gt;schedulingModel: ROUTE_BASED&lt;br&gt;Rates reused through each main-service link.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;02 / DEFINE CAPABILITY FIELDS&lt;/b&gt;&lt;br&gt;&lt;br&gt;VEHICLE_TYPE: CAR / BIKE / VAN / TUK_TUK&lt;br&gt;DRIVER_GENDER: MALE / FEMALE / OTHER&lt;br&gt;Choice conditions use actual fieldId values.&lt;br&gt;Use compatible public provider choice fields.&lt;br&gt;Do not create a new option for every pair.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;03 / CONDITION COMBINATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Example conditions:&lt;br&gt;[{fieldId: 5, choiceValue: CAR},&lt;br&gt; {fieldId: 8, choiceValue: FEMALE}]&lt;br&gt;Conditions are combined with AND.&lt;br&gt;Compare actual provider attributes/selections.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;04 / ROUTE PRICE TEMPLATE&lt;/b&gt;&lt;br&gt;&lt;br&gt;billingType: ROUTE_BASED&lt;br&gt;baseFare: _____  pricePerKm: _____&lt;br&gt;minimumFare: _____  market: _____&lt;br&gt;fare = max(minimumFare,&lt;br&gt;baseFare + pricePerKm × estimatedDistanceKm)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="645" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;05 / TIME PRICE TEMPLATE&lt;/b&gt;&lt;br&gt;&lt;br&gt;HOURLY: rate × ceil(minutes / durationMinutes)&lt;br&gt;durationMinutes defaults to 60 when absent.&lt;br&gt;DAILY: rate × ceil(minutes / 1440)&lt;br&gt;FIXED: configured rate for the booking&lt;br&gt;This is not tree-count or arbitrary unit billing.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="645" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;06 / AREA + EFFECTIVE WINDOW&lt;/b&gt;&lt;br&gt;&lt;br&gt;Optional area: name + centre + radius km&lt;br&gt;effectiveFrom / effectiveTo: rate validity&lt;br&gt;Different areas can have different rates.&lt;br&gt;Pickup-zone + destination-zone fare matrix&lt;br&gt;is not an existing configured feature.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="645" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;07 / SERVICE ICON ≠ MAP MARKER&lt;/b&gt;&lt;br&gt;&lt;br&gt;Service/option icon: catalog presentation&lt;br&gt;Map marker: provider/vehicle on search map&lt;br&gt;Option default marker can be configured.&lt;br&gt;Choice/combination rule → mapMarkerIcon&lt;br&gt;CAR + FEMALE can point to a distinct asset.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="990" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;08 / EXAMPLE RULE SHEET&lt;/b&gt;&lt;br&gt;&lt;br&gt;CAR + MALE → base 200 / km 100 / min 500&lt;br&gt;CAR + FEMALE → base 250 / km 110 / min 600&lt;br&gt;BIKE → base 100 / km 60 / min 250&lt;br&gt;CAR + FEMALE → car marker asset&lt;br&gt;Illustrative numbers only; choose currency/market.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="990" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;09 / VALIDATION DISCUSSION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Unmatched combination policy: __________&lt;br&gt;Overlapping rules / specificity: __________&lt;br&gt;Fallback marker: _____________________&lt;br&gt;Quote example + expected amount: ______&lt;br&gt;Select only real backend-supported behavior.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="990" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n13" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;10 / ROUTE ESTIMATE LIMIT&lt;/b&gt;&lt;br&gt;&lt;br&gt;Current route estimate uses coordinate distance&lt;br&gt;and configured average speed.&lt;br&gt;Do not describe it as traffic-aware navigation&lt;br&gt;or live vehicle tracking.&lt;br&gt;Confirm road-routing integration separately.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1335" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;11 / PRICE SOURCE OF TRUTH&lt;/b&gt;&lt;br&gt;&lt;br&gt;Server calculates the quote / booking price.&lt;br&gt;Frontend sends choice IDs/values, not final fare.&lt;br&gt;Keep provider selection and pricing conditions&lt;br&gt;consistent through quote and booking.&lt;br&gt;Historical booking price snapshots stay intact.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1335" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n15" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;12 / UNIT-BASED IDEAS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Tree count / sack count / per-item billing&lt;br&gt;need an explicit unit-price feature design.&lt;br&gt;A booking question alone does not multiply fare.&lt;br&gt;For now decide whether supported TIME or&lt;br&gt;FIXED pricing fits the actual business case.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1335" width="490" height="310" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-6" name="06 — Filled example: Care Ride">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1840" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;06 — Filled example: Care Ride&lt;/b&gt;&lt;br&gt;&lt;br&gt;Use this example to discuss a real setup. All IDs, choices and prices are illustrative.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;01 / MAIN SERVICES&lt;/b&gt;&lt;br&gt;&lt;br&gt;Caregiver: serviceTypeId 1&lt;br&gt;Ride: serviceTypeId 2&lt;br&gt;Both link to CARE_RIDE optionId 4.&lt;br&gt;Do not create two Care Ride definitions.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;02 / SHARED OPTION&lt;/b&gt;&lt;br&gt;&lt;br&gt;code: CARE_RIDE&lt;br&gt;schedulingModel: ROUTE_BASED&lt;br&gt;deliveryModes: [PROVIDER_TO_CUSTOMER]&lt;br&gt;locationEnabled: true&lt;br&gt;fulfillmentModel: ONE_TO_ONE&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;03 / OPERATIONS&lt;/b&gt;&lt;br&gt;&lt;br&gt;bookingMode: ONE_AT_A_TIME&lt;br&gt;providerSelectionMode: DIRECT_REQUEST&lt;br&gt;requiredProviderCount: 1&lt;br&gt;Coverage: centre + radius&lt;br&gt;Provider defines availability and coverage.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;04 / PROVIDER FORM&lt;/b&gt;&lt;br&gt;&lt;br&gt;Vehicle Type → SELECT → CAR / BIKE / VAN&lt;br&gt;Gender → provider-profile gender&lt;br&gt;Experience → NUMBER (optional)&lt;br&gt;Driver licence → document requirement&lt;br&gt;Publish searchable attributes deliberately.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="645" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;05 / BOOKING TEMPLATE&lt;/b&gt;&lt;br&gt;&lt;br&gt;Passenger Count → NUMBER → required&lt;br&gt;Needs mobility assistance → BOOLEAN&lt;br&gt;Assistance Notes → TEXTAREA → optional&lt;br&gt;Pickup + destination + requested pickup time&lt;br&gt;Use the actual returned field IDs.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="645" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;06 / PROOF CONFIGURATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Driving Licence: FRONT + BACK required&lt;br&gt;Accepted files: JPEG / PNG; 5 MB each&lt;br&gt;Expiry date REQUIRED&lt;br&gt;Bundle approval required&lt;br&gt;Existing separately stored proof stays intact.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="645" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;07 / PRICING&lt;/b&gt;&lt;br&gt;&lt;br&gt;ADMIN-owned route rates&lt;br&gt;CAR + FEMALE: base 250 / km 110 / min 600&lt;br&gt;At estimated 5 km → max(600,250+550)=800&lt;br&gt;Currency/market to be agreed&lt;br&gt;No client-supplied final price.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="990" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;08 / MAP PRESENTATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Catalog icon: Care Ride category icon&lt;br&gt;Default marker: vehicle marker&lt;br&gt;CAR + FEMALE: configured car marker&lt;br&gt;BIKE: configured bike marker&lt;br&gt;Do not imply live tracking is enabled.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="990" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;09 / PAYMENTS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Example allowed methods: CASH, WALLET&lt;br&gt;Add CARD only with agreed processing behavior.&lt;br&gt;Accepted enum does not confirm live processing.&lt;br&gt;Confirm fees / refund / cancellation contract&lt;br&gt;before customer workflow sign-off.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="990" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n13" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;10 / PROVIDER JOURNEY&lt;/b&gt;&lt;br&gt;&lt;br&gt;Choose service → choose CARE_RIDE&lt;br&gt;Load shared requirements → complete profile&lt;br&gt;Submit capabilities + complete proof bundle&lt;br&gt;Review / approval → set operational availability&lt;br&gt;Same enrollment reused from linked services.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1335" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;11 / CUSTOMER JOURNEY&lt;/b&gt;&lt;br&gt;&lt;br&gt;Caregiver OR Ride → CARE_RIDE&lt;br&gt;Enter route/time + booking answers&lt;br&gt;Filter CAR + FEMALE → search candidates&lt;br&gt;Quote → select provider → create booking&lt;br&gt;Uses the same underlying option/rate rules.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1335" width="490" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="n15" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;12 / REVIEW QUESTIONS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Should VAN support more passengers? ______&lt;br&gt;Is one option enough for all vehicle types? ___&lt;br&gt;Required gender filter or optional? __________&lt;br&gt;Which proof is mandatory? _________________&lt;br&gt;Business owner / approval date: ____________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1335" width="490" height="310" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-7" name="07 — Proposed global field catalog">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1810" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;07 — Proposed global field catalog&lt;/b&gt;&lt;br&gt;&lt;br&gt;Future discussion model: define a field once, then link it to options. Not implemented.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;GLOBAL FIELD DEFINITION — proposed&lt;/b&gt;&lt;br&gt;&lt;br&gt;fieldId + code + label + type&lt;br&gt;Choices + icons + value source + profile field&lt;br&gt;Example: PROVIDER_GENDER&lt;br&gt;One canonical definition; no per-link type overrides&lt;br&gt;Changing global choices affects all its links.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#ea580c;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;OPTION ↔ FIELD LINK — proposed&lt;/b&gt;&lt;br&gt;&lt;br&gt;optionId + fieldId&lt;br&gt;required + displayOrder&lt;br&gt;Link / unlink without deleting the global field&lt;br&gt;Keep link settings minimal at first.&lt;br&gt;Search visibility / review policy placement:&lt;br&gt;decide explicitly before implementation.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#ea580c;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;OPTION USAGE — proposed&lt;/b&gt;&lt;br&gt;&lt;br&gt;CARE_RIDE → Gender + Vehicle Type&lt;br&gt;CAREGIVING → Gender + Experience&lt;br&gt;CLEANING → Gender if needed&lt;br&gt;Reusing a definition is separate from&lt;br&gt;reusing a provider answer.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#ea580c;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="link definition" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n4" target="n5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="effective schema" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;strokeColor=#64748b;strokeWidth=2;fontSize=13;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n5" target="n6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;PROFILE FIELD PICKER — proposed&lt;/b&gt;&lt;br&gt;&lt;br&gt;Select valueSource = PROVIDER_PROFILE&lt;br&gt;Select profileField = gender&lt;br&gt;Auto-load canonical profile choices&lt;br&gt;Admin must not maintain a second gender enum.&lt;br&gt;Read the provider value from their profile.&lt;br&gt;Current code still needs explicit SELECT choices.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#ea580c;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="700" width="490" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;ANSWER REUSE — existing concept&lt;/b&gt;&lt;br&gt;&lt;br&gt;Keep existing reuseScope semantics separate.&lt;br&gt;ASSIGNMENT / SERVICE / PROVIDER&lt;br&gt;Use profile source for existing profile values.&lt;br&gt;An unrelated question with a similar label&lt;br&gt;must not automatically share answers.&lt;br&gt;Migration needs explicit equivalence mappings.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="700" width="490" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;SIMPLE FIRST VERSION — proposed&lt;/b&gt;&lt;br&gt;&lt;br&gt;No per-option choice/type/icon overrides.&lt;br&gt;Need different choices? Define another field.&lt;br&gt;Link-local required + order only.&lt;br&gt;Decide one place for approval/filter policies.&lt;br&gt;Preserve scope split: provider vs booking.&lt;br&gt;Avoid an inheritance engine for every property.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7ed;strokeColor=#ea580c;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="700" width="490" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;MIGRATION CHECKLIST&lt;/b&gt;&lt;br&gt;&lt;br&gt;Map existing field IDs → canonical global IDs&lt;br&gt;Preserve answers/reviews and price/marker references&lt;br&gt;Preserve historical bookings; reload frontend schemas&lt;br&gt;Archive superseded definitions; never invent approvals&lt;br&gt;Do not infer equivalence from matching labels alone.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1100" width="1005" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="n13" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;OPEN DECISIONS / SIGN-OFF&lt;/b&gt;&lt;br&gt;&lt;br&gt;Global field ownership: ______________&lt;br&gt;Review policy location: ______________&lt;br&gt;Search flags location: _______________&lt;br&gt;Rollout/migration owner: ______________&lt;br&gt;Approved design / date: ______________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1100" width="490" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;WORKSHOP ORDER&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. Fill service/option worksheet → 2. Choose enums → 3. Separate provider and booking questions → 4. Agree proofs&lt;br&gt;5. Walk through price + marker combinations → 6. Validate one complete provider/customer example → 7. Decide global catalog scope.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1450" width="1520" height="160" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-8" name="08 — Common policies &amp; readiness">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1750" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n2" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;08 — Common policies &amp;amp; readiness&lt;/b&gt;&lt;br&gt;&lt;br&gt;Complete the remaining main-service setup and customer eligibility decisions before implementation sign-off.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=22;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;LEGEND / STATUS&lt;/b&gt;&lt;br&gt;&lt;br&gt;BLUE = existing backend configuration (local code; deployment not verified)&lt;br&gt;ORANGE = proposed design, not implemented | YELLOW = discussion / fill in | GREEN = example only&lt;br&gt;Editable workshop template • 23 Oct 2026 • IDs, prices and examples are illustrative&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=14;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="1520" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;MAIN-SERVICE SELECTION RULES&lt;/b&gt;&lt;br&gt;&lt;br&gt;availabilityEnabled / serviceAreasEnabled&lt;br&gt;optionsRequired + minimumOptionSelections&lt;br&gt;maximumOptionSelections&lt;br&gt;Common policies are not copied per option link.&lt;br&gt;Selected option configuration stays shared.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;COMMON PROVIDER REQUIREMENTS&lt;/b&gt;&lt;br&gt;&lt;br&gt;documents: type ID + required + review flag&lt;br&gt;skills: name + required + review flag&lt;br&gt;certificates / education: level + review flag&lt;br&gt;Level: DISABLED | OPTIONAL | REQUIRED&lt;br&gt;Keep service-common and option-specific distinct.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;RESPONSIBILITIES &amp;amp; MEDIA&lt;/b&gt;&lt;br&gt;&lt;br&gt;responsibleParty: PROVIDER | CUSTOMER | PLATFORM&lt;br&gt;Each responsibility: title, description, required, order&lt;br&gt;Service and option: icon / cover / gallery&lt;br&gt;Marker is a separate presentation asset.&lt;br&gt;Provider languages: SINHALA | ENGLISH | TAMIL&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="300" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;CUSTOMER REUSABLE REQUIREMENTS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Separate from provider requirements/booking fields.&lt;br&gt;Definition: code / type / required / targets&lt;br&gt;verificationMode: NONE | ADMIN_REVIEW&lt;br&gt;or DOCUMENT_REVIEW&lt;br&gt;Evidence codes, choices, file limits, blocksBooking&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="685" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;CUSTOMER ELIGIBILITY POLICY&lt;/b&gt;&lt;br&gt;&lt;br&gt;enabled + minimumAge + dateOfBirthCode&lt;br&gt;requiresVerifiedDateOfBirth + requiredCodes&lt;br&gt;Choose service / shared-option targeting deliberately.&lt;br&gt;Existing service-common gates remain separate.&lt;br&gt;Shared option policy follows canonical context.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="685" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;THREE DIFFERENT DATA COLLECTIONS&lt;/b&gt;&lt;br&gt;&lt;br&gt;Provider requirement: provider capability / proof&lt;br&gt;Customer reusable requirement: identity / eligibility&lt;br&gt;BOOKING_FIELD: question for this particular job&lt;br&gt;Example: licence vs customer identity vs ward/bed&lt;br&gt;Do not force all three into one form.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="685" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;COMPATIBILITY &amp;amp; MIGRATION&lt;/b&gt;&lt;br&gt;&lt;br&gt;Preserve existing option and field references.&lt;br&gt;Keep provider documents/reviews; archive merges.&lt;br&gt;Refresh clients to canonical field IDs after rollout.&lt;br&gt;Document schema columns must exist before deploy.&lt;br&gt;Do not claim production migration has been run.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1070" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;FRONTEND ACCEPTANCE CHECK&lt;/b&gt;&lt;br&gt;&lt;br&gt;Load effective shared fields without owner-ID rejection.&lt;br&gt;Use returned IDs / field types / choices / scope.&lt;br&gt;Render all document parts, not only first documentKey.&lt;br&gt;Do not hardcode per-service booking questions.&lt;br&gt;Display fallback map marker when applicable.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1070" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;div style=&quot;text-align:left;padding:12px&quot;&gt;&lt;b&gt;WORKSHOP RELEASE CHECKLIST&lt;/b&gt;&lt;br&gt;&lt;br&gt;Chosen service option template: ______________&lt;br&gt;One complete provider/customer example: ______&lt;br&gt;Backend gaps / proposed features: ____________&lt;br&gt;Payments/matching/deployment verification: ____&lt;br&gt;Decision owner / next action / date: ___________&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fefce8;strokeColor=#ca8a04;strokeWidth=2;fontFamily=Arial;fontSize=16;fontColor=#0f172a;verticalAlign=top;align=left;spacing=4;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1070" width="490" height="350" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

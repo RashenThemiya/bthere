@@ -275,6 +275,7 @@ public class MarketServiceOfferingService {
         }
     }
     private void applyPricing(JobRate rate, CreateJobRateRequest request) {
+        rate.setPlatformFeePercentage(PlatformFeeService.normalize(request.platformFeePercentage()));
         rate.setBaseFare(request.baseFare());
         rate.setPricePerKm(request.pricePerKm());
         rate.setMinimumFare(request.minimumFare());
@@ -286,6 +287,7 @@ public class MarketServiceOfferingService {
     }
 
     private void applyPricing(JobRate rate, UpdateJobRateRequest request) {
+        rate.setPlatformFeePercentage(PlatformFeeService.normalize(request.platformFeePercentage()));
         rate.setBaseFare(request.baseFare());
         rate.setPricePerKm(request.pricePerKm());
         rate.setMinimumFare(request.minimumFare());
@@ -304,5 +306,6 @@ public class MarketServiceOfferingService {
             item.getPricePerKm(), item.getMinimumFare(), item.getGeographicalAreaName(),
             item.getAreaLatitude(), item.getAreaLongitude(), item.getAreaRadiusKm(),
             item.getEffectiveFrom(), item.getEffectiveTo(), item.getStatus(),
-            item.getConditions().stream().map(c -> new PricingConditionRequest(c.getFieldId(), c.getChoiceValue())).toList()); }
+            item.getConditions().stream().map(c -> new PricingConditionRequest(c.getFieldId(), c.getChoiceValue())).toList(),
+            item.getPlatformFeePercentage()); }
 }

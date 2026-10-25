@@ -55,9 +55,13 @@ public class CustomerBookingService {
     private final CustomerAvailabilityService availabilityService;
     private final com.jobhub.service.upload.S3PrivateDocumentService privateDocuments;
     private final com.jobhub.service.finance.WalletService walletService;
+    private final com.jobhub.repository.job.BookingRequestPolicyRepository requestPolicies;
 
     @Transactional
     public BookingResponse create(Long userId, CreateBookingRequest request) {
+        if (requestPolicies.findById(request.optionId()).filter(com.jobhub.entity.job.BookingRequestPolicy::isEnabled).isPresent()) {
+            throw new com.jobhub.exception.ConflictException("Use booking-requests for this option; provider acceptance and card checkout are required");
+        }
         PreparedBooking prepared = prepare(userId, request, true);
         Job job = jobRepository.save(prepared.job());
         saveProviderAssignments(job.getJobId(), prepared.providerIds());
@@ -66,12 +70,43 @@ public class CustomerBookingService {
         return response(job);
     }
 
+    /** Internal dispatch entry point: saved jobs reserve capacity before hosted payment starts. */
+    @Transactional
+    public Job reserveCardRequest(Long userId, CreateBookingRequest request) {
+        if (!"CARD".equals(request.paymentMethod())) throw new IllegalArgumentException("Booking requests support CARD only");
+        PreparedBooking prepared = prepare(userId, request, true);
+        Job job = prepared.job();
+        job.setJobStatus("AWAITING_PAYMENT");
+        job.setPaymentStatus("PENDING");
+        jobRepository.saveAndFlush(job);
+        saveProviderAssignments(job.getJobId(), prepared.providerIds());
+        saveAnswers(job.getJobId(), prepared.answers());
+        return job;
+    }
+
     @Transactional(readOnly = true)
+    public void validateRequestFields(Long userId, CreateBookingRequest request) {
+        var option = optionRepository.findByOptionIdAndServiceProviderTypeId(request.optionId(), request.serviceTypeId())
+                .filter(o -> o.activeForService(request.serviceTypeId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
+        customerRequirementsService.requireEligible(userId, request.serviceTypeId(), request.optionId());
+        resolvePaymentMethod(option, request.paymentMethod());
+        resolveTime(option, request);
+        validateAnswers(userId, request.serviceTypeId(), request.optionId(),
+                request.answers() == null ? List.of() : request.answers());
+    }
+
+    /** Internal response mapping; the dispatch service must first verify assignment ownership. */
+    @Transactional(readOnly = true)
+    public BookingResponse dispatchResponse(Job job) { return response(job); }
+
+    @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public com.jobhub.dto.job.BookingQuoteResponse quote(Long userId, CreateBookingRequest request) {
         Job job = prepare(userId, request, false).job();
         return new com.jobhub.dto.job.BookingQuoteResponse(job.getRateId(), job.getCurrencyCode(),
                 job.getExpectedAmount(), job.getStartDatetime(), job.getExpectedEndDatetime(),
-                job.getEstimatedDistanceKm(), read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()));
+                job.getEstimatedDistanceKm(), read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()),
+                job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings());
     }
 
     private PreparedBooking prepare(Long userId, CreateBookingRequest request, boolean locked) {
@@ -173,6 +208,9 @@ public class CustomerBookingService {
         job.setPricingSelectionsJson(write(objectMapper.valueToTree(price.pricingSelections())));
         job.setPricingSnapshotJson(write(objectMapper.valueToTree(price.pricingSnapshot())));
         job.setExpectedAmount(price.amount());
+        job.setPlatformFeePercentage(price.feeAllocation().percentage());
+        job.setPlatformFee(price.feeAllocation().platformFee());
+        job.setProviderEarnings(price.feeAllocation().providerEarnings());
         job.setTotalAmount(price.amount());
         job.setCustomerNote(trim(request.customerNote()));
         job.setJobStatus("PENDING");
@@ -517,7 +555,8 @@ public class CustomerBookingService {
                 job.getEstimatedDurationMinutes(), job.getRateId(), job.getCurrencyCode(),
                 job.getExpectedAmount(), job.getPaymentMethod(), job.getPaymentStatus(),
                 job.getJobStatus(), answers,
-                read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()));
+                read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()),
+                job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings());
     }
 
     static String resolvePaymentMethod(ServiceOption option, String requestedMethod) {

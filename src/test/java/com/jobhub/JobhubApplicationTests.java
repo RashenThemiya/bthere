@@ -61,6 +61,76 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class JobhubApplicationTests {
+    @MockitoBean private com.jobhub.repository.job.BookingRequestRepository bookingRequests;
+    @MockitoBean private com.jobhub.repository.job.BookingOfferRepository bookingOffers;
+    @MockitoBean private com.jobhub.repository.job.BookingRequestPolicyRepository bookingRequestPolicies;
+    @MockitoBean private com.jobhub.repository.job.BookingDispatchEventRepository bookingEvents;
+    @MockitoBean private com.jobhub.repository.job.BookingPaymentNoticeRepository bookingPaymentNotices;
+    @MockitoBean private com.jobhub.repository.auth.UserDeviceRepository bookingDevices;
+    @Autowired private com.jobhub.controller.provider.ProviderBookingOfferController bookingOfferController;
+    @Autowired private com.jobhub.controller.admin.AdminBookingRequestPolicyController bookingPolicyController;
+    @Autowired private com.jobhub.controller.customer.CustomerBookingRequestController customerBookingRequestsController;
+    @Autowired private com.jobhub.controller.admin.AdminPlatformFeeController platformFeeController;
+
+    @Autowired private com.jobhub.controller.admin.AdminBookingMonitorController bookingMonitor;
+    @Test void superAdminCanReadBookingMonitoring() {
+        var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",
+            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_SUPER_ADMIN")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try {org.assertj.core.api.Assertions.assertThat(bookingMonitor.summary().requestsByStatus()).isEmpty();}
+        finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+    }
+    @Test void bookingMonitoringIsSuperAdminOnly() {
+        for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","ADMIN","FINANCE_ADMIN")) {
+            var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingMonitor.summary())
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingMonitor.request(1L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingMonitor.transaction(1L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+        }
+    }
+
+    @Test void customersAndProvidersCannotConfigurePlatformCommission() {
+        for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","FINANCE_ADMIN")) {
+            var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",
+                    java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> platformFeeController.updateService(null,1L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> platformFeeController.updateOption(null,12L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+        }
+    }
+
+    @Test void providerCannotConfirmCompletionOnCustomersBehalf() {
+        var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("provider","unused",
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_SERVICE_PROVIDER")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerBookingRequestsController.confirmCompletion(null,70L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+    }
+
+    @Test void customerCannotAcceptProviderOffersOrChangeDispatchPolicy() {
+        var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("customer","unused",
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_CUSTOMER")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingOfferController.accept(null,1L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> bookingPolicyController.update(12L,null))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+    }
     @MockitoBean
     private com.jobhub.repository.provider.ServiceOptionMapMarkerRuleRepository mapMarkerRuleRepository;
     @Autowired private com.jobhub.controller.admin.AdminMapMarkerRuleController mapMarkerRuleController;

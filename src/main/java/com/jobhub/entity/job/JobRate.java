@@ -33,6 +33,8 @@ public class JobRate extends AuditedEntity {
     private LocalDateTime effectiveFrom;
     private LocalDateTime effectiveTo;
     private String status;
+    @Column(precision=5,scale=2)
+    private BigDecimal platformFeePercentage;
 
     @ElementCollection
     @CollectionTable(name = "job_rate_condition", joinColumns = @JoinColumn(name = "rate_id"),

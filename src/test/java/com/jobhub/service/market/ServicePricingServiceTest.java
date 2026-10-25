@@ -21,12 +21,19 @@ import static org.mockito.Mockito.*;
 class ServicePricingServiceTest {
     @Mock JobRateRepository rates;
     @Mock ServiceCustomFieldRepository fields;
+    @Mock com.jobhub.repository.provider.ServiceProviderTypeRepository services;
+    @Mock com.jobhub.repository.provider.ServiceOptionRepository options;
     ServicePricingService service;
     List<JobRate> configured = new ArrayList<>();
     LocalDateTime start = LocalDateTime.now().plusDays(1);
 
     @BeforeEach void setup() {
-        service = new ServicePricingService(rates, new CombinationPricingRules(fields, rates, new ObjectMapper()));
+        service = new ServicePricingService(rates, new CombinationPricingRules(fields, rates, new ObjectMapper()),
+                new PlatformFeeService(services,options,mock(com.jobhub.service.audit.AuditService.class)));
+        var option=new com.jobhub.entity.provider.ServiceOption();option.setOptionId(12L);option.setServiceProviderTypeId(2L);
+        var type=new com.jobhub.entity.provider.ServiceProviderType();type.setServiceProviderTypeId(2L);
+        lenient().when(options.findById(12L)).thenReturn(Optional.of(option));
+        lenient().when(services.findById(2L)).thenReturn(Optional.of(type));
         when(rates.findAllByMarketIdAndServiceProviderTypeIdAndServiceOptionIdAndStatus(1L, 2L, 12L, "ACTIVE"))
                 .thenReturn(configured);
     }
@@ -65,6 +72,18 @@ class ServicePricingServiceTest {
     @Test void missingSelectionsCannotBypassCombinationPriceUsingDefault() {
         rate(1, "100"); rate(2, "200", choice(45, "CAR"));
         assertThatIllegalArgumentException().isThrownBy(() -> price(null));
+    }
+    @Test void selectedVariantFeeAndSnapshotRemainStableAfterRateEdit() {
+        field(45,"[\"CAR\",\"BIKE\"]");
+        rate(1,"100").setPlatformFeePercentage(new BigDecimal("20"));
+        var variant=rate(2,"300",choice(45,"CAR"));variant.setPlatformFeePercentage(new BigDecimal("7.50"));
+        var quoted=price(List.of(choice(45,"CAR")));
+        assertThat(quoted.feeAllocation().platformFee()).isEqualByComparingTo("22.50");
+        assertThat(quoted.feeAllocation().providerEarnings()).isEqualByComparingTo("277.50");
+        assertThat(quoted.pricingSnapshot().platformFeeSource()).isEqualTo("RATE");
+        variant.setPlatformFeePercentage(new BigDecimal("80"));
+        assertThat(quoted.pricingSnapshot().platformFeePercentage()).isEqualByComparingTo("7.50");
+        assertThat(quoted.feeAllocation().platformFee()).isEqualByComparingTo("22.50");
     }
 
     @Test void noMatchingCombinationFailsInsteadOfChoosingAnotherVehiclePrice() {

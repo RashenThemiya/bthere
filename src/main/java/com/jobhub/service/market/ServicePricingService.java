@@ -23,6 +23,7 @@ public class ServicePricingService {
 
     private final JobRateRepository rateRepository;
     private final CombinationPricingRules pricingRules;
+    private final PlatformFeeService platformFees;
 
     public Price calculate(Long marketId, Long serviceTypeId, Long optionId,
                            String schedulingModel, LocalDateTime start, LocalDateTime end,
@@ -77,11 +78,12 @@ public class ServicePricingService {
         BigDecimal amount = "ROUTE_BASED".equals(schedulingModel)
                 ? routeAmount(rate, distanceKm)
                 : timeAmount(rate, start, end);
+        var fee=platformFees.resolve(rate,serviceTypeId,optionId,amount);
         return new Price(rate.getRateId(), rate.getCurrencyCode(),
                 amount.setScale(2, RoundingMode.HALF_UP), rate.getGeographicalAreaName(), selections,
                 new RateSnapshot(rate.getBillingType(), rate.getDurationMinutes(), rate.getRate(),
                         rate.getBaseFare(), rate.getPricePerKm(), rate.getMinimumFare(),
-                        pricingRules.conditions(rate)));
+                        pricingRules.conditions(rate),fee.percentage(),fee.source()),fee);
     }
 
     private BigDecimal routeAmount(JobRate rate, BigDecimal distanceKm) {
@@ -137,9 +139,22 @@ public class ServicePricingService {
 
     public record Price(Long rateId, String currencyCode, BigDecimal amount,
                         String geographicalAreaName, List<PricingConditionRequest> pricingSelections,
-                        RateSnapshot pricingSnapshot) {}
+                        RateSnapshot pricingSnapshot,PlatformFeeService.Allocation feeAllocation) {
+        public Price(Long rateId,String currencyCode,BigDecimal amount,String geographicalAreaName,
+                     List<PricingConditionRequest> pricingSelections,RateSnapshot pricingSnapshot) {
+            this(rateId,currencyCode,amount,geographicalAreaName,pricingSelections,pricingSnapshot,
+                    PlatformFeeService.allocate(amount,pricingSnapshot==null?null:pricingSnapshot.platformFeePercentage(),
+                            pricingSnapshot==null?"DEFAULT":pricingSnapshot.platformFeeSource()));
+        }
+    }
 
     public record RateSnapshot(String billingType, Integer durationMinutes, BigDecimal rate,
                                BigDecimal baseFare, BigDecimal pricePerKm, BigDecimal minimumFare,
-                               List<PricingConditionRequest> conditions) {}
+                               List<PricingConditionRequest> conditions,
+                               BigDecimal platformFeePercentage,String platformFeeSource) {
+        public RateSnapshot(String billingType,Integer durationMinutes,BigDecimal rate,BigDecimal baseFare,
+                            BigDecimal pricePerKm,BigDecimal minimumFare,List<PricingConditionRequest> conditions) {
+            this(billingType,durationMinutes,rate,baseFare,pricePerKm,minimumFare,conditions,new BigDecimal("0.00"),"DEFAULT");
+        }
+    }
 }

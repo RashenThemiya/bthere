@@ -48,6 +48,8 @@ public class ServiceCustomField extends AuditedEntity {
     @Column(columnDefinition = "TEXT")
     private String optionsJson;
     @Column(columnDefinition = "TEXT")
+    private String defaultValueJson;
+    @Column(columnDefinition = "TEXT")
     private String conditionJson;
     private Integer displayOrder;
     private Integer version;

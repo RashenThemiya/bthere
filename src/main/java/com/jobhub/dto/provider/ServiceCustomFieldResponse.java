@@ -31,7 +31,8 @@ public record ServiceCustomFieldResponse(
         String filterOperator,
         ServiceMediaPayload icon,
         String valueSource,
-        String profileField
+        String profileField,
+        JsonNode defaultValue
 ) {
     /** serviceTypeId remains the historical owner, never the requested navigation context. */
     @com.fasterxml.jackson.annotation.JsonProperty("ownerServiceTypeId")

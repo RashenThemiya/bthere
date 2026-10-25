@@ -11,6 +11,12 @@ remain presentation metadata. Conditions reference stable values such as `CAR`.
 
 ## Configure rates
 
+Platform fee update (25 October 2026): rate POST/PUT/GET also supports nullable
+`platformFeePercentage` (0–100, at most two decimal places). Selected rate → shared
+option → canonical service → 0% determines commission. See
+[platform fee configuration and snapshots](PLATFORM_FEES_API.md). Rate PUT clears
+an omitted/null override; include its existing value to preserve it.
+
 Requires SUPER_ADMIN. Existing market-service rate endpoints now accept `conditions`:
 
 | Method | Path | Result |

@@ -62,6 +62,15 @@ public class CustomerDiscoveryService {
                 providerSearchFields.schema(providerSearchFields.definitions(serviceId, optionId)));
     }
     public Results search(Long userId, Search request) {
+        return search(userId, request, null);
+    }
+
+    /** Target before pagination so a direct request is not lost behind 100 nearer providers. */
+    public Results searchForProvider(Long userId, Search request, Long providerId) {
+        return search(userId, request, providerId);
+    }
+
+    private Results search(Long userId, Search request, Long targetProviderId) {
         profiles.get(userId);
         availability.requireOffering(request.marketId(), request.serviceTypeId());
         requirements.requireEligible(userId, request.serviceTypeId(), request.optionId());
@@ -109,6 +118,7 @@ public class CustomerDiscoveryService {
         double radius = request.radiusKm() == null ? 50 : request.radiusKm().doubleValue();
         List<Candidate> candidates = new ArrayList<>();
         for (var assignment : sharedRegistrations(option, request.marketId())) {
+            if (targetProviderId != null && !targetProviderId.equals(assignment.getServiceProviderId())) continue;
             if (!availability.qualified(assignment, option, request.marketId()) || !availability.scheduled(assignment, start, end)) continue;
             List<String> spoken = languages.findAllByAssignmentIdOrderByLanguageCodeAsc(assignment.getAssignmentId())
                     .stream().map(ProviderServiceLanguage::getLanguageCode).toList();

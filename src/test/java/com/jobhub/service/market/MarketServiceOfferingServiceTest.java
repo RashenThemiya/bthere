@@ -62,6 +62,7 @@ class MarketServiceOfferingServiceTest {
     void updateIsACompleteReplacementAndNullOptionClearsExistingOption() {
         MarketServiceOffering offering = offering();
         JobRate rate = rate();
+        rate.setPlatformFeePercentage(new BigDecimal("25"));
         when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering));
         when(rateRepository.findLockedById(9L)).thenReturn(Optional.of(rate));
         when(optionRepository.findLockedById(44L)).thenReturn(Optional.of(new com.jobhub.entity.provider.ServiceOption()));
@@ -82,6 +83,7 @@ class MarketServiceOfferingServiceTest {
         assertThat(rate.getEffectiveTo()).isNull();
         assertThat(rate.getBaseFare()).isNull();
         assertThat(rate.getGeographicalAreaName()).isNull();
+        assertThat(rate.getPlatformFeePercentage()).isNull();
         verify(rateRepository).save(rate);
     }
 
@@ -113,6 +115,20 @@ class MarketServiceOfferingServiceTest {
         offering.setServiceProviderTypeId(3L);
         offering.setCurrencyCode("LKR");
         return offering;
+    }
+    @Test void rateConfigurationStoresAndReturnsPercentageAndRejectsInvalidValues() {
+        when(offeringRepository.findLockedById(7L)).thenReturn(Optional.of(offering()));
+        when(rateRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(i -> {
+            JobRate value=i.getArgument(0);value.setRateId(9L);return value;
+        });
+        var request=new com.jobhub.dto.market.CreateJobRateRequest("FIXED",null,new BigDecimal("1000"),null,null,null,
+                null,null,null,null,null,null,null,java.util.List.of(),new BigDecimal("8.25"));
+        var response=service.addRate(1L,7L,request);
+        assertThat(response.platformFeePercentage()).isEqualByComparingTo("8.25");
+        var invalid=new com.jobhub.dto.market.CreateJobRateRequest("FIXED",null,new BigDecimal("1000"),null,null,null,
+                null,null,null,null,null,null,null,java.util.List.of(),new BigDecimal("100.01"));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.addRate(1L,7L,invalid));
+        verify(rateRepository,org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any());
     }
 
     private JobRate rate() {

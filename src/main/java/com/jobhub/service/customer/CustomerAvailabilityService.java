@@ -87,9 +87,9 @@ public class CustomerAvailabilityService {
     public int remaining(ServiceProviderTypeAssignment assignment, ServiceOption option, Long locationId,
                          Integer locationCapacity, LocalDateTime start, LocalDateTime end, boolean locked) {
         var reserved = locked ? jobs.findLockedReservedOverlaps(assignment.getServiceProviderId(), start, end,
-                Set.of("CANCELLED", "COMPLETED", "REJECTED", "EXPIRED"))
+                Set.of("CANCELLED", "COMPLETED", "REJECTED", "EXPIRED", "AWAITING_COMPLETION_CONFIRMATION"))
                 : jobs.findReservedOverlaps(assignment.getServiceProviderId(), start, end,
-                Set.of("CANCELLED", "COMPLETED", "REJECTED", "EXPIRED"));
+                Set.of("CANCELLED", "COMPLETED", "REJECTED", "EXPIRED", "AWAITING_COMPLETION_CONFIRMATION"));
         for (var job : reserved) {
             if (!assignment.getServiceProviderTypeId().equals(job.getServiceProviderTypeId())
                     && !option.getOptionId().equals(job.getServiceOptionId())) continue;

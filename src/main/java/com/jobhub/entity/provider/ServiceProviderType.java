@@ -21,6 +21,8 @@ public class ServiceProviderType extends AuditedEntity {
     private String description;
     private String iconUrl;
     private String status;
+    @Column(precision=5,scale=2)
+    private java.math.BigDecimal platformFeePercentage;
     private boolean availabilityEnabled;
     /** Legacy V1 compatibility flag. New location rules are configured per option. */
     private boolean serviceAreasEnabled;

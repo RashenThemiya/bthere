@@ -56,6 +56,8 @@ public class ServiceOption extends AuditedEntity {
     private String providerSelectionMode = "OPEN_REQUEST";
     @Column(nullable = false, length = 20)
     private String pricingOwner = "ADMIN";
+    @Column(precision=5,scale=2)
+    private java.math.BigDecimal platformFeePercentage;
 
     @ElementCollection
     @CollectionTable(name = "service_option_payment_method",

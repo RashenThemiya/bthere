@@ -35,5 +35,8 @@ public record BookingResponse(
         String status,
         Map<String, JsonNode> answers,
         JsonNode pricingSelections,
-        JsonNode pricingSnapshot
+        JsonNode pricingSnapshot,
+        BigDecimal platformFeePercentage,
+        BigDecimal platformFee,
+        BigDecimal providerEarnings
 ) {}

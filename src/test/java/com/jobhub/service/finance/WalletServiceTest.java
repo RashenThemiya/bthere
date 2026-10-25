@@ -35,6 +35,8 @@ class WalletServiceTest {
     @Mock ServiceProviderRepository providers;
     @Mock MarketRepository markets;
     @Mock AuditService audit;
+    @Mock BookingRequestRepository bookingRequests;
+    @Mock BookingPaymentNoticeRepository paymentNotices;
     @InjectMocks WalletService service;
     Map<Long, Wallet> balances = new HashMap<>();
     Map<String, WalletOperation> ops = new HashMap<>();
@@ -61,6 +63,94 @@ class WalletServiceTest {
         var provider = new ServiceProvider(); provider.setServiceProviderId(15L); provider.setUserId(42L);
         lenient().when(providers.findById(15L)).thenReturn(Optional.of(provider));
         seedTestFixture(25L, "100.00");
+    }
+    com.jobhub.entity.job.BookingRequest cardFixture() {
+        var r=new com.jobhub.entity.job.BookingRequest();r.setRequestId(9L);r.setUserId(25L);r.setJobId(100L);
+        r.setStatus("COMPLETED");r.setPaymentStatus("PAID");r.setGatewayPaymentId("receipt-1");
+        r.setPaymentFundingMode("PAYHERE");r.setCurrencyCode("LKR");r.setQuotedAmount(new BigDecimal("20"));
+        r.setPlatformFeePercentage(new BigDecimal("10"));r.setPlatformFee(new BigDecimal("2"));r.setProviderEarnings(new BigDecimal("18"));
+        job.setPaymentMethod("CARD");job.setPaymentStatus("PAID");job.setJobStatus("COMPLETED");
+        job.setPlatformFeePercentage(r.getPlatformFeePercentage());job.setPlatformFee(r.getPlatformFee());job.setProviderEarnings(r.getProviderEarnings());
+        lenient().when(bookingRequests.findByJobId(100L)).thenReturn(Optional.of(r));
+        lenient().when(bookingRequests.lockById(9L)).thenReturn(Optional.of(r));
+        lenient().when(bookingRequests.lockByJobId(100L)).thenReturn(Optional.of(r));
+        var n=new com.jobhub.entity.job.BookingPaymentNotice();n.setRequestId(9L);n.setPaymentId("receipt-1");n.setStatusCode("2");
+        lenient().when(paymentNotices.findByPaymentIdAndStatusCode("receipt-1","2")).thenReturn(Optional.of(n));
+        lenient().when(operations.findLockedByOperationKey(anyString())).thenAnswer(i -> Optional.ofNullable(ops.get(i.getArgument(0))));
+        return r;
+    }
+    @Test void cardCompletionCreditsNetExactlyOnceAndPreservesReceiptAndBalancedHistory() {
+        var r=cardFixture();var first=service.settleCardBooking(25L,100L);int count=entries.size();
+        assertThat(service.settleCardBooking(25L,100L).operationId()).isEqualTo(first.operationId());
+        assertThat(entries).hasSize(count);assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("18");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("100");
+        assertThat(first.platformFee()).isEqualByComparingTo("2");assertThat(first.paymentReference()).isEqualTo("receipt-1");
+        assertThat(r.getSettlementStatus()).isEqualTo("POSTED");assertThat(job.getPaymentStatus()).isEqualTo("SETTLED");
+        assertThat(entries.stream().filter(e -> first.operationId().equals(e.getOperationId())).map(WalletLedgerEntry::getDelta)
+                .reduce(BigDecimal.ZERO,BigDecimal::add)).isEqualByComparingTo("0");
+        verify(audit,times(1)).record(eq(25L),eq("CARD_BOOKING_SETTLED"),anyString(),anyLong(),isNull(),any());
+    }
+    @Test void cardSettlementRequiresCompletionVerifiedReceiptAndKnownEnvironment() {
+        var r=cardFixture();r.setStatus("AWAITING_COMPLETION_CONFIRMATION");
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("customer-confirmed");
+        r.setStatus("COMPLETED");when(paymentNotices.findByPaymentIdAndStatusCode("receipt-1","2")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("Verified");
+        verify(ledger,never()).save(any());
+    }
+    @Test void historicalMissingEnvironmentAndChangedSplitCannotSettle() {
+        var r=cardFixture();r.setPaymentFundingMode(null);
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("environment");
+        r.setPaymentFundingMode("PAYHERE");r.setProviderEarnings(new BigDecimal("19"));
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("reconcile");
+        verify(ledger,never()).save(any());
+    }
+    @Test void sandboxCannotMixWithLiveBalance() {
+        var r=cardFixture();seedTestFixture(42L,"5");balances.get(42L).setFundingMode("PAYHERE");r.setPaymentFundingMode("PAYHERE_SANDBOX");
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("cannot be mixed");
+        verify(ledger,never()).save(any());assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("5");
+    }
+    @Test void sandboxCreditsAreTaggedAndCannotFundWalletBookings() {
+        var r=cardFixture();r.setPaymentFundingMode("PAYHERE_SANDBOX");service.settleCardBooking(25L,100L);
+        assertThat(balances.get(42L).getFundingMode()).isEqualTo("PAYHERE_SANDBOX");
+        job.setPaymentMethod("WALLET");job.setJobStatus("PENDING");job.setPaymentStatus("PENDING");
+        balances.get(25L).setFundingMode("PAYHERE_SANDBOX");
+        assertThatThrownBy(() -> service.reserveBooking(25L,100L)).hasMessageContaining("Sandbox earnings");
+    }
+    @Test void fullCommissionStillRecordsZeroNetEarnings() {
+        var r=cardFixture();r.setPlatformFeePercentage(new BigDecimal("100"));r.setPlatformFee(new BigDecimal("20"));r.setProviderEarnings(BigDecimal.ZERO);
+        job.setPlatformFeePercentage(r.getPlatformFeePercentage());job.setPlatformFee(r.getPlatformFee());job.setProviderEarnings(BigDecimal.ZERO);
+        assertThat(service.settleCardBooking(25L,100L).providerEarnings()).isEqualByComparingTo("0");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("0");
+    }
+    @Test void verifiedChargebackFreezesPreviouslyCreditedWalletOnce() {
+        var r=cardFixture();service.settleCardBooking(25L,100L);r.setPaymentStatus("CHARGEDBACK");
+        var n=new com.jobhub.entity.job.BookingPaymentNotice();n.setRequestId(9L);
+        when(paymentNotices.findByPaymentIdAndStatusCode("receipt-1","-3")).thenReturn(Optional.of(n));
+        service.freezeCardSettlement(25L,100L);service.freezeCardSettlement(25L,100L);
+        assertThat(balances.get(42L).getStatus()).isEqualTo("FROZEN");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("18");
+        verify(audit,times(1)).record(isNull(),eq("CARD_SETTLEMENT_CHARGEBACK_REVIEW"),anyString(),anyLong(),any(),any());
+    }
+    @Test void cardHistoryIncludesPaymentAndEarningsDetails() {
+        cardFixture();var posted=service.settleCardBooking(25L,100L);
+        when(wallets.findByUserIdAndCurrencyCode(42L,"LKR")).thenReturn(Optional.of(balances.get(42L)));
+        var page=org.springframework.data.domain.PageRequest.of(0,20);
+        when(ledger.findAllByWalletIdOrderByWalletLedgerEntryIdDesc(42L,page)).thenReturn(new org.springframework.data.domain.PageImpl<>(
+                entries.stream().filter(e -> Long.valueOf(42).equals(e.getWalletId())).toList()));
+        when(operations.findAllById(any())).thenReturn(List.of(ops.get("BOOKING:100:SETTLE")));
+        var entry=service.history(42L,"LKR",page).getContent().get(0);
+        assertThat(entry.paymentReference()).isEqualTo("receipt-1");assertThat(entry.grossAmount()).isEqualByComparingTo("20");
+        assertThat(entry.providerEarnings()).isEqualByComparingTo("18");assertThat(entry.operationId()).isEqualTo(posted.operationId());
+    }
+    @Test void cardCreditFailureRollsBackTransaction() {
+        cardFixture();seedTestFixture(42L,"0");balances.get(42L).setStatus("FROZEN");
+        var manager=mock(org.springframework.transaction.PlatformTransactionManager.class);
+        var tx=mock(org.springframework.transaction.TransactionStatus.class);when(manager.getTransaction(any())).thenReturn(tx);
+        var proxy=new org.springframework.aop.framework.ProxyFactory(service);
+        proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(manager,
+                new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        assertThatThrownBy(() -> ((WalletService)proxy.getProxy()).settleCardBooking(25L,100L)).hasMessageContaining("not active");
+        verify(manager).rollback(tx);verify(manager,never()).commit(any());verify(ledger,never()).save(any());
     }
     @Test void releaseOneRejectsOtherCurrenciesBeforeAccessingWallets() {
         org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");

@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface JobRepository extends JpaRepository<Job, Long> {
+public interface JobRepository extends JpaRepository<Job, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Job> {
+    @Query("select j.jobStatus, count(j) from Job j group by j.jobStatus")
+    List<Object[]> monitorStatusCounts();
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select j from Job j where j.jobId = :id")
     java.util.Optional<Job> lockPaymentJob(@Param("id") Long id);

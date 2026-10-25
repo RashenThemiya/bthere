@@ -4,9 +4,51 @@
 See [FULLY_SHARED_OPTIONS_API.md](FULLY_SHARED_OPTIONS_API.md); prior service-local
 scope descriptions below are superseded.
 
-Markers can now depend on multiple existing provider requirement choices, such as
-Car + Electric. Rules belong to a main service and service option and are independent
-of pricing rules. Sharing an option does not share its service-specific marker rules.
+Markers can depend on one or multiple existing provider requirement choices, such as
+Car or Car + Electric. Rules are owned by the shared service option and are independent
+of pricing rules. All linked services use the same option marker rules.
+
+## Vehicle markers independent of pricing variants
+
+Marker conditions may use a subset of the option's searchable choice fields.
+For example, pricing can use VEHICLE_TYPE + GENDER while markers use only
+VEHICLE_TYPE. Create one CAR marker rule and one BIKE marker rule; do not duplicate
+each rule for MALE and FEMALE. Extra search filters do not prevent a rule matching.
+Gender can be omitted, single-selected or multi-selected without changing a
+vehicle-only rule's marker.
+
+Use the option-owned admin endpoint (the service-scoped endpoints below remain
+available for linked services):
+
+```http
+POST /api/v1/admin/service-options/12/map-marker-rules
+```
+
+```json
+{
+  "conditions": [{"fieldId": 45, "choiceValue": "CAR"}],
+  "mapMarkerIcon": {
+    "key": "markers/car.png",
+    "url": "https://cdn.example.com/markers/car.png",
+    "altText": "Car"
+  },
+  "status": "ACTIVE"
+}
+```
+
+Field IDs and asset URLs are illustrative. Repeat for each vehicle choice with its
+own icon. GET lists rules; PUT `/{ruleId}` replaces a rule; DELETE `/{ruleId}` removes
+it. To simplify an existing CAR + MALE rule, PUT the CAR-only conditions and icon,
+and remove or deactivate redundant gender-specific rules. More specific active
+rules still take precedence, so leaving them active may override the vehicle rule.
+
+Customer `POST /api/v1/customers/me/provider-search` can send both vehicle and gender
+filters. Each candidate's existing `mapMarker` contains a single resolved icon;
+its `conditions` contain only the conditions of the matched marker rule. A
+one-condition marker rule still returns `source: "COMBINATION"` for compatibility.
+No new response field or database migration is required for this configuration.
+Quote/booking `pricingSelections` remain independent and must still include all
+applicable pricing fields, including gender when configured for pricing.
 
 ## Admin API
 
@@ -121,7 +163,7 @@ The active matching rule with the most conditions wins. A runtime tie returns
 409 rather than selecting an arbitrary marker. If no rule matches, the existing
 fallback remains: selected single-choice marker → option marker → main-service
 marker → default pin. Single-choice fallback still uses `mapMarkerFieldId` on the
-service-option link; combination rules do not require that setting. Non-rule
+shared service option; combination rules do not require that setting. Non-rule
 markers return `ruleId: null` and `conditions: []` along with their existing fields.
 
 These are separate map marker assets. Card icons, choice icons, filtering, provider

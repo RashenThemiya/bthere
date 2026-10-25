@@ -57,6 +57,9 @@ public class Job extends AuditedEntity {
     private BigDecimal discountAmount;
     private BigDecimal taxAmount;
     private BigDecimal platformFee;
+    @Column(precision=5,scale=2)
+    private BigDecimal platformFeePercentage;
+    private BigDecimal providerEarnings;
     private BigDecimal totalAmount;
     private String jobStatus;
     private String paymentMethod;

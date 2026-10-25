@@ -28,7 +28,9 @@ public record UpdateJobRateRequest(
         @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal areaLongitude,
         @DecimalMin("0.01") BigDecimal areaRadiusKm,
         @jakarta.validation.constraints.Size(max = 10)
-        java.util.List<@jakarta.validation.constraints.NotNull @jakarta.validation.Valid PricingConditionRequest> conditions
+        java.util.List<@jakarta.validation.constraints.NotNull @jakarta.validation.Valid PricingConditionRequest> conditions,
+        @DecimalMin("0.00") @DecimalMax("100.00") @jakarta.validation.constraints.Digits(integer=3,fraction=2)
+        BigDecimal platformFeePercentage
 ) {
     public UpdateJobRateRequest(String billingType, Integer durationMinutes, BigDecimal rate,
             LocalDateTime effectiveFrom, LocalDateTime effectiveTo, Long optionId,
@@ -37,6 +39,14 @@ public record UpdateJobRateRequest(
             BigDecimal areaRadiusKm) {
         this(billingType, durationMinutes, rate, effectiveFrom, effectiveTo, optionId,
                 baseFare, pricePerKm, minimumFare, geographicalAreaName, areaLatitude,
-                areaLongitude, areaRadiusKm, null);
+                areaLongitude, areaRadiusKm, null, null);
+    }
+    public UpdateJobRateRequest(String billingType,Integer durationMinutes,BigDecimal rate,
+            LocalDateTime effectiveFrom,LocalDateTime effectiveTo,Long optionId,
+            BigDecimal baseFare,BigDecimal pricePerKm,BigDecimal minimumFare,String geographicalAreaName,
+            BigDecimal areaLatitude,BigDecimal areaLongitude,BigDecimal areaRadiusKm,
+            java.util.List<PricingConditionRequest> conditions) {
+        this(billingType,durationMinutes,rate,effectiveFrom,effectiveTo,optionId,baseFare,pricePerKm,
+                minimumFare,geographicalAreaName,areaLatitude,areaLongitude,areaRadiusKm,conditions,null);
     }
 }

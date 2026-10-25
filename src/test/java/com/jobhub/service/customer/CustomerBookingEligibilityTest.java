@@ -21,6 +21,7 @@ class CustomerBookingEligibilityTest {
     @Mock CustomerRepository customers;
     @Mock ServiceOptionRepository options;
     @Mock JobRepository jobs;
+    @Mock com.jobhub.repository.job.BookingRequestPolicyRepository requestPolicies;
     @Mock CustomerRequirementsService requirements;
     @InjectMocks CustomerBookingService bookings;
 

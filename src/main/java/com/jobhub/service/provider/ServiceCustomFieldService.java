@@ -380,6 +380,8 @@ public class ServiceCustomFieldService {
         if (Set.of("SELECT", "MULTI_SELECT").contains(fieldType)) {
             DynamicFieldChoices.validateDefinition(request.options());
         }
+        DynamicFieldChoices.validateDefault(fieldType, request.options(), request.defaultValue(),
+                "PROVIDER_PROFILE".equals(request.valueSource()));
         String reuseScope = request.reuseScope() == null || request.reuseScope().isBlank()
                 ? "ASSIGNMENT" : request.reuseScope().trim().toUpperCase(Locale.ROOT);
         if (!REUSE_SCOPES.contains(reuseScope)) {
@@ -411,6 +413,7 @@ public class ServiceCustomFieldService {
         item.setMaximumFileSizeMb(request.maximumFileSizeMb());
         item.setAllowedFileTypesJson(write(request.allowedFileTypes()));
         item.setOptionsJson(write(request.options()));
+        item.setDefaultValueJson(write(request.defaultValue()));
         item.setConditionJson(write(request.condition()));
         item.setDisplayOrder(request.displayOrder() == null ? 0 : request.displayOrder());
         item.setIconJson(write(request.icon()));
@@ -500,7 +503,8 @@ public class ServiceCustomFieldService {
                 item.getMaximumFileSizeMb(), readStringList(item.getAllowedFileTypesJson()),
                 read(item.getOptionsJson()), read(item.getConditionJson()), item.getDisplayOrder(),
                 item.getVersion(), item.getStatus(), item.isCustomerVisible(), item.isSearchable(), item.getFilterOperator(),
-                readIcon(item.getIconJson()), item.effectiveValueSource(), item.getProfileField());
+                readIcon(item.getIconJson()), item.effectiveValueSource(), item.getProfileField(),
+                read(item.getDefaultValueJson()));
     }
 
     private ServiceMediaPayload readIcon(String value) {

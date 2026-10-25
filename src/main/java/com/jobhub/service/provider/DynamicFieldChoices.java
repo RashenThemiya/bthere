@@ -37,6 +37,32 @@ public final class DynamicFieldChoices {
         return false;
     }
 
+    /** Defaults are form suggestions, never submitted answers or reviewed evidence. */
+    public static void validateDefault(String fieldType, JsonNode choices, JsonNode defaultValue,
+                                       boolean profileBacked) {
+        if (defaultValue == null || defaultValue.isNull()) return;
+        if (profileBacked) {
+            throw new IllegalArgumentException("Profile-backed fields use the profile value and cannot set defaultValue");
+        }
+        if ("SELECT".equals(fieldType)) {
+            if (!contains(choices, defaultValue)) {
+                throw new IllegalArgumentException("SELECT defaultValue must be a configured choice string");
+            }
+        } else if ("MULTI_SELECT".equals(fieldType)) {
+            if (!defaultValue.isArray()) {
+                throw new IllegalArgumentException("MULTI_SELECT defaultValue must be an array of choice strings");
+            }
+            Set<String> selected = new HashSet<>();
+            for (JsonNode value : defaultValue) {
+                if (!contains(choices, value) || !selected.add(value.asText())) {
+                    throw new IllegalArgumentException("MULTI_SELECT defaults must be unique configured choice strings");
+                }
+            }
+        } else {
+            throw new IllegalArgumentException("defaultValue is supported only for SELECT and MULTI_SELECT fields");
+        }
+    }
+
     public static com.jobhub.dto.provider.ServiceMediaPayload mapMarkerIcon(JsonNode choices, String selected) {
         if (choices == null || !choices.isArray() || selected == null) return null;
         for (JsonNode choice : choices) {

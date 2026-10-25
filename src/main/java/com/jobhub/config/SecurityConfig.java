@@ -45,7 +45,8 @@ public class SecurityConfig {
         ));
         configuration.setAllowedHeaders(List.of(
                 HttpHeaders.CONTENT_TYPE,
-                HttpHeaders.AUTHORIZATION
+                HttpHeaders.AUTHORIZATION,
+                "Idempotency-Key"
         ));
         configuration.setMaxAge(3600L);
 
@@ -63,6 +64,7 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/payhere/booking-notify").permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",

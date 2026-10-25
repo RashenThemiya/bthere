@@ -1,0 +1,83 @@
+-- Scheduled single-provider card request MVP. Apply before enabling option policies.
+-- Existing completion_code/completion_attempts columns can remain; they are no longer mapped or used.
+CREATE TABLE IF NOT EXISTS booking_request_policy (
+    option_id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    minimum_notice_minutes INT NOT NULL DEFAULT 120,
+    offer_timeout_seconds INT NOT NULL DEFAULT 60,
+    confirmation_timeout_seconds INT NOT NULL DEFAULT 120,
+    matching_timeout_seconds INT NOT NULL DEFAULT 600,
+    maximum_radius_km DECIMAL(38,2) DEFAULT 50
+);
+CREATE TABLE IF NOT EXISTS booking_request (
+    request_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version BIGINT NOT NULL DEFAULT 0,
+    user_id BIGINT,
+    idempotency_key VARCHAR(100),
+    payload_hash VARCHAR(255),
+    option_id BIGINT,
+    market_id BIGINT,
+    selection_mode VARCHAR(255),
+    payload_json LONGTEXT,
+    candidates_json LONGTEXT,
+    next_candidate INT NOT NULL DEFAULT 0,
+    status VARCHAR(255),
+    quoted_amount DECIMAL(38,2),
+    currency_code VARCHAR(255),
+    job_id BIGINT,
+    expires_at TIMESTAMP(6) NULL,
+    confirmation_expires_at TIMESTAMP(6) NULL,
+    payment_started_at TIMESTAMP(6) NULL,
+    payment_order_id VARCHAR(100),
+    gateway_payment_id VARCHAR(100),
+    payment_status VARCHAR(255),
+    checkout_method VARCHAR(255),
+    checkout_json TEXT,
+    start_code VARCHAR(255),
+    start_attempts INT NOT NULL DEFAULT 0,
+    code_expires_at TIMESTAMP(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    INDEX idx_booking_request_status (status,expires_at),
+    INDEX idx_booking_request_confirmation (status,confirmation_expires_at),
+    INDEX idx_booking_request_payment (status,payment_started_at),
+    CONSTRAINT uk_booking_request_key UNIQUE (user_id,idempotency_key),
+    CONSTRAINT uk_booking_request_order UNIQUE (payment_order_id),
+    CONSTRAINT uk_booking_request_job UNIQUE (job_id)
+);
+CREATE TABLE IF NOT EXISTS booking_offer (
+    offer_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    request_id BIGINT NOT NULL,
+    provider_id BIGINT,
+    provider_location_id BIGINT,
+    status VARCHAR(255),
+    expires_at TIMESTAMP(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    INDEX idx_booking_offer_request (request_id,status,expires_at),
+    INDEX idx_booking_offer_provider (provider_id,status),
+    CONSTRAINT fk_booking_offer_request FOREIGN KEY (request_id) REFERENCES booking_request(request_id)
+);
+CREATE TABLE IF NOT EXISTS booking_payment_notice (
+    notice_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    request_id BIGINT NOT NULL,
+    payment_id VARCHAR(100),
+    status_code VARCHAR(255),
+    received_at TIMESTAMP(6) NULL,
+    CONSTRAINT uk_booking_payment_notice UNIQUE (payment_id,status_code),
+    CONSTRAINT fk_booking_notice_request FOREIGN KEY (request_id) REFERENCES booking_request(request_id)
+);
+CREATE TABLE IF NOT EXISTS booking_dispatch_event (
+    event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT,
+    request_id BIGINT NOT NULL,
+    offer_id BIGINT,
+    event_type VARCHAR(255),
+    created_at TIMESTAMP(6) NULL,
+    expires_at TIMESTAMP(6) NULL,
+    delivery_status VARCHAR(255),
+    delivery_attempts INT NOT NULL DEFAULT 0,
+    next_delivery_at TIMESTAMP(6) NULL,
+    INDEX idx_booking_event_user (user_id,event_id),
+    INDEX idx_booking_event_delivery (delivery_status,next_delivery_at),
+    CONSTRAINT fk_booking_event_request FOREIGN KEY (request_id) REFERENCES booking_request(request_id)
+);

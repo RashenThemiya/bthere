@@ -63,6 +63,28 @@ class MapMarkerResolverTest {
         verifyNoInteractions(types);
     }
 
+    @Test void vehicleOnlyRuleUsesSameMarkerRegardlessOfGenderFilter() throws Exception {
+        var fields = List.of(field(45, "[\"CAR\",\"BIKE\"]"),
+                field(47, "[\"MALE\",\"FEMALE\"]"));
+        when(rules.findAllByServiceProviderTypeIdAndOptionIdAndStatus(1L, 12L, "ACTIVE"))
+                .thenReturn(List.of(rule(7, new long[]{45}, "CAR"), rule(8, new long[]{45}, "BIKE")));
+        for (String gender : List.of("[]", "[\"MALE\"]", "[\"FEMALE\"]", "[\"MALE\",\"FEMALE\"]")) {
+            var filters = new ArrayList<ProviderFilter>();
+            filters.add(filter(45, "[\"CAR\"]"));
+            if (!"[]".equals(gender)) filters.add(filter(47, gender));
+            var result = resolver.resolve(1L, option(), fields, filters);
+            assertThat(result.ruleId()).isEqualTo(7L);
+            assertThat(result.icon().key()).isEqualTo("combination-7.png");
+            assertThat(result.conditions()).containsExactly(
+                    new com.jobhub.dto.market.PricingConditionRequest(45L, "CAR"));
+        }
+        var bike = resolver.resolve(1L, option(), fields,
+                List.of(filter(45, "[\"BIKE\"]"), filter(47, "[\"FEMALE\"]")));
+        assertThat(bike.ruleId()).isEqualTo(8L);
+        assertThat(bike.icon().key()).isEqualTo("combination-8.png");
+        verifyNoInteractions(types);
+    }
+
     @Test void multipleValuesDoNotImplyASpecificCombinationAndKeepFallback() throws Exception {
         var option = option(); option.getMedia().add(media("MAP_MARKER", "ride.png"));
         var fields = List.of(field(45, "[\"CAR\"]"), field(47, "[\"ELECTRIC\",\"PETROL\"]"));

@@ -28,12 +28,13 @@ public record ServiceCustomFieldRequest(
         String filterOperator,
         @jakarta.validation.Valid ServiceMediaPayload icon,
         String valueSource,
-        String profileField
+        String profileField,
+        JsonNode defaultValue
 ) {
     public ServiceCustomFieldRequest withOptionIds(List<Long> ids) {
         return new ServiceCustomFieldRequest(null, ids, scope, reuseScope, code, label,
                 description, fieldType, required, requiresApproval, minimumFiles, maximumFiles,
                 maximumFileSizeMb, allowedFileTypes, options, condition, displayOrder,
-                customerVisible, searchable, filterOperator, icon, valueSource, profileField);
+                customerVisible, searchable, filterOperator, icon, valueSource, profileField, defaultValue);
     }
 }

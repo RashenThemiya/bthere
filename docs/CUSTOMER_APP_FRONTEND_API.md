@@ -1,5 +1,9 @@
 # Customer App — full frontend API reference
 
+PayHere customer-confirmed bookings now support automatic provider earnings credit.
+See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
+payment references, earnings history and environment separation.
+
 ## Customer tab update: provider filters and field/choice icons (2026-10-20)
 
 Profile-photo 403 troubleshooting: the upload endpoint authenticates writes, while
@@ -48,6 +52,26 @@ fallback to value for missing label, text-only for missing icon. Field and choic
 are independently optional.
 
 ### Search using stable values
+
+Platform fee update (25 October 2026): booking quotes/responses and booking-request
+Views add platformFeePercentage, platformFee and providerEarnings. expectedAmount
+remains the full fare; commission is deducted from it for provider earnings.
+Use server values and preserve booking snapshots. See [platform fee API](PLATFORM_FEES_API.md).
+
+Scheduled request booking update (25 October 2026): opt-in options now use the
+[booking request/card checkout lifecycle](BOOKING_REQUESTS_API.md). Fill configured
+booking fields first, create a direct/open request, wait for provider acceptance,
+confirm and pay by Visa/Mastercard credit/debit card, then use separate customer
+a start code and customer completion confirmation (no end code). This is implemented locally, not deployed. Legacy booking-create
+is blocked for enabled options. Read that contract for policy, new endpoints,
+notification integration and payment-review limitations.
+
+Map marker rules may use fewer fields than pricing. For example, CAR + MALE and
+CAR + FEMALE can share a CAR-only marker rule while having different prices.
+Render each search candidate's returned `mapMarker.icon`; do not create one icon
+per pricing combination. Extra gender filters do not change a vehicle-only marker.
+Search has no price field: request `POST /api/v1/customers/me/bookings/quote`
+separately with all applicable `pricingSelections`.
 
 ```http
 POST /api/v1/customers/me/provider-search

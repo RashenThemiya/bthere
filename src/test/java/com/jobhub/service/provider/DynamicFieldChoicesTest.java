@@ -20,6 +20,29 @@ class DynamicFieldChoicesTest {
     }
     private final ObjectMapper mapper = new ObjectMapper();
 
+    @Test void defaultsMustMatchChoiceValuesAndSelectionCardinality() throws Exception {
+        var choices = mapper.readTree("[\"BIKE\",{\"value\":\"CAR\",\"label\":\"Car\"}]");
+        DynamicFieldChoices.validateDefault("SELECT", choices, mapper.readTree("\"CAR\""), false);
+        DynamicFieldChoices.validateDefault("MULTI_SELECT", choices, mapper.readTree("[\"CAR\",\"BIKE\"]"), false);
+        DynamicFieldChoices.validateDefault("MULTI_SELECT", choices, mapper.readTree("[]"), false);
+        DynamicFieldChoices.validateDefault("TEXT", null, null, false);
+        for (String input : new String[]{"\"Car\"", "\"UNKNOWN\"", "[\"CAR\"]", "1", "{\"value\":\"CAR\"}"}) {
+            var value = mapper.readTree(input);
+            assertThatThrownBy(() -> DynamicFieldChoices.validateDefault("SELECT", choices, value, false))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        for (String input : new String[]{"\"CAR\"", "[\"CAR\",\"CAR\"]", "[\"UNKNOWN\"]", "[null]", "[1]"}) {
+            var value = mapper.readTree(input);
+            assertThatThrownBy(() -> DynamicFieldChoices.validateDefault("MULTI_SELECT", choices, value, false))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        var selected = mapper.readTree("\"CAR\"");
+        assertThatThrownBy(() -> DynamicFieldChoices.validateDefault("TEXT", choices, selected, false))
+                .hasMessageContaining("only for SELECT");
+        assertThatThrownBy(() -> DynamicFieldChoices.validateDefault("SELECT", choices, selected, true))
+                .hasMessageContaining("Profile-backed");
+    }
+
     @Test void supportsLegacyStringsAndRichChoicesWithOptionalIcons() throws Exception {
         var choices = mapper.readTree("""
                 ["CAR", {"value":"VAN","label":"Van","icon":{"key":"service-icons/van.svg",

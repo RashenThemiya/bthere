@@ -76,6 +76,13 @@ returns 403 ProblemDetail with structured reasons if access is blocked.
 
 ## Booking context and dynamic forms
 
+Map markers are independent of pricing variants. A search with vehicle CAR and
+gender FEMALE can match a marker rule containing only CAR. Render the single
+`mapMarker.icon` returned on each candidate; do not generate markers for every
+combination of filter values. See [marker configuration](COMBINATION_MAP_MARKERS_API.md#vehicle-markers-independent-of-pricing-variants).
+Search does not return prices; use `POST /api/v1/customers/me/bookings/quote` with
+the applicable `pricingSelections` for pricing.
+
 Context returns `marketId`, market `timezone`, an option card in `selection`,
 `bookingSchema`, `matchingFilters`, and `liveTrackingSupported: false`.
 The booking schema contains common BOOKING_FIELD definitions and the selected

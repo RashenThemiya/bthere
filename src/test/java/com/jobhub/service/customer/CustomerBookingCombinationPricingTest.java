@@ -41,12 +41,14 @@ class CustomerBookingCombinationPricingTest {
     @Mock CustomerRequirementsService customerRequirementsService;
     @Mock CustomerAvailabilityService availabilityService;
     @Mock WalletService walletService;
+    @Mock BookingRequestPolicyRepository requestPolicies;
     @Spy ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks CustomerBookingService service;
     ServiceProviderTypeAssignment assignment;
     List<PricingConditionRequest> selections = List.of(
             new PricingConditionRequest(45L, "CAR"), new PricingConditionRequest(46L, "MALE"));
     CreateBookingRequest request;
+    ServicePricingService.Price configuredPrice;
 
     @BeforeEach void setup() {
         var customer = new Customer(); customer.setCustomerId(25L);
@@ -72,9 +74,9 @@ class CustomerBookingCombinationPricingTest {
         when(availabilityService.scheduled(eq(assignment), any(), any())).thenReturn(true);
         when(availabilityService.remaining(eq(assignment), any(), isNull(), isNull(), any(), any(), anyBoolean())).thenReturn(1);
         var snapshot = new ServicePricingService.RateSnapshot("FIXED", null, new BigDecimal("750"), null, null, null, selections);
+        configuredPrice=new ServicePricingService.Price(7L,"LKR",new BigDecimal("750.00"),null,selections,snapshot);
         when(pricingService.calculate(eq(1L), eq(2L), eq(12L), eq("TIME_BASED"), any(), any(),
-                isNull(), isNull(), isNull(), eq(selections))).thenReturn(
-                new ServicePricingService.Price(7L, "LKR", new BigDecimal("750.00"), null, selections, snapshot));
+                isNull(), isNull(), isNull(), eq(selections))).thenAnswer(i -> configuredPrice);
         LocalDateTime start = LocalDateTime.now(java.time.ZoneId.of("Asia/Colombo")).plusDays(1);
         request = new CreateBookingRequest(2L, 12L, 15L, null, "ONLINE", start, start.plusHours(1),
                 null, null, null, null, null, null, List.of(), "CASH", selections);
@@ -119,5 +121,25 @@ class CustomerBookingCombinationPricingTest {
                 .when(providerSearchFields).requirePricingSelections(assignment, 12L, selections);
         assertThatIllegalArgumentException().isThrownBy(() -> service.create(5L, request));
         verify(jobRepository, never()).save(any());
+    }
+
+    @Test void cardRequestReservationPersistsCapacityWithoutConfirmingOrCharging() {
+        var b=request;
+        var card=new CreateBookingRequest(b.serviceTypeId(),b.optionId(),b.providerId(),b.providerIds(),b.deliveryMode(),
+                b.startDatetime(),b.expectedEndDatetime(),null,null,null,null,null,null,List.of(),"CARD",selections);
+        when(jobRepository.saveAndFlush(any())).thenAnswer(i -> {Job job=i.getArgument(0);job.setJobId(100L);return job;});
+        var reserved=service.reserveCardRequest(5L,card);
+        assertThat(reserved.getJobStatus()).isEqualTo("AWAITING_PAYMENT");assertThat(reserved.getPaymentStatus()).isEqualTo("PENDING");
+        verify(availabilityService).lockProviders(List.of(15L));verifyNoInteractions(walletService);
+    }
+    @Test void bookingSavesFeeAndProviderNetRatherThanRecomputingAtSettlement() {
+        var snapshot=new ServicePricingService.RateSnapshot("FIXED",null,new BigDecimal("750"),null,null,null,selections,new BigDecimal("10.00"),"OPTION");
+        configuredPrice=new ServicePricingService.Price(7L,"LKR",new BigDecimal("750.00"),null,selections,snapshot);
+        when(jobRepository.save(any())).thenAnswer(i -> {Job job=i.getArgument(0);job.setJobId(100L);return job;});
+        var result=service.create(5L,request);
+        assertThat(result.platformFeePercentage()).isEqualByComparingTo("10");
+        assertThat(result.platformFee()).isEqualByComparingTo("75");assertThat(result.providerEarnings()).isEqualByComparingTo("675");
+        assertThat(result.expectedAmount()).isEqualByComparingTo("750");
+        assertThat(result.pricingSnapshot().path("platformFeeSource").asText()).isEqualTo("OPTION");
     }
 }

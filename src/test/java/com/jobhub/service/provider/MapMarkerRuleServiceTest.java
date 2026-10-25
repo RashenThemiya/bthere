@@ -74,6 +74,26 @@ class MapMarkerRuleServiceTest {
         assertThatCode(() -> service.create(1L,12L,request(null,choice(45,"CAR")))).doesNotThrowAnyException();
     }
 
+    @Test void markerRuleCanUseOnlyVehicleWhenOptionAlsoHasGenderField() throws Exception {
+        scope();
+        var vehicle = mapper.readValue("""
+                {"fieldId":45,"scope":"PROVIDER_REQUIREMENT","status":"ACTIVE","fieldType":"SELECT",
+                 "customerVisible":true,"searchable":true,"options":["CAR","BIKE"]}
+                """, ServiceCustomFieldResponse.class);
+        var gender = mapper.readValue("""
+                {"fieldId":47,"scope":"PROVIDER_REQUIREMENT","status":"ACTIVE","fieldType":"SELECT",
+                 "customerVisible":true,"searchable":true,"options":["MALE","FEMALE"]}
+                """, ServiceCustomFieldResponse.class);
+        when(fields.listForOption(1L, 12L, false)).thenReturn(List.of(vehicle, gender));
+        when(rules.save(any())).thenAnswer(i -> i.getArgument(0));
+        var response = service.create(1L, 12L, request(null, choice(45, "CAR")));
+        assertThat(response.conditions()).containsExactly(choice(45, "CAR"));
+        var updated = rule(7, choice(45, "CAR"), choice(47, "MALE"));
+        when(rules.findById(7L)).thenReturn(Optional.of(updated));
+        var replacement = service.update(1L, 12L, 7L, request(null, choice(45, "CAR")));
+        assertThat(replacement.conditions()).containsExactly(choice(45, "CAR"));
+    }
+
     @Test void moreSpecificCombinationMayOverrideGeneralRule() throws Exception {
         scope(); definitions();
         when(rules.findAllByServiceProviderTypeIdAndOptionIdAndStatus(1L,12L,"ACTIVE"))

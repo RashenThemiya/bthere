@@ -39,6 +39,41 @@ any configured option makes it applicable; selecting several still requires
 only one answer per provider-service registration. `reuseScope` controls reuse
 between separate field definitions or registrations, not which options apply.
 
+## Default selections
+
+Custom-field create/update requests and definition responses support optional
+`defaultValue`. For `SELECT`, send a single configured choice value:
+
+```json
+{"fieldType":"SELECT","options":["CAR","BIKE"],"defaultValue":"CAR"}
+```
+
+For `MULTI_SELECT`, send an array of unique configured choice values:
+
+```json
+{"fieldType":"MULTI_SELECT","options":["CAR","BIKE"],"defaultValue":["CAR","BIKE"]}
+```
+
+These are partial examples; retain the other required definition properties.
+Defaults use choice values, not labels or choice objects. Omitted/null defaults
+mean no preselection; an empty MULTI_SELECT array also selects nothing. Updates
+replace the default, so omission/null clears it. Removing a defaulted choice
+requires updating/clearing its default in the same request. Other field types
+and PROVIDER_PROFILE fields reject non-null defaults; profile fields use the
+actual profile value.
+
+Frontend: show a single-choice default picker for SELECT and a multiple-choice
+picker for MULTI_SELECT in the admin editor. On input forms, use `defaultValue`
+only for a fresh, unanswered field. Preserve saved answers, reused answers and
+explicitly cleared selections. Submit the selected value through the normal
+answer API. Defaults are suggestions: the backend does not create submissions,
+grant approval, fill missing booking answers or satisfy requirements from them.
+Do not apply these form defaults to customer search filters automatically.
+
+No frontend source is included in this backend repository. Apply
+`DYNAMIC_FIELD_DEFAULTS_SCHEMA.sql` once when schema updates are managed manually;
+the new nullable column is also covered by the existing Hibernate update setting.
+
 ## Reusing provider answers
 
 ### Reuse provider profile values without duplicate inputs

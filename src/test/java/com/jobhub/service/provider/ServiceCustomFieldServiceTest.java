@@ -22,6 +22,40 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ServiceCustomFieldServiceTest {
+    @Test void choiceDefaultsRoundTripThroughSharedScopingAndCanBeChangedOrCleared() throws Exception {
+        var mapper = new ObjectMapper();
+        var realService = new ServiceCustomFieldService(mapper, typeRepository, optionRepository,
+                fieldRepository, submissionRepository, providerOptionRepository, assignmentRepository,
+                profileService, approvalService, serviceSetupService, profileFields);
+        var definition = mapper.readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"VEHICLE","label":"Vehicle",
+                 "fieldType":"SELECT","options":["CAR","BIKE"],"defaultValue":"CAR"}
+                """, ServiceCustomFieldRequest.class).withOptionIds(List.of(12L));
+        var saved = new java.util.concurrent.atomic.AtomicReference<ServiceCustomField>();
+        when(fieldRepository.save(any())).thenAnswer(i -> {
+            ServiceCustomField field = i.getArgument(0); field.setFieldId(25L); saved.set(field); return field;
+        });
+        var created = realService.create(1L, definition);
+        assertThat(created.defaultValue().asText()).isEqualTo("CAR");
+        assertThat(saved.get().getDefaultValueJson()).isEqualTo("\"CAR\"");
+        assertThat(mapper.valueToTree(created).path("defaultValue").asText()).isEqualTo("CAR");
+        when(fieldRepository.findById(25L)).thenAnswer(i -> Optional.of(saved.get()));
+        var changedJson = mapper.valueToTree(definition);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changedJson).put("fieldType", "MULTI_SELECT")
+                .set("defaultValue", mapper.readTree("[\"CAR\",\"BIKE\"]"));
+        var changed = realService.update(1L, 25L, mapper.treeToValue(changedJson, ServiceCustomFieldRequest.class));
+        assertThat(changed.defaultValue()).isEqualTo(mapper.readTree("[\"CAR\",\"BIKE\"]"));
+        // Removing a choice without updating its default must fail before persistence.
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changedJson).set("options", mapper.readTree("[\"BIKE\"]"));
+        var invalid = mapper.treeToValue(changedJson, ServiceCustomFieldRequest.class);
+        assertThatThrownBy(() -> realService.update(1L, 25L, invalid)).hasMessageContaining("configured choice");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changedJson).remove("defaultValue");
+        assertThat(realService.update(1L, 25L, mapper.treeToValue(changedJson, ServiceCustomFieldRequest.class))
+                .defaultValue()).isNull();
+        assertThat(saved.get().getDefaultValueJson()).isNull();
+        verify(submissionRepository, never()).save(any());
+        verify(submissionRepository, atLeastOnce()).saveAll(List.of());
+    }
     @Test void linkedContextMutatesTheSameFieldAndUnrelatedContextCannot() throws Exception {
         var field = new ServiceCustomField();
         field.setFieldId(5L); field.setServiceProviderTypeId(2L);

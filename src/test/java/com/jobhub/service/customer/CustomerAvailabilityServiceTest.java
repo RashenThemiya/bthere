@@ -76,6 +76,18 @@ class CustomerAvailabilityServiceTest {
         schedule(List.of(slot(8, 10), slot(10, 12)));
         assertThat(service.scheduled(assignment(), start, end)).isTrue();
     }
+    @Test void waitingForCustomerCompletionConfirmationDoesNotReserveProviderCapacity() {
+        when(jobs.findReservedOverlaps(eq(15L),eq(start),eq(end),anySet())).thenAnswer(i -> {
+            Set<String> excluded=i.getArgument(3);
+            assertThat(excluded).contains("AWAITING_COMPLETION_CONFIRMATION");return List.of();
+        });
+        when(jobs.findLockedReservedOverlaps(eq(15L),eq(start),eq(end),anySet())).thenAnswer(i -> {
+            Set<String> excluded=i.getArgument(3);
+            assertThat(excluded).contains("AWAITING_COMPLETION_CONFIRMATION");return List.of();
+        });
+        assertThat(service.remaining(assignment(),option(),null,null,start,end,false)).isEqualTo(5);
+        assertThat(service.remaining(assignment(),option(),null,null,start,end,true)).isEqualTo(5);
+    }
     @Test void scheduleGapHidesProvider() {
         schedule(List.of(slot(8, 9), slot(10, 12)));
         assertThat(service.scheduled(assignment(), start, end)).isFalse();
