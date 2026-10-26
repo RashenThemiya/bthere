@@ -227,7 +227,7 @@ class ServiceCustomFieldServiceTest {
         verify(fieldRepository, times(1)).save(any());
     }
 
-    @Test void allowsDisplayOnlyPublicImageFieldButRejectsPublicDocumentsAndBookingImages() throws Exception {
+    @Test void allowsPublicUploadsButRejectsCustomerBookingImages() throws Exception {
         var mapper = new ObjectMapper();
         var request = mapper.readValue("""
                 {"scope":"PROVIDER_REQUIREMENT","code":"PORTFOLIO","label":"Portfolio",
@@ -241,11 +241,28 @@ class ServiceCustomFieldServiceTest {
         assertThat(saved.maximumFiles()).isEqualTo(5);
         var json = mapper.valueToTree(request);
         ((com.fasterxml.jackson.databind.node.ObjectNode)json).put("fieldType", "DOCUMENT_UPLOAD");
-        assertThatThrownBy(() -> service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)))
-                .hasMessageContaining("unconditional");
+        assertThat(service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)).customerVisible()).isTrue();
         ((com.fasterxml.jackson.databind.node.ObjectNode)json).put("fieldType", "IMAGE_UPLOAD").put("scope", "BOOKING_FIELD");
         assertThatThrownBy(() -> service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)))
                 .hasMessageContaining("unconditional");
+    }
+
+    @Test void everyFieldTypeCanBePublishedButOnlyExistingFilterTypesCanBeSearched() throws Exception {
+        var mapper = new ObjectMapper();
+        when(fieldRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        for (String type : List.of("TEXT", "TEXTAREA", "NUMBER", "BOOLEAN", "DATE", "TIME", "PHONE", "EMAIL",
+                "SELECT", "MULTI_SELECT", "IMAGE_UPLOAD", "DOCUMENT_UPLOAD", "FILE_UPLOAD")) {
+            var json = mapper.createObjectNode().put("scope", "PROVIDER_REQUIREMENT").put("code", "PUBLIC_" + type)
+                    .put("label", type).put("fieldType", type).put("customerVisible", true).put("searchable", false);
+            if (type.contains("SELECT")) json.set("options", mapper.readTree("[\"A\",\"B\"]"));
+            assertThat(service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)).customerVisible())
+                    .as(type).isTrue();
+            if (!Set.of("SELECT", "MULTI_SELECT", "NUMBER", "BOOLEAN").contains(type)) {
+                json.put("searchable", true);
+                assertThatThrownBy(() -> service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)))
+                        .as(type).hasMessageContaining("display-only");
+            }
+        }
     }
 
     @Test void rejectsSearchOnPrivateUploadAndConditionalFields() throws Exception {

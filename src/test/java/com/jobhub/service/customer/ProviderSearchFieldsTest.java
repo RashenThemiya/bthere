@@ -26,9 +26,9 @@ class ProviderSearchFieldsTest {
         when(fields.listForOption(2L, 12L, false)).thenReturn(List.of(visible,
                 field(23, "IMAGE_UPLOAD", false, false), field(24, "DOCUMENT_UPLOAD", true, false)));
         var definitions = service.definitions(2L, 12L);
-        assertThat(definitions).containsExactly(visible);
+        assertThat(definitions).extracting(ServiceCustomFieldResponse::fieldId).containsExactly(22L, 24L);
         assertThat(service.schema(definitions)).isEmpty();
-        assertThat(service.displaySchema(definitions)).extracting(d -> d.fieldId()).containsExactly(22L);
+        assertThat(service.displaySchema(definitions)).extracting(d -> d.fieldId()).containsExactly(22L, 24L);
         String key = "providers/25/images/photo.jpg";
         when(storage.createPublishedProviderImageUrl(25L, key)).thenReturn(
                 new com.jobhub.dto.upload.PresignedUrlResponse(key, "https://example.com/signed-image",
@@ -49,6 +49,53 @@ class ProviderSearchFieldsTest {
         verifyNoInteractions(storage);
         when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(answer(22, "[\"" + key + "\"]", "APPROVED", false)));
         assertThat(service.attributes(assignment, List.of(field(22, "IMAGE_UPLOAD", false, false)))).isEmpty();
+        verifyNoInteractions(storage);
+    }
+
+    @Test void publicScalarFieldsPreserveValuesAndRemainDisplayOnly() throws Exception {
+        var assignment = new ServiceProviderTypeAssignment();
+        var types = List.of("TEXT", "TEXTAREA", "DATE", "TIME", "PHONE", "EMAIL");
+        var values = List.of("Name", "Long description", "2026-10-26", "09:30", "+94771234567", "provider@example.com");
+        var definitions = new ArrayList<ServiceCustomFieldResponse>();
+        var answers = new ArrayList<ProviderCustomSubmissionResponse>();
+        for (int i = 0; i < types.size(); i++) {
+            definitions.add(field(i + 1, types.get(i), true, false));
+            answers.add(answer(i + 1, mapper.writeValueAsString(values.get(i)), "APPROVED", false));
+        }
+        when(fields.listForOption(3L, 12L, false)).thenReturn(definitions);
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(answers);
+        assertThat(service.definitions(3L, 12L)).hasSize(6);
+        assertThat(service.schema(definitions)).isEmpty();
+        assertThat(service.displaySchema(definitions)).hasSize(6);
+        var attributes = service.attributes(assignment, definitions);
+        for (int i = 0; i < values.size(); i++) assertThat(attributes.get((long)i + 1).asText()).isEqualTo(values.get(i));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.validate(
+                List.of(field(1, "TEXT", true, true)), List.of(choice(1, "[\"A\"]"))));
+    }
+
+    @Test void publicDocumentsAndFilesUseOwnedSignedUrlsAndHideUnapprovedAndPrivateAnswers() throws Exception {
+        var assignment = new ServiceProviderTypeAssignment(); assignment.setServiceProviderId(15L);
+        var provider = new com.jobhub.entity.provider.ServiceProvider(); provider.setUserId(25L);
+        when(providers.findById(15L)).thenReturn(Optional.of(provider));
+        var definitions = List.of(field(31, "DOCUMENT_UPLOAD", true, false), field(32, "FILE_UPLOAD", true, false),
+                field(33, "FILE_UPLOAD", false, false));
+        String key = "providers/25/documents/certificate.pdf";
+        when(storage.createPublishedProviderFileUrl(25L, key)).thenReturn(
+                new com.jobhub.dto.upload.PresignedUrlResponse(key, "https://example.com/document",
+                        java.time.Instant.parse("2030-01-01T00:10:00Z")));
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                answer(31, "{\"files\":[{\"key\":\"" + key + "\"}]}", "APPROVED", true),
+                answer(32, "[\"" + key + "\"]", "APPROVED", false),
+                answer(33, "[\"" + key + "\"]", "APPROVED", false)));
+        var attributes = service.attributes(assignment, definitions);
+        assertThat(attributes).containsOnlyKeys(31L, 32L);
+        assertThat(attributes.get(31L).get(0).path("url").asText()).isEqualTo("https://example.com/document");
+        assertThat(attributes.get(32L).get(0).path("key").asText()).isEqualTo(key);
+        clearInvocations(storage);
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                answer(31, "[\"" + key + "\"]", "PENDING", false),
+                answer(32, "[\"" + key + "\"]", "REJECTED", false)));
+        assertThat(service.attributes(assignment, definitions)).isEmpty();
         verifyNoInteractions(storage);
     }
 

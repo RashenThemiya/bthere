@@ -122,10 +122,11 @@ Super Admin enables fields using the existing custom-field POST/PUT endpoints:
 ```
 
 Both flags default to false, including existing definitions. Searchable requires
-customerVisible. Only unconditional PROVIDER_REQUIREMENT fields of types SELECT,
-MULTI_SELECT, NUMBER, BOOLEAN and IMAGE_UPLOAD can be published. IMAGE_UPLOAD is
-display-only (`searchable: false`); document/file uploads, text/contact fields and
-BOOKING_FIELD definitions cannot be enabled. Select choices must be unique nonempty
+customerVisible. All field types can be published for unconditional
+PROVIDER_REQUIREMENT definitions. Only SELECT, MULTI_SELECT, NUMBER and BOOLEAN
+are searchable. Text/contact/date/time and upload fields are display-only
+(`searchable: false`, `filterOperator: null`). BOOKING_FIELD definitions cannot be
+enabled. Select choices must be unique nonempty
 string values. Choices may be strings or objects with value, label and optional icon;
 see [choice icon contract](DYNAMIC_FIELDS_API.md#icons-for-individual-select-choices).
 Filters submit values only, never label/icon objects. PUT replaces these settings
@@ -370,3 +371,13 @@ candidate's `providerAttributes`; image values are arrays of `{key,url,expiresAt
 Render as a gallery for that provider/service option. Only approved public images
 are returned; signed URLs expire after ten minutes. Images are not search filters.
 See [configuration, upload and response examples](DYNAMIC_FIELDS_API.md#customer-visible-provider-image-galleries).
+
+
+### All public provider field types
+
+`providerDisplayFields` now includes every explicitly public provider field type.
+`providerAttributes` preserves scalar strings/numbers/booleans and choice values;
+IMAGE_UPLOAD/DOCUMENT_UPLOAD/FILE_UPLOAD values are arrays of `{key,url,expiresAt}`.
+Only approved manual answers are returned. Render documents as links and other
+values according to fieldType. All non-filter types require searchable false.
+See [full type table and examples](DYNAMIC_FIELDS_API.md#customer-visibility-for-all-provider-field-types).

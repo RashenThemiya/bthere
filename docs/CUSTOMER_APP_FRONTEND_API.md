@@ -1893,3 +1893,15 @@ candidate's `providerAttributes`; image values are arrays of `{key,url,expiresAt
 Render as a gallery for that provider/service option. Only approved public images
 are returned; signed URLs expire after ten minutes. Images are not search filters.
 See [configuration, upload and response examples](DYNAMIC_FIELDS_API.md#customer-visible-provider-image-galleries).
+
+
+### Customer display support for every provider field type
+
+All unconditional PROVIDER_REQUIREMENT types now support explicit customerVisible.
+Booking-context `providerDisplayFields` supplies the labels and fieldTypes; join
+by fieldId to provider-search candidate `providerAttributes`. TEXT/TEXTAREA/DATE/
+TIME/PHONE/EMAIL return strings. Documents/files return arrays of
+`{key,url,expiresAt}`, like images; render as view/download links. Signed URLs last
+ten minutes. Only approved public manual answers are included. Searchable remains
+restricted to SELECT/MULTI_SELECT/NUMBER/BOOLEAN. Booking questions remain separate.
+See [configuration and examples](DYNAMIC_FIELDS_API.md#customer-visibility-for-all-provider-field-types).

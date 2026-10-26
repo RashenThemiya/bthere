@@ -441,8 +441,9 @@ Review body uses `APPROVED` or `REJECTED` and an optional `rejectionReason`.
 
 IMAGE_UPLOAD provider requirements now support `customerVisible: true` with
 `searchable: false`, `filterOperator: null` and `condition: null`. Image fields
-are display-only. DOCUMENT_UPLOAD/FILE_UPLOAD and booking upload fields remain
-private; image fields cannot be pricing fields or search filters.
+are display-only. DOCUMENT_UPLOAD/FILE_UPLOAD can also be explicitly published
+as described below. Booking upload fields remain private; uploads cannot be pricing
+fields or search filters.
 
 Example admin definition (POST or full replacement PUT on existing field):
 
@@ -510,3 +511,89 @@ approved image URLs in discovery results. Frontend must render these image
 arrays under the matching provider/service option. This repository contains no
 frontend gallery implementation. Existing field visibility is not changed
 by deployment; explicitly enable customerVisible on intended portfolio fields.
+
+
+## Customer visibility for all provider field types
+
+All 13 dynamic field types now accept `customerVisible: true` for unconditional
+`PROVIDER_REQUIREMENT` fields. Existing definitions stay private unless explicitly
+enabled. This does not change provider-profile binding allowlists, booking-field
+privacy or conditional-field restrictions.
+
+| Type | Customer value | Searchable |
+|---|---|---|
+| TEXT, TEXTAREA | string | No |
+| DATE, TIME | string, unchanged from provider answer | No |
+| PHONE, EMAIL | string | No |
+| NUMBER | number | Yes |
+| BOOLEAN | boolean | Yes |
+| SELECT | configured string value | Yes |
+| MULTI_SELECT | array of configured string values | Yes |
+| IMAGE_UPLOAD | array of `{key,url,expiresAt}` | No |
+| DOCUMENT_UPLOAD, FILE_UPLOAD | array of `{key,url,expiresAt}` | No |
+
+For display-only fields send `searchable: false`, `filterOperator: null` and
+`condition: null`. Searchable fields still require customerVisible and their
+existing operator. Example full definition for a public phone field:
+
+```json
+{
+  "optionIds": [1],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "ASSIGNMENT",
+  "code": "CONTACT_PHONE",
+  "label": "Contact phone",
+  "fieldType": "PHONE",
+  "required": false,
+  "requiresApproval": false,
+  "customerVisible": true,
+  "searchable": false,
+  "filterOperator": null,
+  "condition": null
+}
+```
+
+For a document field use `fieldType: DOCUMENT_UPLOAD` (or FILE_UPLOAD), a distinct
+code/label, and upload limits such as `minimumFiles: 0`, `maximumFiles: 5`,
+`maximumFileSizeMb: 10`, `allowedFileTypes: ["PDF","JPG","PNG","WEBP"]`.
+Upload through `/api/v1/uploads/documents` and submit the returned keys through
+the normal provider answer API. Both file-array and `{files:[...]}` shapes work.
+Public files retain the upload service's existing PDF/JPG/PNG/WebP support; this
+change does not add video or arbitrary file formats.
+
+Only approved manual answers are published; existing permitted profile-backed
+PROVIDED values retain their behavior. Public upload links check provider
+ownership and stored content type and expire in ten minutes. Pending/rejected,
+private, foreign, missing and unsupported files are omitted. Submitted URLs are
+ignored and fresh URLs are signed by the backend. `/uploads/view-url` ownership
+rules remain unchanged.
+
+Customer frontend reads labels/types from booking-context `providerDisplayFields`
+and values from provider-search candidates' `providerAttributes`. Example partial
+candidate response with explicitly public fields:
+
+```json
+{
+  "providerAttributes": {
+    "31": "Experienced home-care provider",
+    "32": "+94771234567",
+    "33": "provider@example.com",
+    "34": "2026-10-26",
+    "35": "09:30",
+    "36": [
+      {
+        "key": "providers/25/documents/certificate.pdf",
+        "url": "https://example.com/temporary-signed-document-url",
+        "expiresAt": "2026-10-26T10:10:00Z"
+      }
+    ]
+  }
+}
+```
+
+Render text as text, long descriptions as paragraphs, contact values as contact
+links, date/time strings with appropriate formatting, images as a gallery and
+PDF/files as view/download links. `providerFilters` includes only searchable
+SELECT/MULTI_SELECT/NUMBER/BOOLEAN fields; pricing discovery remains independent.
+There is no frontend source in this repository; it must render these returned
+values. No database migration is needed for this extension.

@@ -28,6 +28,36 @@ class S3CustomerDocumentsTest {
                 && r.getObjectRequest().key().equals("providers/25/images/photo.png")));
     }
 
+    @Test void publicFileLinksRequireOwnedSupportedExistingObjects() throws Exception {
+        var signer = mock(S3Presigner.class);
+        var published = new S3PrivateDocumentService(s3, signer);
+        ReflectionTestUtils.setField(published, "bucket", "test-private");
+        for (String key : java.util.List.of("providers/99/documents/a.pdf", "customers/25/documents/a.pdf",
+                "providers/25/documents/../a.pdf", "providers/25/documents/a.html")) {
+            assertThatThrownBy(() -> published.createPublishedProviderFileUrl(25L, key))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        verifyNoInteractions(s3, signer);
+        when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("application/pdf").contentLength(100L).build());
+        var signed = mock(software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest.class);
+        when(signed.url()).thenReturn(new java.net.URI("https://example.com/signed-pdf").toURL());
+        when(signer.presignGetObject(any(software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest.class)))
+                .thenReturn(signed);
+        var result = published.createPublishedProviderFileUrl(25L, "providers/25/documents/a.pdf");
+        assertThat(result.key()).isEqualTo("providers/25/documents/a.pdf");
+        assertThat(result.url()).isEqualTo("https://example.com/signed-pdf");
+        clearInvocations(signer);
+        when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("text/html").contentLength(100L).build());
+        assertThatThrownBy(() -> published.createPublishedProviderFileUrl(25L, "providers/25/documents/a.pdf"))
+                .hasMessageContaining("must be PDF");
+        when(s3.headObject(any(HeadObjectRequest.class))).thenThrow(S3Exception.builder().statusCode(404).build());
+        assertThatThrownBy(() -> published.createPublishedProviderFileUrl(25L, "providers/25/documents/a.pdf"))
+                .hasMessageContaining("does not exist");
+        verifyNoInteractions(signer);
+    }
+
     @Test void publicationRejectsForeignUnsafeAndNonImageObjectsBeforeSigning() {
         ReflectionTestUtils.setField(service, "bucket", "test-private");
         assertThatThrownBy(() -> service.createPublishedProviderImageUrl(25L, "providers/99/images/a.jpg"))

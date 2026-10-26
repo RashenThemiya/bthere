@@ -107,6 +107,25 @@ public class S3PrivateDocumentService {
         return signedViewUrl(key);
     }
 
+    /** Only call for approved, explicitly customer-visible document/file answers. */
+    public PresignedUrlResponse createPublishedProviderFileUrl(Long userId, String key) {
+        if (userId == null || key == null
+                || !key.matches("providers/" + userId + "/(?:images|documents)/[A-Za-z0-9_-]+\\.(?:pdf|jpg|png|webp)")) {
+            throw new IllegalArgumentException("Published file must belong to this provider");
+        }
+        try {
+            var head = s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(requireBucket()).key(key).build());
+            if (head.contentType() == null || !EXTENSIONS.containsKey(head.contentType().toLowerCase(java.util.Locale.ROOT))) {
+                throw new IllegalArgumentException("Published file must be PDF, JPG, PNG or WebP");
+            }
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception exception) {
+            if (exception.statusCode() == 404) throw new IllegalArgumentException("Uploaded file does not exist");
+            throw exception;
+        }
+        return signedViewUrl(key);
+    }
+
     private PresignedUrlResponse signedViewUrl(String normalizedKey) {
         Duration duration = Duration.ofMinutes(10);
         String url = s3Presigner.presignGetObject(

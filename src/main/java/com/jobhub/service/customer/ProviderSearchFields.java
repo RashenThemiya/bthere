@@ -15,6 +15,7 @@ import java.util.*;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProviderSearchFields {
+    private static final Set<String> SEARCH_TYPES = Set.of("SELECT", "MULTI_SELECT", "NUMBER", "BOOLEAN");
     private final ServiceCustomFieldService fields;
     private final com.jobhub.repository.provider.ServiceProviderRepository providers;
     private final com.jobhub.service.upload.S3PrivateDocumentService storage;
@@ -35,12 +36,11 @@ public class ProviderSearchFields {
     public List<ServiceCustomFieldResponse> definitions(Long serviceId, Long optionId) {
         return fields.listForOption(serviceId, optionId, false).stream()
                 .filter(f -> "PROVIDER_REQUIREMENT".equals(f.scope()) && f.customerVisible())
-                .filter(f -> Set.of("SELECT", "MULTI_SELECT", "BOOLEAN", "NUMBER", "IMAGE_UPLOAD").contains(f.fieldType()))
                 .filter(f -> f.condition() == null || f.condition().isNull()).toList();
     }
 
     public List<ProviderFilterDefinition> schema(List<ServiceCustomFieldResponse> definitions) {
-        return definitions.stream().filter(f -> f.searchable() && !"IMAGE_UPLOAD".equals(f.fieldType()))
+        return definitions.stream().filter(f -> f.searchable() && SEARCH_TYPES.contains(f.fieldType()))
                 .map(f -> new ProviderFilterDefinition(f.fieldId(), f.code(), f.label(),
                         f.fieldType(), f.options(), f.filterOperator(), f.icon())).toList();
     }
@@ -56,7 +56,7 @@ public class ProviderSearchFields {
         Set<Long> seen = new HashSet<>();
         for (var filter : filters) {
             if (filter == null || filter.fieldId() == null || !seen.add(filter.fieldId())) invalid();
-            var field = definitions.stream().filter(f -> f.fieldId().equals(filter.fieldId()) && f.searchable() && !"IMAGE_UPLOAD".equals(f.fieldType()))
+            var field = definitions.stream().filter(f -> f.fieldId().equals(filter.fieldId()) && f.searchable() && SEARCH_TYPES.contains(f.fieldType()))
                     .findFirst().orElseThrow(() -> new IllegalArgumentException("Provider filter is not available for this option"));
             if ("NUMBER".equals(field.fieldType())) {
                 if (filter.value() != null || filter.minimum() == null && filter.maximum() == null
@@ -89,8 +89,8 @@ public class ProviderSearchFields {
                             && (f.condition() == null || f.condition().isNull()))
                     .filter(f -> validAnswer(f, answer.value()))
                     .findFirst().ifPresent(f -> {
-                        if ("IMAGE_UPLOAD".equals(f.fieldType())) {
-                            var images = publishedImages(assignment, answer.value());
+                        if (f.fieldType().endsWith("UPLOAD")) {
+                            var images = publishedFiles(assignment, f.fieldType(), answer.value());
                             if (!images.isEmpty()) result.put(f.fieldId(), images);
                         } else result.put(f.fieldId(), answer.value());
                     });
@@ -98,7 +98,7 @@ public class ProviderSearchFields {
         return result;
     }
 
-    private JsonNode publishedImages(ServiceProviderTypeAssignment assignment, JsonNode value) {
+    private JsonNode publishedFiles(ServiceProviderTypeAssignment assignment, String fieldType, JsonNode value) {
         var images = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
         var provider = providers.findById(assignment.getServiceProviderId()).orElse(null);
         if (provider == null || provider.getUserId() == null) return images;
@@ -107,13 +107,15 @@ public class ProviderSearchFields {
             var key = file.isTextual() ? file : file.path("key");
             if (!key.isTextual()) continue;
             try {
-                var view = storage.createPublishedProviderImageUrl(provider.getUserId(), key.asText());
+                var view = "IMAGE_UPLOAD".equals(fieldType)
+                        ? storage.createPublishedProviderImageUrl(provider.getUserId(), key.asText())
+                        : storage.createPublishedProviderFileUrl(provider.getUserId(), key.asText());
                 var image = images.addObject();
                 image.put("key", view.key());
                 image.put("url", view.url());
                 image.put("expiresAt", view.expiresAt().toString());
             } catch (IllegalArgumentException ignored) {
-                // Skip malformed legacy answers, foreign files and deleted/non-image objects.
+                // Skip malformed legacy answers, foreign files and deleted/unsupported objects.
             }
         }
         return images;
@@ -145,7 +147,8 @@ public class ProviderSearchFields {
     private boolean validAnswer(ServiceCustomFieldResponse field, JsonNode value) {
         if (value == null || value.isNull()) return false;
         return switch (field.fieldType()) {
-            case "IMAGE_UPLOAD" -> value.isArray() || value.path("files").isArray();
+            case "IMAGE_UPLOAD", "DOCUMENT_UPLOAD", "FILE_UPLOAD" -> value.isArray() || value.path("files").isArray();
+            case "TEXT", "TEXTAREA", "DATE", "TIME", "PHONE", "EMAIL" -> value.isTextual();
             case "NUMBER" -> value.isNumber();
             case "BOOLEAN" -> value.isBoolean();
             case "SELECT" -> value.isTextual() && isChoice(field, value);
