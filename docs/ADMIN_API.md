@@ -362,3 +362,11 @@ all be supplied. `effectiveTo`, when supplied, cannot be before `effectiveFrom`.
 ```
 
 The update does not change the rate ID, market, service type, currency, or status.
+
+
+## Admin-assisted provider registration
+
+SUPER_ADMIN and VERIFICATION_ADMIN can register services on behalf of an existing
+provider, upload WhatsApp evidence into that provider's namespace, complete missing
+requirements and use the existing audited review APIs without provider login.
+See [full endpoints, payloads and approval workflow](ADMIN_ASSISTED_PROVIDER_REGISTRATION_API.md).
