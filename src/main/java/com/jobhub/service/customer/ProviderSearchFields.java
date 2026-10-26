@@ -16,6 +16,8 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class ProviderSearchFields {
     private final ServiceCustomFieldService fields;
+    private final com.jobhub.repository.provider.ServiceProviderRepository providers;
+    private final com.jobhub.service.upload.S3PrivateDocumentService storage;
 
     public void requirePricingSelections(ServiceProviderTypeAssignment assignment, Long optionId,
             List<com.jobhub.dto.market.PricingConditionRequest> selections) {
@@ -33,14 +35,19 @@ public class ProviderSearchFields {
     public List<ServiceCustomFieldResponse> definitions(Long serviceId, Long optionId) {
         return fields.listForOption(serviceId, optionId, false).stream()
                 .filter(f -> "PROVIDER_REQUIREMENT".equals(f.scope()) && f.customerVisible())
-                .filter(f -> Set.of("SELECT", "MULTI_SELECT", "BOOLEAN", "NUMBER").contains(f.fieldType()))
+                .filter(f -> Set.of("SELECT", "MULTI_SELECT", "BOOLEAN", "NUMBER", "IMAGE_UPLOAD").contains(f.fieldType()))
                 .filter(f -> f.condition() == null || f.condition().isNull()).toList();
     }
 
     public List<ProviderFilterDefinition> schema(List<ServiceCustomFieldResponse> definitions) {
-        return definitions.stream().filter(ServiceCustomFieldResponse::searchable)
+        return definitions.stream().filter(f -> f.searchable() && !"IMAGE_UPLOAD".equals(f.fieldType()))
                 .map(f -> new ProviderFilterDefinition(f.fieldId(), f.code(), f.label(),
                         f.fieldType(), f.options(), f.filterOperator(), f.icon())).toList();
+    }
+
+    public List<ProviderFilterDefinition> displaySchema(List<ServiceCustomFieldResponse> definitions) {
+        return definitions.stream().map(f -> new ProviderFilterDefinition(f.fieldId(), f.code(), f.label(),
+                f.fieldType(), f.options(), f.filterOperator(), f.icon())).toList();
     }
 
     public void validate(List<ServiceCustomFieldResponse> definitions, List<ProviderFilter> filters) {
@@ -49,7 +56,7 @@ public class ProviderSearchFields {
         Set<Long> seen = new HashSet<>();
         for (var filter : filters) {
             if (filter == null || filter.fieldId() == null || !seen.add(filter.fieldId())) invalid();
-            var field = definitions.stream().filter(f -> f.fieldId().equals(filter.fieldId()) && f.searchable())
+            var field = definitions.stream().filter(f -> f.fieldId().equals(filter.fieldId()) && f.searchable() && !"IMAGE_UPLOAD".equals(f.fieldType()))
                     .findFirst().orElseThrow(() -> new IllegalArgumentException("Provider filter is not available for this option"));
             if ("NUMBER".equals(field.fieldType())) {
                 if (filter.value() != null || filter.minimum() == null && filter.maximum() == null
@@ -77,11 +84,39 @@ public class ProviderSearchFields {
         for (var answer : fields.resolvedProviderAnswers(assignment)) {
             if (!"APPROVED".equals(answer.verificationStatus())
                     && !("PROVIDER_PROFILE".equals(answer.valueSource()) && "PROVIDED".equals(answer.verificationStatus()))) continue;
-            definitions.stream().filter(f -> f.fieldId().equals(answer.fieldId()))
+            definitions.stream().filter(f -> f.fieldId().equals(answer.fieldId()) && f.customerVisible()
+                            && "PROVIDER_REQUIREMENT".equals(f.scope())
+                            && (f.condition() == null || f.condition().isNull()))
                     .filter(f -> validAnswer(f, answer.value()))
-                    .findFirst().ifPresent(f -> result.put(f.fieldId(), answer.value()));
+                    .findFirst().ifPresent(f -> {
+                        if ("IMAGE_UPLOAD".equals(f.fieldType())) {
+                            var images = publishedImages(assignment, answer.value());
+                            if (!images.isEmpty()) result.put(f.fieldId(), images);
+                        } else result.put(f.fieldId(), answer.value());
+                    });
         }
         return result;
+    }
+
+    private JsonNode publishedImages(ServiceProviderTypeAssignment assignment, JsonNode value) {
+        var images = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
+        var provider = providers.findById(assignment.getServiceProviderId()).orElse(null);
+        if (provider == null || provider.getUserId() == null) return images;
+        JsonNode files = value.isArray() ? value : value.path("files");
+        for (var file : files) {
+            var key = file.isTextual() ? file : file.path("key");
+            if (!key.isTextual()) continue;
+            try {
+                var view = storage.createPublishedProviderImageUrl(provider.getUserId(), key.asText());
+                var image = images.addObject();
+                image.put("key", view.key());
+                image.put("url", view.url());
+                image.put("expiresAt", view.expiresAt().toString());
+            } catch (IllegalArgumentException ignored) {
+                // Skip malformed legacy answers, foreign files and deleted/non-image objects.
+            }
+        }
+        return images;
     }
 
     public boolean matches(Map<Long, JsonNode> attributes, List<ProviderFilter> filters) {
@@ -110,6 +145,7 @@ public class ProviderSearchFields {
     private boolean validAnswer(ServiceCustomFieldResponse field, JsonNode value) {
         if (value == null || value.isNull()) return false;
         return switch (field.fieldType()) {
+            case "IMAGE_UPLOAD" -> value.isArray() || value.path("files").isArray();
             case "NUMBER" -> value.isNumber();
             case "BOOLEAN" -> value.isBoolean();
             case "SELECT" -> value.isTextual() && isChoice(field, value);

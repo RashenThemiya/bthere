@@ -11,6 +11,38 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class S3CustomerDocumentsTest {
+    @Test void publishedRasterImagesReceiveTenMinuteSignedUrls() throws Exception {
+        var signer = mock(S3Presigner.class);
+        var published = new S3PrivateDocumentService(s3, signer);
+        ReflectionTestUtils.setField(published, "bucket", "test-private");
+        when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("image/png").contentLength(100L).build());
+        var signed = mock(software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest.class);
+        when(signed.url()).thenReturn(new java.net.URI("https://example.com/signed").toURL());
+        when(signer.presignGetObject(any(software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest.class)))
+                .thenReturn(signed);
+        var result = published.createPublishedProviderImageUrl(25L, "providers/25/images/photo.png");
+        assertThat(result.url()).isEqualTo("https://example.com/signed");
+        verify(signer).presignGetObject(argThat((software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest r) ->
+                r.signatureDuration().equals(java.time.Duration.ofMinutes(10))
+                && r.getObjectRequest().key().equals("providers/25/images/photo.png")));
+    }
+
+    @Test void publicationRejectsForeignUnsafeAndNonImageObjectsBeforeSigning() {
+        ReflectionTestUtils.setField(service, "bucket", "test-private");
+        assertThatThrownBy(() -> service.createPublishedProviderImageUrl(25L, "providers/99/images/a.jpg"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createPublishedProviderImageUrl(25L, "providers/25/images/../a.jpg"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createPublishedProviderImageUrl(25L, "providers/25/documents/a.pdf"))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(s3);
+        when(s3.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder()
+                .contentType("application/pdf").contentLength(100L).build());
+        assertThatThrownBy(() -> service.createPublishedProviderImageUrl(25L, "providers/25/images/a.jpg"))
+                .hasMessageContaining("must be a JPG");
+    }
+
     @Test void providerPartsInspectStoredMetadataAndRejectForeignKeys() {
         ReflectionTestUtils.setField(service, "bucket", "test-private");
         assertThatThrownBy(()->service.inspectProviderFile(25L,"providers/99/documents/front.jpg"))

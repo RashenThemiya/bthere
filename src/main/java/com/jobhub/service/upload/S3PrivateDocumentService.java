@@ -84,6 +84,30 @@ public class S3PrivateDocumentService {
             throw new IllegalArgumentException("You cannot access this file");
         }
 
+        return signedViewUrl(normalizedKey);
+    }
+
+    /** Only call after resolving an approved, explicitly customer-visible image answer. */
+    public PresignedUrlResponse createPublishedProviderImageUrl(Long userId, String key) {
+        if (userId == null || key == null
+                || !key.matches("providers/" + userId + "/(?:images|documents)/[A-Za-z0-9_-]+\\.(?:jpg|png|webp)")) {
+            throw new IllegalArgumentException("Published image must belong to this provider");
+        }
+        try {
+            var head = s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(requireBucket()).key(key).build());
+            if (!java.util.Set.of("image/jpeg", "image/png", "image/webp").contains(
+                    head.contentType() == null ? "" : head.contentType().toLowerCase(java.util.Locale.ROOT))) {
+                throw new IllegalArgumentException("Published file must be a JPG, PNG or WebP image");
+            }
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception exception) {
+            if (exception.statusCode() == 404) throw new IllegalArgumentException("Uploaded image does not exist");
+            throw exception;
+        }
+        return signedViewUrl(key);
+    }
+
+    private PresignedUrlResponse signedViewUrl(String normalizedKey) {
         Duration duration = Duration.ofMinutes(10);
         String url = s3Presigner.presignGetObject(
                 GetObjectPresignRequest.builder()

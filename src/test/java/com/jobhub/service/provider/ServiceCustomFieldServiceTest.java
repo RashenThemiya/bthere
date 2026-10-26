@@ -227,6 +227,27 @@ class ServiceCustomFieldServiceTest {
         verify(fieldRepository, times(1)).save(any());
     }
 
+    @Test void allowsDisplayOnlyPublicImageFieldButRejectsPublicDocumentsAndBookingImages() throws Exception {
+        var mapper = new ObjectMapper();
+        var request = mapper.readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"PORTFOLIO","label":"Portfolio",
+                 "fieldType":"IMAGE_UPLOAD","customerVisible":true,"searchable":false,
+                 "minimumFiles":0,"maximumFiles":5,"allowedFileTypes":["JPG","PNG","WEBP"]}
+                """, ServiceCustomFieldRequest.class);
+        when(fieldRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        var saved = service.create(1L, request);
+        assertThat(saved.customerVisible()).isTrue();
+        assertThat(saved.searchable()).isFalse();
+        assertThat(saved.maximumFiles()).isEqualTo(5);
+        var json = mapper.valueToTree(request);
+        ((com.fasterxml.jackson.databind.node.ObjectNode)json).put("fieldType", "DOCUMENT_UPLOAD");
+        assertThatThrownBy(() -> service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)))
+                .hasMessageContaining("unconditional");
+        ((com.fasterxml.jackson.databind.node.ObjectNode)json).put("fieldType", "IMAGE_UPLOAD").put("scope", "BOOKING_FIELD");
+        assertThatThrownBy(() -> service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)))
+                .hasMessageContaining("unconditional");
+    }
+
     @Test void rejectsSearchOnPrivateUploadAndConditionalFields() throws Exception {
         assertThatThrownBy(() -> service.create(1L, request("\"searchable\":true")))
                 .hasMessageContaining("customer visible");
@@ -234,7 +255,7 @@ class ServiceCustomFieldServiceTest {
                 {"scope":"PROVIDER_REQUIREMENT","code":"NIC","label":"NIC",
                  "fieldType":"IMAGE_UPLOAD","customerVisible":true,"searchable":true}
                 """, ServiceCustomFieldRequest.class);
-        assertThatThrownBy(() -> service.create(1L, upload)).hasMessageContaining("unconditional");
+        assertThatThrownBy(() -> service.create(1L, upload)).hasMessageContaining("display-only");
         assertThatThrownBy(() -> service.create(1L,
                 request("\"searchable\":true,\"customerVisible\":true,\"condition\":{}")))
                 .hasMessageContaining("unconditional");

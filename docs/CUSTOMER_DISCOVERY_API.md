@@ -123,7 +123,8 @@ Super Admin enables fields using the existing custom-field POST/PUT endpoints:
 
 Both flags default to false, including existing definitions. Searchable requires
 customerVisible. Only unconditional PROVIDER_REQUIREMENT fields of types SELECT,
-MULTI_SELECT, NUMBER and BOOLEAN can be published. Uploads, text/contact fields and
+MULTI_SELECT, NUMBER, BOOLEAN and IMAGE_UPLOAD can be published. IMAGE_UPLOAD is
+display-only (`searchable: false`); document/file uploads, text/contact fields and
 BOOKING_FIELD definitions cannot be enabled. Select choices must be unique nonempty
 string values. Choices may be strings or objects with value, label and optional icon;
 see [choice icon contract](DYNAMIC_FIELDS_API.md#icons-for-individual-select-choices).
@@ -359,3 +360,13 @@ marker fields alone do not identify pricing fields.
 Optional paired `pricingLatitude`/`pricingLongitude` query parameters include
 applicable area rates; omit both for general rates only. Refresh context when
 pricing location changes. See [exact contract and sample response](COMBINATION_PRICING_API.md#customer-pricing-field-discovery).
+
+
+### Public provider images
+
+Booking context includes `providerDisplayFields` for public field labels/types,
+including display-only IMAGE_UPLOAD fields. Join by fieldId to each provider-search
+candidate's `providerAttributes`; image values are arrays of `{key,url,expiresAt}`.
+Render as a gallery for that provider/service option. Only approved public images
+are returned; signed URLs expire after ten minutes. Images are not search filters.
+See [configuration, upload and response examples](DYNAMIC_FIELDS_API.md#customer-visible-provider-image-galleries).

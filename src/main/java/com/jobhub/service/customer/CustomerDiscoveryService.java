@@ -62,11 +62,12 @@ public class CustomerDiscoveryService {
                            BigDecimal pricingLatitude, BigDecimal pricingLongitude) {
         var card = options(userId, marketId, serviceId).stream().filter(o -> optionId.equals(o.option().optionId()))
                 .findFirst().orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
+        var publicFields = providerSearchFields.definitions(serviceId, optionId);
         return new Context(marketId, availability.market(marketId).getTimezone(), card,
                 fields.schema(serviceId, "BOOKING_FIELD", optionId), List.of("languages", "requiredSkillIds", "providerFilters"), false,
-                providerSearchFields.schema(providerSearchFields.definitions(serviceId, optionId)),
+                providerSearchFields.schema(publicFields),
                 pricing.pricingFieldIds(marketId, serviceId, optionId, card.option().schedulingModel(),
-                        pricingLatitude, pricingLongitude));
+                        pricingLatitude, pricingLongitude), providerSearchFields.displaySchema(publicFields));
     }
     public Results search(Long userId, Search request) {
         return search(userId, request, null);

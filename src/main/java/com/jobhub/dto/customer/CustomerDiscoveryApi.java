@@ -16,7 +16,8 @@ public final class CustomerDiscoveryApi {
     public record OptionCard(ServiceOptionResponse option, Access access) {}
     public record Context(Long marketId, String timezone, OptionCard selection,
                           ServiceDynamicSchemaResponse bookingSchema, List<String> matchingFilters,
-                          boolean liveTrackingSupported, List<ProviderFilterDefinition> providerFilters, List<Long> pricingFieldIds) {}
+                          boolean liveTrackingSupported, List<ProviderFilterDefinition> providerFilters, List<Long> pricingFieldIds,
+                          List<ProviderFilterDefinition> providerDisplayFields) {}
     public record ProviderFilterDefinition(Long fieldId, String code, String label,
                                            String fieldType, JsonNode options, String filterOperator,
                                            ServiceMediaPayload icon) {}

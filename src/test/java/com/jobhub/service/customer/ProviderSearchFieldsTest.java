@@ -14,7 +14,43 @@ import static org.mockito.Mockito.*;
 class ProviderSearchFieldsTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final ServiceCustomFieldService fields = mock(ServiceCustomFieldService.class);
-    private final ProviderSearchFields service = new ProviderSearchFields(fields);
+    private final com.jobhub.repository.provider.ServiceProviderRepository providers = mock(com.jobhub.repository.provider.ServiceProviderRepository.class);
+    private final com.jobhub.service.upload.S3PrivateDocumentService storage = mock(com.jobhub.service.upload.S3PrivateDocumentService.class);
+    private final ProviderSearchFields service = new ProviderSearchFields(fields, providers, storage);
+
+    @Test void approvedVisibleImagesHaveFreshUrlsAndNeverBecomeSearchFilters() throws Exception {
+        var assignment = new ServiceProviderTypeAssignment(); assignment.setServiceProviderId(15L);
+        var provider = new com.jobhub.entity.provider.ServiceProvider(); provider.setUserId(25L);
+        when(providers.findById(15L)).thenReturn(Optional.of(provider));
+        var visible = field(22, "IMAGE_UPLOAD", true, false);
+        when(fields.listForOption(2L, 12L, false)).thenReturn(List.of(visible,
+                field(23, "IMAGE_UPLOAD", false, false), field(24, "DOCUMENT_UPLOAD", true, false)));
+        var definitions = service.definitions(2L, 12L);
+        assertThat(definitions).containsExactly(visible);
+        assertThat(service.schema(definitions)).isEmpty();
+        assertThat(service.displaySchema(definitions)).extracting(d -> d.fieldId()).containsExactly(22L);
+        String key = "providers/25/images/photo.jpg";
+        when(storage.createPublishedProviderImageUrl(25L, key)).thenReturn(
+                new com.jobhub.dto.upload.PresignedUrlResponse(key, "https://example.com/signed-image",
+                        java.time.Instant.parse("2030-01-01T00:10:00Z")));
+        when(storage.createPublishedProviderImageUrl(25L, "providers/99/images/private.jpg"))
+                .thenThrow(new IllegalArgumentException("foreign"));
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                answer(22, "{\"files\":[{\"key\":\"" + key + "\",\"url\":\"https://untrusted.invalid\"},\"providers/99/images/private.jpg\"]}", "APPROVED", true),
+                answer(23, "[\"providers/25/images/private.jpg\"]", "APPROVED", false)));
+        var images = service.attributes(assignment, definitions).get(22L);
+        assertThat(images.size()).isEqualTo(1);
+        assertThat(images.get(0).path("url").asText()).isEqualTo("https://example.com/signed-image");
+        assertThat(images.get(0).path("expiresAt").asText()).isEqualTo("2030-01-01T00:10:00Z");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.validate(definitions, List.of(choice(22, "[\"A\"]"))));
+        clearInvocations(storage);
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(answer(22, "[\"" + key + "\"]", "PENDING", false)));
+        assertThat(service.attributes(assignment, definitions)).isEmpty();
+        verifyNoInteractions(storage);
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(answer(22, "[\"" + key + "\"]", "APPROVED", false)));
+        assertThat(service.attributes(assignment, List.of(field(22, "IMAGE_UPLOAD", false, false)))).isEmpty();
+        verifyNoInteractions(storage);
+    }
 
     @Test void pricingRequiresEverySelectedChoiceToMatchApprovedProviderAttributes() throws Exception {
         var assignment = new ServiceProviderTypeAssignment(); assignment.setServiceProviderTypeId(2L);
@@ -66,7 +102,7 @@ class ProviderSearchFieldsTest {
                 field(1, "SELECT", true, true), field(2, "NUMBER", true, false),
                 field(3, "SELECT", false, false), field(4, "IMAGE_UPLOAD", true, true)));
         var definitions = service.definitions(3L, 12L);
-        assertThat(definitions).extracting(ServiceCustomFieldResponse::fieldId).containsExactly(1L, 2L);
+        assertThat(definitions).extracting(ServiceCustomFieldResponse::fieldId).containsExactly(1L, 2L, 4L);
         assertThat(service.schema(definitions)).extracting(f -> f.fieldId()).containsExactly(1L);
     }
 

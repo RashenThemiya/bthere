@@ -1883,3 +1883,13 @@ Optional paired `pricingLatitude` and `pricingLongitude` query parameters includ
 applicable area rates. Without coordinates only general rates participate.
 Refresh after pricing-location changes; marker fields are independent.
 See [full contract and JSON sample](COMBINATION_PRICING_API.md#customer-pricing-field-discovery).
+
+
+### Public provider images
+
+Booking context includes `providerDisplayFields` for public field labels/types,
+including display-only IMAGE_UPLOAD fields. Join by fieldId to each provider-search
+candidate's `providerAttributes`; image values are arrays of `{key,url,expiresAt}`.
+Render as a gallery for that provider/service option. Only approved public images
+are returned; signed URLs expire after ten minutes. Images are not search filters.
+See [configuration, upload and response examples](DYNAMIC_FIELDS_API.md#customer-visible-provider-image-galleries).

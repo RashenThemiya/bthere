@@ -341,10 +341,13 @@ public class ServiceCustomFieldService {
         ProviderProfileFields.validate(request, scope, fieldType);
         if (request.customerVisible() || request.searchable()) {
             if (!PROVIDER_REQUIREMENT.equals(scope)
-                    || !Set.of("SELECT", "MULTI_SELECT", "NUMBER", "BOOLEAN").contains(fieldType)
+                    || !Set.of("SELECT", "MULTI_SELECT", "NUMBER", "BOOLEAN", "IMAGE_UPLOAD").contains(fieldType)
                     || request.condition() != null && !request.condition().isNull()) {
-                throw new IllegalArgumentException("Customer fields must be unconditional SELECT, MULTI_SELECT, NUMBER or BOOLEAN provider requirements");
+                throw new IllegalArgumentException("Customer fields must be unconditional SELECT, MULTI_SELECT, NUMBER, BOOLEAN or IMAGE_UPLOAD provider requirements");
             }
+        }
+        if (request.searchable() && "IMAGE_UPLOAD".equals(fieldType)) {
+            throw new IllegalArgumentException("IMAGE_UPLOAD fields are display-only and cannot be searchable");
         }
         if (request.searchable() && !request.customerVisible()) {
             throw new IllegalArgumentException("Searchable fields must be customer visible");

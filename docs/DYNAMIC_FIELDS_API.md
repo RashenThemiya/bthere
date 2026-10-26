@@ -435,3 +435,78 @@ approval remain incomplete until approved.
 - `PATCH /api/v1/admin/provider-submissions/{submissionId}/review`
 
 Review body uses `APPROVED` or `REJECTED` and an optional `rejectionReason`.
+
+
+## Customer-visible provider image galleries
+
+IMAGE_UPLOAD provider requirements now support `customerVisible: true` with
+`searchable: false`, `filterOperator: null` and `condition: null`. Image fields
+are display-only. DOCUMENT_UPLOAD/FILE_UPLOAD and booking upload fields remain
+private; image fields cannot be pricing fields or search filters.
+
+Example admin definition (POST or full replacement PUT on existing field):
+
+```json
+{
+  "optionIds": [1],
+  "scope": "PROVIDER_REQUIREMENT",
+  "reuseScope": "ASSIGNMENT",
+  "code": "PORTFOLIO_IMAGES",
+  "label": "Work photos",
+  "fieldType": "IMAGE_UPLOAD",
+  "required": false,
+  "requiresApproval": true,
+  "minimumFiles": 0,
+  "maximumFiles": 5,
+  "maximumFileSizeMb": 10,
+  "allowedFileTypes": ["JPG", "PNG", "WEBP"],
+  "customerVisible": true,
+  "searchable": false,
+  "filterOperator": null,
+  "condition": null
+}
+```
+
+Option IDs must be valid in the endpoint's service context. Upload each image
+through existing multipart `POST /api/v1/uploads/images`, then submit returned
+keys through the provider answer API. Both `["providers/25/images/photo.jpg"]`
+and `{"files":[{"key":"providers/25/images/photo.jpg"}]}` answer shapes work.
+Existing provider documents-path raster images are also supported. Responses
+never trust a submitted URL. Customer publication checks provider ownership,
+image key format and stored JPG/PNG/WebP content type. Missing/malformed files
+are omitted. Pending/rejected answers and private fields are omitted.
+
+Booking-context now returns `providerDisplayFields`, covering customer-visible
+field labels and types, including display-only images. `providerFilters` remains
+searchable fields only. Join display definitions by fieldId to the candidate's
+`providerAttributes` from provider-search. Example partial responses:
+
+```json
+{
+  "providerDisplayFields": [
+    {"fieldId":22,"code":"PORTFOLIO_IMAGES","label":"Work photos",
+     "fieldType":"IMAGE_UPLOAD","options":null,"filterOperator":null,"icon":null}
+  ]
+}
+```
+
+```json
+{
+  "providerAttributes": {
+    "22": [
+      {"key":"providers/25/images/photo.jpg",
+       "url":"https://example.com/temporary-signed-image-url",
+       "expiresAt":"2026-10-26T10:10:00Z"}
+    ]
+  }
+}
+```
+
+Only APPROVED image answers are published, consistent with existing public
+provider attributes (auto-approved fields also qualify). URLs expire after ten
+minutes; reload provider-search to refresh. The general `/uploads/view-url`
+endpoint still permits only file owners/admins; customers receive only the
+approved image URLs in discovery results. Frontend must render these image
+arrays under the matching provider/service option. This repository contains no
+frontend gallery implementation. Existing field visibility is not changed
+by deployment; explicitly enable customerVisible on intended portfolio fields.
