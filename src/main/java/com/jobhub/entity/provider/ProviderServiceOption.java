@@ -27,4 +27,10 @@ public class ProviderServiceOption extends AuditedEntity {
     private LocalDateTime reviewedAt;
     @Column(length = 500)
     private String reviewNote;
+    /** Reviewed options use APPROVED; legacy active rows still require approved verification. */
+    public boolean canAcceptBookings() {
+        return "ACTIVE".equals(providerStatus)
+                && "APPROVED".equals(verificationStatus)
+                && ("APPROVED".equals(adminStatus) || "ACTIVE".equals(adminStatus));
+    }
 }

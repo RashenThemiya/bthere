@@ -64,7 +64,7 @@ class CustomerBookingCombinationPricingTest {
         assignment.setProviderStatus("ACTIVE"); assignment.setAdminStatus("ACTIVE");
         when(assignmentRepository.findByServiceProviderIdAndServiceProviderTypeId(15L, 2L)).thenReturn(Optional.of(assignment));
         var selected = new ProviderServiceOption(); selected.setProviderStatus("ACTIVE");
-        selected.setAdminStatus("ACTIVE"); selected.setVerificationStatus("APPROVED");
+        selected.setAdminStatus("APPROVED"); selected.setVerificationStatus("APPROVED");
         when(providerOptionRepository.findByAssignmentIdAndOptionId(14L, 12L)).thenReturn(Optional.of(selected));
         var marketLink = new ServiceProviderMarket(); marketLink.setMarketId(1L);
         when(providerMarketRepository.findByServiceProviderIdAndStatus(15L, "ACTIVE")).thenReturn(Optional.of(marketLink));

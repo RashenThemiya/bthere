@@ -50,6 +50,35 @@ class CustomerAvailabilityServiceTest {
         when(types.findById(3L)).thenReturn(Optional.of(t));
         when(schedules.findAllByAssignmentIdAndScheduleTypeOrderByDayOfWeekAscStartTimeAsc(14L, "WEEKLY")).thenReturn(slots);
     }
+    @Test void reviewedOptionIsEligibleWithoutChangingAssignmentActivationStatus() {
+        var assignment = assignment();
+        assignment.setStatus("ACTIVE"); assignment.setProviderStatus("ACTIVE");
+        assignment.setAdminStatus("ACTIVE"); assignment.setVerificationStatus("APPROVED");
+        var provider = new ServiceProvider(); provider.setServiceProviderId(15L);
+        provider.setStatus("ACTIVE"); provider.setAvailabilityStatus("AVAILABLE");
+        when(providers.findById(15L)).thenReturn(Optional.of(provider));
+        var market = new ServiceProviderMarket(); market.setMarketId(1L);
+        when(providerMarkets.findByServiceProviderIdAndStatus(15L, "ACTIVE")).thenReturn(Optional.of(market));
+        var selected = new ProviderServiceOption();
+        selected.setProviderStatus("ACTIVE"); selected.setVerificationStatus("APPROVED");
+        when(selectedOptions.findByAssignmentIdAndOptionId(14L, 12L)).thenReturn(Optional.of(selected));
+        selected.setAdminStatus("APPROVED");
+        assertThat(service.qualified(assignment, option(), 1L)).isTrue();
+        // Existing ACTIVE rows are still eligible when verification is approved.
+        selected.setAdminStatus("ACTIVE");
+        assertThat(service.qualified(assignment, option(), 1L)).isTrue();
+        for (String status : Arrays.asList("PENDING", "REJECTED", "INACTIVE", null)) {
+            selected.setAdminStatus(status);
+            assertThat(service.qualified(assignment, option(), 1L)).as("admin status %s", status).isFalse();
+        }
+        selected.setAdminStatus("APPROVED"); selected.setVerificationStatus("PENDING");
+        assertThat(service.qualified(assignment, option(), 1L)).isFalse();
+        selected.setVerificationStatus("APPROVED"); selected.setProviderStatus("INACTIVE");
+        assertThat(service.qualified(assignment, option(), 1L)).isFalse();
+        selected.setProviderStatus("ACTIVE"); assignment.setAdminStatus("INACTIVE");
+        assertThat(service.qualified(assignment, option(), 1L)).isFalse();
+    }
+
     @Test void adjacentBookingsDoNotConsumeCapacitySimultaneously() {
         var first = job(1, start, start.plusHours(2), 2);
         var second = job(2, start.plusHours(2), end, 3);

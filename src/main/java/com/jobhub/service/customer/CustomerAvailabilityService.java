@@ -52,8 +52,7 @@ public class CustomerAvailabilityService {
         if (providerMarkets.findByServiceProviderIdAndStatus(provider.getServiceProviderId(), "ACTIVE")
                 .filter(m -> marketId.equals(m.getMarketId())).isEmpty()) return false;
         return selectedOptions.findByAssignmentIdAndOptionId(assignment.getAssignmentId(), option.getOptionId())
-                .filter(o -> "ACTIVE".equals(o.getProviderStatus()) && "ACTIVE".equals(o.getAdminStatus())
-                        && "APPROVED".equals(o.getVerificationStatus())).isPresent();
+                .filter(ProviderServiceOption::canAcceptBookings).isPresent();
     }
 
     public boolean scheduled(ServiceProviderTypeAssignment assignment, LocalDateTime start, LocalDateTime end) {

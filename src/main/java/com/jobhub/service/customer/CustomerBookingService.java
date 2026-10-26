@@ -501,8 +501,7 @@ public class CustomerBookingService {
                             && "APPROVED".equals(item.getVerificationStatus()));
             if (assignment.isEmpty()) continue;
             if (providerOptionRepository.findByAssignmentIdAndOptionId(assignment.get().getAssignmentId(), optionId)
-                    .filter(item -> "APPROVED".equals(item.getVerificationStatus())
-                            && "ACTIVE".equals(item.getProviderStatus()) && "ACTIVE".equals(item.getAdminStatus())).isPresent()) {
+                    .filter(ProviderServiceOption::canAcceptBookings).isPresent()) {
                 return assignment.get();
             }
         }
