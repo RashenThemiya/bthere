@@ -109,6 +109,64 @@ public class CustomerBookingService {
                 job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings());
     }
 
+    /**
+     * Provider-less price preview for the booking form. Booking answers are not required and
+     * nothing is saved, reserved or charged; the accepted provider's quote is still authoritative.
+     */
+    @Transactional(readOnly = true)
+    public com.jobhub.dto.job.BookingQuoteResponse estimate(com.jobhub.dto.job.BookingRequestsApi.Estimate input) {
+        CreateBookingRequest request = input.booking();
+        if (request.providerId() != null || request.providerIds() != null && !request.providerIds().isEmpty()) {
+            throw new IllegalArgumentException("Estimate does not take a provider; use quote for a selected provider");
+        }
+        ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(
+                        request.optionId(), request.serviceTypeId())
+                .filter(item -> item.activeForService(request.serviceTypeId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
+        Market market = marketRepository.findById(input.marketId())
+                .orElseThrow(() -> new ResourceNotFoundException("Market not found"));
+        availabilityService.requireOffering(market.getMarketId(), request.serviceTypeId());
+        String mode = request.deliveryMode().trim().toUpperCase(Locale.ROOT);
+        if (!option.getDeliveryModes().contains(mode)) {
+            throw new IllegalArgumentException("Delivery mode is not enabled for this option");
+        }
+        if (!"ONLINE".equals(mode) && !option.isLocationEnabled()) {
+            throw new IllegalArgumentException("Physical locations are disabled for this option");
+        }
+        BookingTime time = resolveTime(option, request);
+        java.time.ZoneId marketZone = java.time.ZoneId.of(market.getTimezone());
+        if (time.start().isBefore(java.time.LocalDateTime.now(marketZone))
+                || java.time.Duration.between(time.start(), time.end()).compareTo(java.time.Duration.ofDays(31)) > 0) {
+            throw new IllegalArgumentException("Choose a future interval of at most 31 days");
+        }
+        CustomerDiscoveryService.requireUnambiguous(marketZone, time.start(), time.end());
+        Route route = resolveRoute(option, request, null);
+        // Area prices use the same point the booking will: route destination, customer meeting
+        // point, or (before a provider location exists) the customer's search location.
+        BigDecimal latitude = null;
+        BigDecimal longitude = null;
+        if ("ROUTE_BASED".equals(schedulingModel(option))) {
+            latitude = route.destinationLatitude();
+            longitude = route.destinationLongitude();
+        } else if ("PROVIDER_TO_CUSTOMER".equals(mode)) {
+            if (request.meetingPoint() == null) throw new IllegalArgumentException("Customer meeting point is required");
+            latitude = request.meetingPoint().latitude();
+            longitude = request.meetingPoint().longitude();
+        } else if ("CUSTOMER_TO_PROVIDER".equals(mode) && input.searchLocation() != null) {
+            latitude = input.searchLocation().latitude();
+            longitude = input.searchLocation().longitude();
+        }
+        ServicePricingService.Price price = pricingService.calculate(
+                market.getMarketId(), option.getServiceProviderTypeId(), request.optionId(),
+                schedulingModel(option), time.start(), time.end(), route.distanceKm(),
+                latitude, longitude, request.pricingSelections());
+        return new com.jobhub.dto.job.BookingQuoteResponse(price.rateId(), market.getDefaultCurrency(),
+                price.amount(), time.start(), time.end(), route.distanceKm(),
+                objectMapper.valueToTree(price.pricingSelections()), objectMapper.valueToTree(price.pricingSnapshot()),
+                price.feeAllocation().percentage(), price.feeAllocation().platformFee(),
+                price.feeAllocation().providerEarnings());
+    }
+
     private PreparedBooking prepare(Long userId, CreateBookingRequest request, boolean locked) {
         Customer customer = customerRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Complete the customer profile first"));

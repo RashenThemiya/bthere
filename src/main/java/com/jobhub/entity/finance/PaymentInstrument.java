@@ -11,5 +11,6 @@ public class PaymentInstrument extends CreatedEntity {
     private String provider;
     private String type;
     private String displayLabel;
+    @Column(length=20) private String brand;
     private String status;
 }

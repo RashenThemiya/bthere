@@ -94,4 +94,25 @@ class GatewayServiceTest {
         var card=service.startCard(25L,100L,"retry1");
         assertThat(card.intentId()).isNotEqualTo(topup.intentId());assertThat(card.purpose()).isEqualTo("CARD");
     }
+    @Test void mockCardReturnsBrandIncludingLegacyRows() {
+        when(methods.findByUserIdAndProviderAndType(25L,"MOCK","CARD")).thenReturn(Optional.empty());
+        when(methods.save(any())).thenAnswer(i -> i.getArgument(0));
+        assertThat(service.setup(25L,"CARD").brand()).isEqualTo("VISA");
+        var legacy=new PaymentInstrument();legacy.setType("CARD");legacy.setStatus("VERIFIED_MOCK");
+        var bank=new PaymentInstrument();bank.setType("BANK_ACCOUNT");bank.setStatus("VERIFIED_MOCK");
+        when(methods.findAllByUserIdAndProvider(25L,"MOCK")).thenReturn(List.of(legacy,bank));
+        assertThat(service.methods(25L)).extracting(m -> m.brand()).containsExactly("VISA",null);
+    }
+    @Test void removeDeletesOnlyOwnedMethodWithoutPendingPayment() {
+        var own=new PaymentInstrument();own.setMethodId(5L);own.setUserId(25L);own.setProvider("MOCK");own.setType("CARD");
+        var other=new PaymentInstrument();other.setMethodId(6L);other.setUserId(26L);other.setProvider("MOCK");
+        when(methods.findById(5L)).thenReturn(Optional.of(own));when(methods.findById(6L)).thenReturn(Optional.of(other));
+        assertThatThrownBy(() -> service.remove(25L,6L)).isInstanceOf(ResourceNotFoundException.class);
+        when(intents.existsByMethodIdAndStatus(5L,"PENDING")).thenReturn(true);
+        assertThatThrownBy(() -> service.remove(25L,5L)).isInstanceOf(ConflictException.class);
+        verify(methods,never()).delete(any());
+        when(intents.existsByMethodIdAndStatus(5L,"PENDING")).thenReturn(false);
+        service.remove(25L,5L);
+        verify(methods).delete(own);
+    }
 }

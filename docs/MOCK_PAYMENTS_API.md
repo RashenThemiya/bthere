@@ -91,15 +91,57 @@ No request body. Setup returns 200 with one synthetic method per owner/type/prov
   "methodId": 5,
   "type": "BANK_ACCOUNT",
   "displayLabel": "TEST BANK •••• 0001",
+  "brand": null,
   "status": "VERIFIED_MOCK"
 }
 ```
 
-CARD label is TEST CARD •••• 4242. The label is invented by the server; it is not
+CARD label is TEST CARD •••• 4242. CARD methods return `brand`: `"VISA"` or
+`"MASTERCARD"` (the mock card is always the synthetic `"VISA"`); use it to pick the
+card logo. BANK_ACCOUNT methods return `brand: null`. The label is invented by the server; it is not
 a card PAN or verified bank account. List returns Method[]. Methods are scoped
 to owner and selected provider. No bank/card numbers, CVV, banking passwords,
 bank OTPs or real payment tokens are accepted or stored. The mock verification
 state must never be reused as real KYC/account verification.
+
+### Remove a saved method
+
+```http
+DELETE /api/v1/me/payment-methods/{methodId}
+```
+
+No body. CUSTOMER or SERVICE_PROVIDER token. Works for CARD and BANK_ACCOUNT.
+
+| Status | When |
+|---|---|
+| 204 No Content | Removed. It no longer appears in `GET /api/v1/me/payment-methods`. |
+| 404 | `methodId` does not exist, belongs to another user, or belongs to another provider. |
+| 409 | A payment (top-up/withdrawal intent) using this method is still `PENDING`. |
+| 401 | Missing or expired token. |
+
+Pending-payment behaviour: the method cannot be removed while any intent that
+references it is `PENDING`. Wait until that payment ends as `SUCCEEDED` or
+`FAILED`, then retry. Completed payments keep their `methodId` for history even
+after the method is removed. After removal, `POST /payment-methods/setup` can add
+the method again (it gets a new `methodId`).
+
+```json
+{
+  "type": "about:blank",
+  "title": "Resource conflict",
+  "status": 409,
+  "detail": "Payment method is used by a pending payment"
+}
+```
+
+```json
+{
+  "type": "about:blank",
+  "title": "Resource not found",
+  "status": 404,
+  "detail": "Payment method not found"
+}
+```
 
 ## Top-up test
 

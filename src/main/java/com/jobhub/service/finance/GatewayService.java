@@ -38,8 +38,17 @@ public class GatewayService {
         return method(instruments.findByUserIdAndProviderAndType(userId,gateway.name(),type).orElseGet(() -> {
             var m=new PaymentInstrument();m.setUserId(userId);m.setProvider(gateway.name());m.setType(type);
             m.setDisplayLabel("CARD".equals(type)?"TEST CARD •••• 4242":"TEST BANK •••• 0001");m.setStatus("VERIFIED_MOCK");
+            if ("CARD".equals(type)) m.setBrand("VISA");
             return instruments.save(m);
         }));
+    }
+    @Transactional
+    public void remove(Long userId,Long methodId) {
+        lockUser(userId); // Serializes with startWallet, which locks the user before creating an intent.
+        var m=instruments.findById(methodId).filter(x -> userId.equals(x.getUserId()) && gateway.name().equals(x.getProvider()))
+                .orElseThrow(() -> new ResourceNotFoundException("Payment method not found"));
+        if (intents.existsByMethodIdAndStatus(methodId,"PENDING")) throw new ConflictException("Payment method is used by a pending payment");
+        instruments.delete(m);
     }
     @Transactional
     public Intent startWallet(Long userId,String currency,BigDecimal amount,Long methodId,String purpose,String key) {
@@ -125,6 +134,10 @@ public class GatewayService {
     private void lockUser(Long id) {users.lockById(id).filter(u -> "ACTIVE".equals(u.getStatus())).orElseThrow(() -> new ConflictException("Inactive account"));}
     private void validateKey(String key) {if(key==null||key.isBlank()||key.length()>100)throw new IllegalArgumentException("Idempotency-Key is required, maximum100characters");}
     private static String hash(String value) {try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
-    private Method method(PaymentInstrument m) {return new Method(m.getMethodId(),m.getType(),m.getDisplayLabel(),m.getStatus());}
+    private Method method(PaymentInstrument m) {
+        // Mock cards saved before brand existed are the synthetic Visa 4242.
+        String brand=m.getBrand()==null && "CARD".equals(m.getType()) && "VERIFIED_MOCK".equals(m.getStatus())?"VISA":m.getBrand();
+        return new Method(m.getMethodId(),m.getType(),m.getDisplayLabel(),brand,m.getStatus());
+    }
     private Intent response(GatewayIntent i) {return new Intent(i.getIntentId(),i.getPurpose(),i.getCurrencyCode(),i.getAmount(),i.getJobId(),i.getMethodId(),i.getStatus());}
 }

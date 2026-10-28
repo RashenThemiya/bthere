@@ -58,6 +58,9 @@ public class WalletController {
     public com.jobhub.dto.customer.GatewayApi.Method setup(@AuthenticationPrincipal AuthenticatedUser user,@RequestParam @Pattern(regexp="CARD|BANK_ACCOUNT") String type) {
         return gateway.setup(user.id(),type);
     }
+    @DeleteMapping("/payment-methods/{methodId}")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void remove(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long methodId) { gateway.remove(user.id(),methodId); }
     @GetMapping("/payment-intents/{id}")
     public com.jobhub.dto.customer.GatewayApi.Intent intent(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) { return gateway.get(user.id(),id); }
     @PostMapping("/mock-payments/{id}/events")

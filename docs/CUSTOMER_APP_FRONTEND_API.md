@@ -8,6 +8,62 @@ PayHere customer-confirmed bookings now support automatic provider earnings cred
 See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
 payment references, earnings history and environment separation.
 
+## Saved card brand and removal (2026-10-28)
+
+Authenticated CUSTOMER bearer token; all paths below include `/api/v1`.
+Implemented locally; hosted deployment is not verified.
+
+`GET /api/v1/me/payment-methods` returns HTTP 200:
+
+```json
+[
+  {
+    "methodId": 1,
+    "type": "CARD",
+    "displayLabel": "TEST CARD •••• 4242",
+    "brand": "VISA",
+    "status": "VERIFIED_MOCK"
+  }
+]
+```
+
+Use `brand` (`VISA` or `MASTERCARD`) for the card logo. The current synthetic
+mock card is VISA, including older mock rows without a saved brand.
+Bank methods have `brand: null`. Live card linking remains unconfigured;
+this change does not enable live card storage or payments.
+
+`DELETE /api/v1/me/payment-methods/{methodId}` takes no body and returns
+HTTP **204 No Content**. Refresh the list after success: the removed card
+is absent. A repeated delete returns 404. Removing a card does not refund
+payments, cancel bookings, or change the wallet balance.
+
+| Status | Meaning |
+|---|---|
+| 401 | Missing/expired token |
+| 403 | Role is neither CUSTOMER nor SERVICE_PROVIDER |
+| 404 | Method is absent, owned by another user, or outside the current payment provider |
+| 409 | A payment intent referencing this method is PENDING; card remains saved |
+
+```json
+{
+  "type": "about:blank",
+  "title": "Resource conflict",
+  "status": 409,
+  "detail": "Payment method is used by a pending payment",
+  "instance": "/api/v1/me/payment-methods/1"
+}
+```
+
+For 404, title is `Resource not found` and detail is `Payment method not found`.
+Wait for a pending intent to finish as SUCCEEDED or FAILED, then retry removal.
+Removal does not cancel or resolve that intent automatically. Completed payment
+history retains its original methodId. Only intents that reference this specific
+method block removal; a hosted checkout without a saved methodId is independent.
+In MOCK mode, setup can add a new synthetic card after removal with a new ID.
+See [mock payment APIs](MOCK_PAYMENTS_API.md) for setup and test-payment flows.
+Existing schemas need the nullable brand column; see
+[brand migration](PAYMENT_METHOD_BRAND_MIGRATION.sql).
+
 ## Customer tab update: provider filters and field/choice icons (2026-10-20)
 
 Profile-photo 403 troubleshooting: the upload endpoint authenticates writes, while
@@ -76,6 +132,95 @@ Render each search candidate's returned `mapMarker.icon`; do not create one icon
 per pricing combination. Extra gender filters do not change a vehicle-only marker.
 Search has no price field: request `POST /api/v1/customers/me/bookings/quote`
 separately with all applicable `pricingSelections`.
+
+### Provider-less estimate (OPEN_REQUEST booking form)
+
+`/quote` needs a `providerId`, so it cannot price an OPEN_REQUEST form before a
+provider accepts. Use the estimate endpoint while the form is being filled.
+`/quote` is unchanged and remains the DIRECT_REQUEST flow.
+
+```http
+POST /api/v1/customers/me/bookings/estimate
+Authorization: Bearer <CUSTOMER token>
+```
+
+The body is the same shape as `POST /booking-requests` (`marketId`, `booking`,
+optional `searchLocation`), so the form draft can be sent as-is. Do not send
+`booking.providerId`/`providerIds`. `booking.answers` are optional and ignored:
+name/contact and other booking answers are not required for an estimate.
+Customer profile and requirement eligibility are not checked here; they are
+checked when the booking request is created.
+
+```json
+{
+  "marketId": 1,
+  "booking": {
+    "serviceTypeId": 3,
+    "optionId": 12,
+    "deliveryMode": "PROVIDER_TO_CUSTOMER",
+    "startDatetime": "2030-01-07T08:00:00",
+    "expectedEndDatetime": "2030-01-07T10:00:00",
+    "meetingPoint": {
+      "name": "Home", "addressLine1": "12 Galle Road",
+      "latitude": 6.9271, "longitude": 79.8612
+    },
+    "paymentMethod": "CARD",
+    "pricingSelections": [{ "fieldId": 25, "choiceValue": "CAR" }]
+  }
+}
+```
+
+Location used for area prices:
+
+| Booking | Point used |
+|---|---|
+| ROUTE_BASED | `booking.pickup` + `booking.destination` (distance), destination for area price. Send `requestedPickupTime`, not start/end. |
+| PROVIDER_TO_CUSTOMER | `booking.meetingPoint` (required) |
+| CUSTOMER_TO_PROVIDER | `searchLocation` if sent; otherwise only non-area prices apply |
+| ONLINE | none |
+
+200 response (same shape as `/quote`):
+
+```json
+{
+  "rateId": 7,
+  "currencyCode": "LKR",
+  "expectedAmount": 3000.00,
+  "startDatetime": "2030-01-07T08:00:00",
+  "expectedEndDatetime": "2030-01-07T10:00:00",
+  "estimatedDistanceKm": null,
+  "pricingSelections": [{ "fieldId": 25, "choiceValue": "CAR" }],
+  "pricingSnapshot": { "billingType": "HOURLY", "rate": 1500.00 },
+  "platformFeePercentage": 10.00,
+  "platformFee": 300.00,
+  "providerEarnings": 2700.00
+}
+```
+
+Estimate only: no booking, provider reservation, capacity hold or payment is
+created. The amount comes from the admin rate for the market, option, time and
+pricing choices. When a provider accepts, the request is re-quoted with that
+provider's location. That quote can differ from the estimate when an area price
+depends on the provider location (CUSTOMER_TO_PROVIDER), and it is the final
+amount shown for confirmation.
+
+Validation errors (`ProblemDetail`, `detail` text shown below):
+
+| Status | detail |
+|---|---|
+| 400 | Field errors for missing `marketId`, `booking`, `booking.serviceTypeId`, `booking.optionId`, `booking.deliveryMode`, or an invalid `meetingPoint`/`pickup`/`destination`/`searchLocation` |
+| 400 | `Estimate does not take a provider; use quote for a selected provider` |
+| 400 | `Delivery mode is not enabled for this option` |
+| 400 | `Physical locations are disabled for this option` |
+| 400 | `TIME_BASED booking requires startDatetime before expectedEndDatetime` |
+| 400 | `ROUTE_BASED booking requires requestedPickupTime, pickup and destination` |
+| 400 | `Choose a future interval of at most 31 days` |
+| 400 | `Customer meeting point is required` |
+| 400 | `Select exactly one choice for every applicable pricing field: [25, 26]` |
+| 404 | `Active service option not found` / `Market not found` / `Service is not offered in this market` |
+| 404 | `No active price is configured for the selected choices, market and service option` |
+| 409 | `Multiple equally specific prices match the selected choices` |
+| 401 / 403 | Missing token / not a CUSTOMER |
 
 ```http
 POST /api/v1/customers/me/provider-search

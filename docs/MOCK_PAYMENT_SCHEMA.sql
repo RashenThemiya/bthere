@@ -27,6 +27,7 @@ CREATE TABLE payment_instrument (
     provider VARCHAR(255),
     type VARCHAR(255),
     display_label VARCHAR(255),
+    brand VARCHAR(20),
     status VARCHAR(255),
     UNIQUE KEY uk_payment_instrument_type (user_id, provider, type)
 );
