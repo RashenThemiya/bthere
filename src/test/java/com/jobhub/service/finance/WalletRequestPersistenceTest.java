@@ -32,6 +32,51 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class WalletRequestPersistenceTest {
+    @Test void concurrentMockCardConfirmationIsAtomicAndCompletionSettlesSyntheticFundsOnce() throws Exception {
+        var config=new Configuration().setPhysicalNamingStrategy(new CamelCaseToUnderscoresNamingStrategy())
+            .setProperty("hibernate.connection.driver_class","org.h2.Driver")
+            .setProperty("hibernate.connection.url","jdbc:h2:mem:"+UUID.randomUUID()+";LOCK_TIMEOUT=10000")
+            .setProperty("hibernate.hbm2ddl.auto","create-drop");
+        for(var type:List.of(BookingRequest.class,BookingOffer.class,BookingDispatchEvent.class,BookingPaymentNotice.class,
+                Job.class,JobProviderAssignment.class,Wallet.class,WalletOperation.class,WalletLedgerEntry.class,PaymentInstrument.class))config.addAnnotatedClass(type);
+        try(var factory=config.buildSessionFactory()) {
+            var ids=tx(factory,em -> {
+                var j=new Job();j.setMarketId(1L);j.setCustomerId(7L);j.setAssignedServiceProviderId(15L);j.setCurrencyCode("LKR");
+                j.setExpectedAmount(new BigDecimal("20"));j.setTotalAmount(new BigDecimal("20"));j.setPlatformFeePercentage(new BigDecimal("10"));
+                j.setPlatformFee(new BigDecimal("2"));j.setProviderEarnings(new BigDecimal("18"));j.setJobStatus("AWAITING_PAYMENT");
+                j.setPaymentMethod("CARD");j.setPaymentStatus("PENDING");j.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5));
+                j.setExpectedEndDatetime(j.getStartDatetime().plusHours(1));em.persist(j);
+                var r=new BookingRequest();r.setUserId(25L);r.setJobId(j.getJobId());r.setIdempotencyKey("mock-test");r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");
+                r.setConfirmationExpiresAt(Instant.now().plusSeconds(120));r.setPayloadJson("{\"marketId\":1,\"booking\":{\"paymentMethod\":\"CARD\"}}");
+                r.setPaymentStatus("NOT_STARTED");r.setCurrencyCode("LKR");r.setQuotedAmount(j.getTotalAmount());
+                r.setPlatformFeePercentage(j.getPlatformFeePercentage());r.setPlatformFee(j.getPlatformFee());r.setProviderEarnings(j.getProviderEarnings());em.persist(r);
+                var card=new PaymentInstrument();card.setUserId(25L);card.setProvider("MOCK");card.setType("CARD");card.setStatus("VERIFIED_MOCK");em.persist(card);
+                return List.of(r.getRequestId(),j.getJobId(),card.getMethodId());
+            });
+            Long rid=ids.get(0),jid=ids.get(1),mid=ids.get(2);
+            var failing=mock(AuditService.class);
+            doThrow(new IllegalStateException("audit failure")).when(failing).record(any(),anyString(),anyString(),any(),any(),any());
+            assertThatThrownBy(() -> tx(factory,em -> service(em,failing,true,true).confirmMockCard(25L,rid,mid))).hasMessageContaining("audit failure");
+            try(var em=factory.createEntityManager()) {
+                assertThat(em.find(Job.class,jid).getPaymentStatus()).isEqualTo("PENDING");
+                assertThat(em.createQuery("select count(n) from BookingPaymentNotice n",Long.class).getSingleResult()).isZero();
+            }
+            concurrent(() -> tx(factory,em -> service(em,mock(AuditService.class),true,true).confirmMockCard(25L,rid,mid).status()));
+            tx(factory,em -> {
+                var s=service(em,mock(AuditService.class),true,true);
+                var code=s.customerCodes(25L,jid).code();s.verifyStartCode(42L,jid,code);return s.requestCompletion(42L,jid);
+            });
+            concurrent(() -> tx(factory,em -> service(em,mock(AuditService.class),true,true).confirmCompletion(25L,jid).status()));
+            try(var em=factory.createEntityManager()) {
+                assertThat(em.createQuery("select count(n) from BookingPaymentNotice n",Long.class).getSingleResult()).isEqualTo(1);
+                assertThat(em.createQuery("select count(o) from WalletOperation o",Long.class).getSingleResult()).isEqualTo(1);
+                assertThat(em.createQuery("select sum(e.delta) from WalletLedgerEntry e",BigDecimal.class).getSingleResult()).isEqualByComparingTo("0");
+                var w=em.createQuery("select w from Wallet w where w.userId=42",Wallet.class).getSingleResult();
+                assertThat(w.getAvailableBalance()).isEqualByComparingTo("18");assertThat(w.getFundingMode()).isEqualTo("MOCK");
+                assertThat(em.createQuery("select count(w) from Wallet w where w.userId=25",Long.class).getSingleResult()).isZero();
+            }
+        }
+    }
     @Test void concurrentConfirmationAndCompletionPostOnceAndFailuresRollBackWholeLifecycle() throws Exception {
         var config=new Configuration().setPhysicalNamingStrategy(new CamelCaseToUnderscoresNamingStrategy())
             .setProperty("hibernate.connection.driver_class","org.h2.Driver")
@@ -112,6 +157,9 @@ class WalletRequestPersistenceTest {
         }
     }
     private BookingRequestService service(EntityManager em,AuditService audit,boolean validKey) {
+        return service(em,audit,validKey,false);
+    }
+    private BookingRequestService service(EntityManager em,AuditService audit,boolean validKey,boolean mockMode) {
         var repos=new JpaRepositoryFactory(em);var requests=repos.getRepository(BookingRequestRepository.class);
         var users=mock(UserRepository.class);var user=new User();user.setStatus("ACTIVE");when(users.lockById(anyLong())).thenReturn(Optional.of(user));
         var customers=mock(CustomerRepository.class);var customer=new Customer();customer.setCustomerId(7L);when(customers.findByUserId(25L)).thenReturn(Optional.of(customer));
@@ -121,9 +169,12 @@ class WalletRequestPersistenceTest {
         var jobs=repos.getRepository(JobRepository.class);var notices=repos.getRepository(BookingPaymentNoticeRepository.class);
         var walletService=new WalletService(repos.getRepository(WalletRepository.class),repos.getRepository(WalletOperationRepository.class),
             repos.getRepository(WalletLedgerRepository.class),users,jobs,customers,mock(JobProviderAssignmentRepository.class),providers,marketRepo,audit,requests,notices);
+        if(mockMode)org.springframework.test.util.ReflectionTestUtils.setField(walletService,"paymentProvider","MOCK");
         return new BookingRequestService(requests,repos.getRepository(BookingOfferRepository.class),mock(BookingRequestPolicyRepository.class),
             repos.getRepository(BookingDispatchEventRepository.class),notices,mock(ServiceOptionRepository.class),providers,marketRepo,users,jobs,
             mock(CustomerDiscoveryService.class),mock(CustomerBookingService.class),mock(PayHereBookingCheckout.class),
-            new BookingCodeCipher(validKey?Base64.getEncoder().encodeToString(new byte[32]):"invalid"),new ObjectMapper().findAndRegisterModules(),audit,walletService);
+            new BookingCodeCipher(validKey?Base64.getEncoder().encodeToString(new byte[32]):"invalid"),new ObjectMapper().findAndRegisterModules(),audit,walletService,
+            mockMode?new com.jobhub.payments.MockPaymentGateway():mock(com.jobhub.payments.PaymentGateway.class),
+            mockMode?repos.getRepository(PaymentInstrumentRepository.class):mock(PaymentInstrumentRepository.class));
     }
 }

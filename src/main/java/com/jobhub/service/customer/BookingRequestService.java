@@ -42,13 +42,20 @@ public class BookingRequestService {
     private final ObjectMapper mapper;
     private final com.jobhub.service.audit.AuditService audit;
     private final com.jobhub.service.finance.WalletService wallets;
+    private final com.jobhub.payments.PaymentGateway paymentGateway;
+    private final com.jobhub.repository.finance.PaymentInstrumentRepository instruments;
+
+    private void requireCardReady() {
+        if(paymentGateway.isMock()) paymentGateway.requireEnabled();
+        else checkout.requireReady();
+    }
 
     @Transactional
     public Policy setPolicy(Long optionId, Policy input) {
         var option=options.findLockedById(optionId).orElseThrow(() -> new ResourceNotFoundException("Option not found"));
         if(input.enabled()) {
             requireSupported(option); codes.requireReady();
-            if(!option.getAllowedPaymentMethods().contains("WALLET"))checkout.requireReady();
+            if(!option.getAllowedPaymentMethods().contains("WALLET"))requireCardReady();
         }
         var p=policies.findById(optionId).orElseGet(BookingRequestPolicy::new);
         p.setOptionId(optionId); p.setEnabled(input.enabled()); p.setMinimumNoticeMinutes(input.minimumNoticeMinutes());
@@ -84,7 +91,7 @@ public class BookingRequestService {
         var option=options.findByOptionIdAndServiceProviderTypeId(b.optionId(),b.serviceTypeId())
                 .filter(o -> o.activeForService(b.serviceTypeId())).orElseThrow(() -> new ResourceNotFoundException("Active option not found"));
         requireSupported(option); codes.requireReady();
-        if("CARD".equals(b.paymentMethod()))checkout.requireReady();
+        if("CARD".equals(b.paymentMethod()))requireCardReady();
         var policy=policies.findById(option.getOptionId()).filter(BookingRequestPolicy::isEnabled)
                 .orElseThrow(() -> new ConflictException("Booking requests are not enabled for this option"));
         if(!Set.of("CARD","WALLET").contains(b.paymentMethod()==null?"":b.paymentMethod()))
@@ -246,6 +253,7 @@ public class BookingRequestService {
     @Transactional
     public Checkout confirm(Long userId,Long id,Confirm contact) {
         var r=owned(userId,id);
+        if(paymentGateway.isMock())throw new ConflictException("Use confirm-mock-card with a saved mock methodId");
         if(!"CARD".equals(requestMethod(r)))throw new ConflictException("Use confirm-wallet for a WALLET request");
         if("PAYMENT_PENDING".equals(r.getStatus())) {
             if(!contact.cardMethod().equals(r.getCheckoutMethod())) throw new ConflictException("Checkout already started with another card method");
@@ -261,6 +269,46 @@ public class BookingRequestService {
         r.setPaymentFundingMode(checkout.fundingMode());
         r.setCheckoutJson(write(session)); r.setStatus("PAYMENT_PENDING"); r.setPaymentStatus("PENDING"); r.setPaymentStartedAt(Instant.now());
         return session;
+    }
+    /** Explicit synthetic success only; never calls a merchant or debits a wallet. */
+    @Transactional
+    public View confirmMockCard(Long userId,Long id,Long methodId) {
+        if(!paymentGateway.isMock())throw new PaymentUnavailableException("Mock booking card payments are disabled");
+        paymentGateway.requireEnabled();
+        var r=owned(userId,id);
+        if(!"CARD".equals(requestMethod(r)) || r.getJobId()==null)
+            throw new ConflictException("Provider must accept a CARD request first");
+        var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow();
+        // Serialize saved-method use with removal. Replay uses the frozen proof,
+        // including when the method has since been removed.
+        users.lockById(userId).filter(u -> "ACTIVE".equals(u.getStatus()))
+                .orElseThrow(() -> new ConflictException("Inactive account"));
+        String proof="MOCK-BR-"+id+"-METHOD-"+methodId;
+        if("MOCK".equals(r.getPaymentFundingMode()) && "PAID".equals(r.getPaymentStatus())) {
+            if(!proof.equals(r.getGatewayPaymentId()))throw new ConflictException("Booking already paid with another mock method");
+            return view(r);
+        }
+        if(!"AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) || r.getConfirmationExpiresAt()==null
+                || !Instant.now().isBefore(r.getConfirmationExpiresAt()) || !"AWAITING_PAYMENT".equals(job.getJobStatus())
+                || !"CARD".equals(job.getPaymentMethod()) || !"PENDING".equals(job.getPaymentStatus()))
+            throw new ConflictException("Customer confirmation expired or provider has not accepted");
+        var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
+        if(!job.getStartDatetime().atZone(zone).toInstant().isAfter(Instant.now()))throw new ConflictException("Booking start time has passed");
+        if(!"LKR".equals(job.getCurrencyCode()) || job.getExpectedAmount()==null || job.getExpectedAmount().signum()<=0
+                || !Objects.equals(job.getCurrencyCode(),r.getCurrencyCode()) || r.getQuotedAmount()==null
+                || job.getExpectedAmount().compareTo(r.getQuotedAmount())!=0)
+            throw new ConflictException("Saved booking payment amount or currency is invalid");
+        var card=instruments.findById(methodId).filter(m -> userId.equals(m.getUserId()) && "MOCK".equals(m.getProvider())
+                && "CARD".equals(m.getType()) && "VERIFIED_MOCK".equals(m.getStatus()))
+                .orElseThrow(() -> new ResourceNotFoundException("Verified mock card not found"));
+        var notice=new BookingPaymentNotice();notice.setRequestId(id);notice.setPaymentId(proof);
+        notice.setStatusCode("2");notice.setReceivedAt(Instant.now());notices.saveAndFlush(notice);
+        r.setGatewayPaymentId(proof);r.setPaymentFundingMode("MOCK");r.setPaymentStartedAt(Instant.now());
+        r.setCheckoutMethod(card.getBrand()==null?"VISA":card.getBrand());
+        r.setPaymentStatus("PAID");job.setPaymentStatus("PAID");
+        confirmService(r,job);
+        audit.record(userId,"MOCK_CARD_BOOKING_CONFIRMED","BOOKING_REQUEST",id,null,Map.of("methodId",methodId,"fundingMode","MOCK"));
+        return view(r);
     }
     /** Reserve existing wallet funds only after provider acceptance and explicit customer confirmation. */
     @Transactional
@@ -311,6 +359,7 @@ public class BookingRequestService {
         checkout.verify(params);
         var found=requests.findByPaymentOrderId(params.get("order_id")).orElseThrow(() -> new ResourceNotFoundException("Payment order not found"));
         var r=locked(found.getRequestId()); var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow();
+        if("MOCK".equals(r.getPaymentFundingMode()))throw new ConflictException("Merchant notifications cannot fund mock bookings");
         if(!"CARD".equals(job.getPaymentMethod()))throw new ConflictException("Gateway notifications cannot fund WALLET bookings");
         if(!job.getCurrencyCode().equals(params.get("payhere_currency"))
                 || job.getExpectedAmount().compareTo(new BigDecimal(params.get("payhere_amount")))!=0)

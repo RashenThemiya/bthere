@@ -8,6 +8,16 @@ PayHere customer-confirmed bookings now support automatic provider earnings cred
 See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
 payment references, earnings history and environment separation.
 
+## MOCK booking card checkout (2026-10-29)
+
+OPEN_REQUEST and DIRECT_REQUEST now support an explicit synthetic card confirmation
+in MOCK mode after provider acceptance. See [MOCK booking card API](MOCK_BOOKING_CARD_API.md)
+for the full flow, request/response examples and errors. Payment settings add
+`provider` and `testMode`; existing capabilities remain. In MOCK, call
+`POST /api/v1/customers/me/booking-requests/{id}/confirm-mock-card` with
+`{"methodId":1}` instead of the PayHere `/confirm` endpoint. Implemented locally;
+deployment is not verified.
+
 ## Saved card brand and removal (2026-10-28)
 
 Authenticated CUSTOMER bearer token; all paths below include `/api/v1`.

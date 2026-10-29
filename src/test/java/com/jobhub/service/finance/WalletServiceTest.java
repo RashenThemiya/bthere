@@ -80,6 +80,29 @@ class WalletServiceTest {
         lenient().when(operations.findLockedByOperationKey(anyString())).thenAnswer(i -> Optional.ofNullable(ops.get(i.getArgument(0))));
         return r;
     }
+    @Test void mockCardSettlementTagsEmptyProviderWalletAndUsesOnlyMockAccounts() {
+        var r=cardFixture();r.setPaymentFundingMode("MOCK");r.setGatewayPaymentId("MOCK-BR-9-METHOD-7");
+        var n=new com.jobhub.entity.job.BookingPaymentNotice();n.setRequestId(9L);
+        when(paymentNotices.findByPaymentIdAndStatusCode("MOCK-BR-9-METHOD-7","2")).thenReturn(Optional.of(n));
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");
+        var result=service.settleCardBooking(25L,100L);
+        assertThat(balances.get(42L).getFundingMode()).isEqualTo("MOCK");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("18");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("100");
+        assertThat(entries).extracting(WalletLedgerEntry::getBucket).contains("MOCK_CLEARING","MOCK_PLATFORM_FEE");
+        int count=entries.size();assertThat(service.settleCardBooking(25L,100L).operationId()).isEqualTo(result.operationId());
+        assertThat(entries).hasSize(count);
+    }
+    @Test void mockCardSettlementCannotRunOutsideMockOrMixLiveFunds() {
+        var r=cardFixture();r.setPaymentFundingMode("MOCK");r.setGatewayPaymentId("MOCK-BR-9-METHOD-7");
+        var n=new com.jobhub.entity.job.BookingPaymentNotice();n.setRequestId(9L);
+        when(paymentNotices.findByPaymentIdAndStatusCode("MOCK-BR-9-METHOD-7","2")).thenReturn(Optional.of(n));
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("outside mock mode");
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");
+        seedTestFixture(42L,"5");balances.get(42L).setFundingMode("PAYHERE");
+        assertThatThrownBy(() -> service.settleCardBooking(25L,100L)).hasMessageContaining("cannot be mixed");
+        verify(ledger,never()).save(any());
+    }
     @Test void cardCompletionCreditsNetExactlyOnceAndPreservesReceiptAndBalancedHistory() {
         var r=cardFixture();var first=service.settleCardBooking(25L,100L);int count=entries.size();
         assertThat(service.settleCardBooking(25L,100L).operationId()).isEqualTo(first.operationId());

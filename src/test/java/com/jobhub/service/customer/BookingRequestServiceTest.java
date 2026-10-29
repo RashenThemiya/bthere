@@ -42,6 +42,8 @@ class BookingRequestServiceTest {
     @Mock PayHereBookingCheckout checkout;
     @Mock com.jobhub.service.audit.AuditService audit;
     @Mock com.jobhub.service.finance.WalletService wallets;
+    @Mock com.jobhub.payments.PaymentGateway paymentGateway;
+    @Mock com.jobhub.repository.finance.PaymentInstrumentRepository instruments;
     @Spy BookingCodeCipher codes=new BookingCodeCipher(Base64.getEncoder().encodeToString(new byte[32]));
     @Spy ObjectMapper mapper=new ObjectMapper().findAndRegisterModules();
     @InjectMocks BookingRequestService service;
@@ -63,7 +65,8 @@ class BookingRequestServiceTest {
         input=new Create(1L,booking,null,null,null,null,null);
         job=new Job();job.setPaymentMethod("CARD");job.setJobId(70L);job.setMarketId(1L);job.setAssignedServiceProviderId(15L);job.setExpectedAmount(new BigDecimal("1000.00"));
         job.setCurrencyCode("LKR");job.setStartDatetime(start);job.setExpectedEndDatetime(start.plusHours(1));job.setJobStatus("AWAITING_PAYMENT");job.setPaymentStatus("PENDING");
-        lenient().when(users.lockById(5L)).thenReturn(Optional.of(new User()));
+        var customerUser=new User();customerUser.setStatus("ACTIVE");
+        lenient().when(users.lockById(5L)).thenReturn(Optional.of(customerUser));
         lenient().when(options.findByOptionIdAndServiceProviderTypeId(12L,3L)).thenReturn(Optional.of(option));
         lenient().when(policies.findById(12L)).thenReturn(Optional.of(policy));
         lenient().when(markets.findById(1L)).thenReturn(Optional.of(market));
@@ -89,6 +92,39 @@ class BookingRequestServiceTest {
         lenient().when(offers.saveAndFlush(any())).thenAnswer(i -> {BookingOffer o=i.getArgument(0);o.setOfferId((long)stored.size()+1);stored.add(o);return o;});
         lenient().when(offers.findAllByRequestIdOrderByOfferIdAsc(1L)).thenAnswer(i -> stored);
         lenient().when(offers.findById(anyLong())).thenAnswer(i -> stored.stream().filter(o -> o.getOfferId().equals(i.getArgument(0))).findFirst());
+    }
+    @Test void mockCardConfirmsAfterAcceptanceAndReplayDoesNotPayOrNotifyTwice() {
+        when(paymentGateway.isMock()).thenReturn(true);
+        accepted();
+        var card=new com.jobhub.entity.finance.PaymentInstrument();card.setUserId(5L);card.setProvider("MOCK");
+        card.setType("CARD");card.setStatus("VERIFIED_MOCK");card.setBrand("VISA");
+        when(instruments.findById(7L)).thenReturn(Optional.of(card));
+        var result=service.confirmMockCard(5L,1L,7L);
+        assertThat(result.status()).isEqualTo("CONFIRMED");assertThat(result.paymentStatus()).isEqualTo("PAID");
+        assertThat(result.paymentFundingMode()).isEqualTo("MOCK");
+        assertThat(job.getPaymentStatus()).isEqualTo("PAID");
+        service.confirmMockCard(5L,1L,7L);
+        verify(notices,times(1)).saveAndFlush(any());
+        verify(instruments,times(1)).findById(7L);
+        verify(checkout,never()).requireReady();verify(checkout,never()).checkout(any(),any(),any());
+        verifyNoInteractions(wallets);
+        assertThatThrownBy(() -> service.confirmMockCard(5L,1L,8L)).isInstanceOf(ConflictException.class);
+    }
+    @Test void mockCardRejectsLiveModeWrongOwnerAndExpiredConfirmation() {
+        assertThatThrownBy(() -> service.confirmMockCard(5L,1L,7L)).isInstanceOf(PaymentUnavailableException.class);
+        when(paymentGateway.isMock()).thenReturn(true);accepted();
+        assertThatThrownBy(() -> service.confirmMockCard(6L,1L,7L)).isInstanceOf(ResourceNotFoundException.class);
+        var other=new com.jobhub.entity.finance.PaymentInstrument();other.setUserId(6L);
+        when(instruments.findById(7L)).thenReturn(Optional.of(other));
+        assertThatThrownBy(() -> service.confirmMockCard(5L,1L,7L)).isInstanceOf(ResourceNotFoundException.class);
+        request.setConfirmationExpiresAt(Instant.now().minusSeconds(1));
+        assertThatThrownBy(() -> service.confirmMockCard(5L,1L,7L)).isInstanceOf(ConflictException.class);
+        verify(notices,never()).saveAndFlush(any());assertThat(job.getPaymentStatus()).isEqualTo("PENDING");
+    }
+    @Test void mockCardRequiresAcceptanceAndHostedConfirmExplainsMockRoute() {
+        when(paymentGateway.isMock()).thenReturn(true);create();
+        assertThatThrownBy(() -> service.confirmMockCard(5L,1L,7L)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.confirm(5L,1L,contact())).hasMessageContaining("confirm-mock-card");
     }
     void create(){service.create(5L,"key",input);}
     void accepted(){create();service.accept(9L,1L);}

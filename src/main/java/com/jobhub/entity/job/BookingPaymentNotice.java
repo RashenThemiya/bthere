@@ -2,7 +2,7 @@ package com.jobhub.entity.job;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
-/** Verified callback audit; no raw card/contact data or merchant secrets. */
+/** Verified callback or explicitly synthetic mock receipt; funding mode distinguishes them. No card details. */
 @Entity @Table(name="booking_payment_notice",uniqueConstraints=@UniqueConstraint(
         name="uk_booking_payment_notice",columnNames={"payment_id","status_code"}))
 @Getter @Setter @NoArgsConstructor

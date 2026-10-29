@@ -95,6 +95,9 @@ class GatewayServiceTest {
         assertThat(card.intentId()).isNotEqualTo(topup.intentId());assertThat(card.purpose()).isEqualTo("CARD");
     }
     @Test void mockCardReturnsBrandIncludingLegacyRows() {
+        assertThat(service.settings().provider()).isEqualTo("MOCK");
+        assertThat(service.settings().testMode()).isTrue();
+        assertThat(service.settings().capabilities().cardCheckout()).isTrue();
         when(methods.findByUserIdAndProviderAndType(25L,"MOCK","CARD")).thenReturn(Optional.empty());
         when(methods.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.setup(25L,"CARD").brand()).isEqualTo("VISA");

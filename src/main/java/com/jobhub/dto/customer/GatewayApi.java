@@ -3,7 +3,7 @@ import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 public final class GatewayApi {
     private GatewayApi() {}
-    public record Settings(WalletApi.Capabilities capabilities) {}
+    public record Settings(WalletApi.Capabilities capabilities,String provider,boolean testMode) {}
     public record Method(Long methodId,String type,String displayLabel,String brand,String status) {}
     public record Intent(Long intentId,String purpose,String currencyCode,
                          BigDecimal amount,Long jobId,Long methodId,String status) {}

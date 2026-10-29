@@ -273,8 +273,12 @@ public class WalletService {
                     .filter(n -> request.getRequestId().equals(n.getRequestId())).isEmpty()
                     || paymentNotices.findByPaymentIdAndStatusCode(reference,"-3").isPresent())
                 throw new ConflictException("Verified successful card payment is required for settlement");
-            if(!Set.of("PAYHERE","PAYHERE_SANDBOX").contains(mode==null?"":mode))
+            if(!Set.of("PAYHERE","PAYHERE_SANDBOX","MOCK").contains(mode==null?"":mode))
                 throw new ConflictException("Payment environment is missing; merchant reconciliation is required");
+            if("MOCK".equals(mode) && !reference.startsWith("MOCK-BR-"+request.getRequestId()+"-METHOD-"))
+                throw new ConflictException("Synthetic card payment proof is required");
+            if("MOCK".equals(mode) && !"MOCK".equalsIgnoreCase(selectedGateway == null ? paymentProvider : selectedGateway.name()))
+                throw new ConflictException("Mock funds cannot be used outside mock mode");
         }
         String currency=currency(job.getCurrencyCode());
         BigDecimal gross=money(request.getQuotedAmount(),currency);
@@ -323,7 +327,7 @@ public class WalletService {
         op.setPlatformFee(split.platformFee());op.setProviderEarnings(split.providerEarnings());
         var postings=new ArrayList<Posting>();
         postings.add(walletPayment?new Posting(payer,"RESERVED",gross.negate()):
-            new Posting(null,"PAYHERE_SANDBOX".equals(mode)?"PAYHERE_SANDBOX_CLEARING":"PAYHERE_CLEARING",gross.negate()));
+            new Posting(null,"MOCK".equals(mode)?"MOCK_CLEARING":"PAYHERE_SANDBOX".equals(mode)?"PAYHERE_SANDBOX_CLEARING":"PAYHERE_CLEARING",gross.negate()));
         postings.add(new Posting(wallet,"AVAILABLE",split.providerEarnings()));
         if(split.platformFee().signum()>0)postings.add(new Posting(null,
                 "PAYHERE_SANDBOX".equals(mode)?"SANDBOX_PLATFORM_FEE":"MOCK".equals(mode)?"MOCK_PLATFORM_FEE":"PLATFORM_FEE",split.platformFee()));
@@ -364,7 +368,9 @@ public class WalletService {
         var affected = postings.stream().map(Posting::wallet).filter(Objects::nonNull).distinct().toList();
         String explicitFunding=op.getFundingMode();
         boolean cardFunds="PAYHERE".equals(explicitFunding) || "PAYHERE_SANDBOX".equals(explicitFunding);
-        boolean mockPosting = !cardFunds && affected.stream().anyMatch(w -> "MOCK".equals(w.getFundingMode()));
+        boolean mockPosting = "MOCK".equals(explicitFunding) || !cardFunds && affected.stream().anyMatch(w -> "MOCK".equals(w.getFundingMode()));
+        if(mockPosting && !"MOCK".equalsIgnoreCase(selectedGateway == null ? paymentProvider : selectedGateway.name()))
+            throw new ConflictException("Mock funds cannot be used outside mock mode");
         for (var wallet : affected) {
             if(cardFunds && !explicitFunding.equals(wallet.getFundingMode()) && hasFunds(wallet))
                 throw new ConflictException("Sandbox, live card and other wallet funds cannot be mixed");

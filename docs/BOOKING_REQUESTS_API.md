@@ -41,6 +41,14 @@ also constrain provider filters. Each offer is re-quoted; acceptance revalidates
 and reserves capacity in an AWAITING_PAYMENT job. A changed offered price returns
 409; cancel/recreate the request rather than silently accepting a changed amount.
 
+## MOCK card checkout update (29 October 2026)
+
+MOCK now supports CARD request creation and explicit synthetic confirmation after
+provider acceptance without PayHere credentials. Use payment-settings.provider
+to select `confirm-mock-card` versus the existing hosted `/confirm` route.
+See [MOCK booking card contract](MOCK_BOOKING_CARD_API.md). WALLET is unchanged.
+Implemented locally; deployment is not verified.
+
 ## Admin configuration
 
 SUPER_ADMIN:
@@ -62,7 +70,8 @@ PUT /api/v1/admin/service-options/{optionId}/booking-request-policy
 
 Missing policy means disabled with the displayed defaults. Enabling requires CARD or WALLET
 in the option's allowedPaymentMethods, ADMIN pricing, supported single-provider
-fulfillment and an encryption key for codes. CARD requires configured PayHere checkout; WALLET-only does not. Team
+fulfillment and an encryption key for codes. CARD supports MOCK test confirmation
+or configured PayHere checkout; WALLET-only does not require PayHere. Team
 options are rejected explicitly. Policies are shared across linked services.
 For an enabled option, the legacy POST /customers/me/bookings endpoint returns
 409 directing the customer to booking-requests; it cannot bypass this lifecycle.

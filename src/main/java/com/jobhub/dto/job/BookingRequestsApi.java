@@ -45,6 +45,7 @@ public final class BookingRequestsApi {
                           @NotBlank @Size(max=100) String city,
                           @NotBlank @Size(max=100) String country) {}
     public record Checkout(String actionUrl, Map<String,String> fields, String status) {}
+    public record MockCard(@NotNull @Positive Long methodId) {}
     public record Code(@NotBlank @Pattern(regexp="[0-9]{6}") String code) {}
     public record Codes(String purpose, String code, Instant expiresAt) {}
     public record Transition(boolean successful, String status) {}

@@ -27,7 +27,7 @@ public class GatewayService {
     private final JobRepository jobs;
     private final WalletService wallets;
 
-    public Settings settings() { return new Settings(gateway.capabilities()); }
+    public Settings settings() { return new Settings(gateway.capabilities(),gateway.name(),gateway.isMock()); }
     public List<Method> methods(Long userId) { return instruments.findAllByUserIdAndProvider(userId,gateway.name()).stream().map(this::method).toList(); }
     @Transactional
     public Method setup(Long userId,String type) {
