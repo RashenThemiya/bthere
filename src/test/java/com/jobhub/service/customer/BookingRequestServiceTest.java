@@ -91,6 +91,8 @@ class BookingRequestServiceTest {
         });
         lenient().when(offers.saveAndFlush(any())).thenAnswer(i -> {BookingOffer o=i.getArgument(0);o.setOfferId((long)stored.size()+1);stored.add(o);return o;});
         lenient().when(offers.findAllByRequestIdOrderByOfferIdAsc(1L)).thenAnswer(i -> stored);
+        lenient().when(offers.findAllByProviderIdAndStatusOrderByOfferIdAsc(anyLong(),eq("PENDING")))
+                .thenAnswer(i -> stored.stream().filter(o -> o.getProviderId().equals(i.getArgument(0)) && "PENDING".equals(o.getStatus())).toList());
         lenient().when(offers.findById(anyLong())).thenAnswer(i -> stored.stream().filter(o -> o.getOfferId().equals(i.getArgument(0))).findFirst());
     }
     @Test void mockCardConfirmsAfterAcceptanceAndReplayDoesNotPayOrNotifyTwice() {
@@ -126,7 +128,97 @@ class BookingRequestServiceTest {
         assertThatThrownBy(() -> service.confirmMockCard(5L,1L,7L)).isInstanceOf(ConflictException.class);
         assertThatThrownBy(() -> service.confirm(5L,1L,contact())).hasMessageContaining("confirm-mock-card");
     }
+    void candidates(int count) {
+        var candidates=new ArrayList<Candidate>();
+        for(int i=0;i<count;i++) {
+            long pid=15L+i,uid=9L+i;
+            var provider=new ServiceProvider();provider.setServiceProviderId(pid);provider.setUserId(uid);
+            lenient().when(providers.findById(pid)).thenReturn(Optional.of(provider));
+            lenient().when(providers.findByUserId(uid)).thenReturn(Optional.of(provider));
+            candidates.add(new Candidate(pid,20L+i,12L,null,"Provider "+pid,null,null,null,null,null,null,1,List.of(),Map.of(),null));
+        }
+        when(discovery.search(eq(5L),any())).thenReturn(new Results(Instant.now(),1L,"UTC",null,null,"OPEN_REQUEST",1,"AVAILABLE",count,0,100,false,candidates));
+    }
+    @Test void broadcastsTwentyWithOneDeadlineAndMovesToNextGroupAfterAllDecline() {
+        candidates(23);create();assertThat(stored).hasSize(20);
+        assertThat(stored).extracting(BookingOffer::getExpiresAt).containsOnly(stored.get(0).getExpiresAt());
+        service.decline(9L,1L);assertThat(stored).hasSize(20);
+        for(int i=1;i<20;i++)service.decline(9L+i,1L+i);
+        assertThat(stored).hasSize(23);assertThat(request.getStatus()).isEqualTo("MATCHING");
+        assertThat(stored.subList(20,23)).extracting(BookingOffer::getStatus).containsOnly("PENDING");
+    }
+    @Test void groupExpiryExpiresEveryOfferAndCustomerCancellationRevokesNextGroup() {
+        candidates(23);create();stored.forEach(o -> o.setExpiresAt(Instant.now().minusSeconds(1)));
+        service.expire(1L);assertThat(stored).hasSize(23);
+        assertThat(stored.subList(0,20)).extracting(BookingOffer::getStatus).containsOnly("EXPIRED");
+        service.cancel(5L,1L);
+        assertThat(stored.subList(20,23)).extracting(BookingOffer::getStatus).containsOnly("CANCELLED");
+        verify(events,times(20)).save(argThat(e -> "OFFER_EXPIRED".equals(e.getEventType())));
+        verify(events,times(3)).save(argThat(e -> "OFFER_CANCELLED".equals(e.getEventType())));
+    }
+    @Test void firstAcceptanceRevokesOtherOffersAndUsesWinningProvidersOwnPrice() {
+        candidates(3);
+        when(bookings.quote(eq(5L),any())).thenAnswer(i -> {
+            CreateBookingRequest b=i.getArgument(1);
+            return new BookingQuoteResponse(1L,"LKR",new BigDecimal(b.providerId()==16L?"2000":"1000"),start,start.plusHours(1),null,null,null);
+        });
+        create();assertThat(service.providerOffers(10L).get(0).expectedAmount()).isEqualByComparingTo("2000");
+        job.setExpectedAmount(new BigDecimal("2000"));job.setAssignedServiceProviderId(16L);
+        service.accept(10L,2L);
+        assertThat(request.getQuotedAmount()).isEqualByComparingTo("2000");
+        assertThat(stored).extracting(BookingOffer::getStatus).containsExactly("CANCELLED","ACCEPTED","CANCELLED");
+        assertThatThrownBy(() -> service.accept(9L,1L)).hasMessage("Already accepted by another provider");
+        service.accept(10L,2L);verify(bookings,times(1)).reserveRequestBooking(any(),any());
+        verify(events,times(2)).save(argThat(e -> "OFFER_CANCELLED".equals(e.getEventType())));
+    }
+    @Test void customGroupSizeAndUnavailableCandidatesDoNotWasteGroupSlots() {
+        policy.setOfferGroupSize(2);candidates(4);
+        when(bookings.quote(eq(5L),argThat(b -> b!=null && Long.valueOf(15L).equals(b.providerId()))))
+            .thenThrow(new ConflictException("Unavailable"));
+        create();assertThat(stored).extracting(BookingOffer::getProviderId).containsExactly(16L,17L);
+    }
+    @Test void olderPolicyWritesPreserveGroupSizeAndNewWritesConfigureIt() {
+        when(options.findLockedById(12L)).thenReturn(Optional.of(option));policy.setOfferGroupSize(7);
+        var old=new Policy(false,120,30,120,600,new BigDecimal("50"));
+        assertThat(service.setPolicy(12L,old).offerGroupSize()).isEqualTo(7);
+        var updated=new Policy(false,120,30,120,600,new BigDecimal("50"),20);
+        assertThat(service.setPolicy(12L,updated).offerGroupSize()).isEqualTo(20);
+    }
     void create(){service.create(5L,"key",input);}
+    @Test void searchLongerRediscoversPrioritizesNewProvidersAndExcludesDeclines() {
+        candidates(3);create();var old=request;old.setStatus("UNMATCHED");
+        stored.get(0).setStatus("DECLINED");
+        stored.get(1).setStatus("EXPIRED");stored.get(1).setExpiresAt(Instant.now().minusSeconds(180));
+        stored.get(2).setStatus("EXPIRED");stored.get(2).setExpiresAt(Instant.now().minusSeconds(10));
+        candidates(4);
+        doAnswer(i -> {request=i.getArgument(0);request.setRequestId(2L);return request;}).when(requests).saveAndFlush(any());
+        when(offers.findAllByRequestIdOrderByOfferIdAsc(1L)).thenAnswer(i -> stored.stream().filter(o -> o.getRequestId().equals(1L)).toList());
+        when(offers.findAllByRequestIdOrderByOfferIdAsc(2L)).thenAnswer(i -> stored.stream().filter(o -> o.getRequestId().equals(2L)).toList());
+        var result=service.retry(5L,1L,"retry-key");
+        assertThat(result.requestId()).isEqualTo(2L);assertThat(old.getStatus()).isEqualTo("UNMATCHED");
+        assertThat(request.getRetryOfRequestId()).isEqualTo(1L);
+        assertThat(stored.stream().filter(o -> o.getRequestId().equals(2L))).extracting(BookingOffer::getProviderId).containsExactly(18L,16L);
+        verify(discovery,times(2)).search(eq(5L),any());verify(bookings,never()).reserveRequestBooking(any(),any());
+    }
+    @Test void searchLongerIsIdempotentAndCannotRestartMatchingOrPaidRequests() {
+        create();assertThatThrownBy(() -> service.retry(5L,1L,"retry-key")).isInstanceOf(ConflictException.class);
+        var old=request;old.setStatus("UNMATCHED");stored.get(0).setStatus("DECLINED");
+        when(requests.lockById(1L)).thenReturn(Optional.of(old));
+        doAnswer(i -> {request=i.getArgument(0);request.setRequestId(2L);return request;}).when(requests).saveAndFlush(any());
+        when(offers.findAllByRequestIdOrderByOfferIdAsc(1L)).thenReturn(List.of(stored.get(0)));
+        var result=service.retry(5L,1L,"retry-key");var retry=request;
+        when(requests.findByUserIdAndIdempotencyKey(5L,"retry-key")).thenReturn(Optional.of(retry));
+        assertThat(service.retry(5L,1L,"retry-key").requestId()).isEqualTo(result.requestId());
+        verify(requests,times(2)).saveAndFlush(any());
+        old.setJobId(70L);assertThatThrownBy(() -> service.retry(5L,1L,"other-key")).isInstanceOf(ConflictException.class);
+    }
+    @Test void searchLongerChecksOwnerAndCurrentAdvanceNotice() {
+        create();request.setStatus("UNMATCHED");stored.get(0).setStatus("EXPIRED");
+        assertThatThrownBy(() -> service.retry(6L,1L,"retry-key")).isInstanceOf(ResourceNotFoundException.class);
+        policy.setMinimumNoticeMinutes(10000);
+        assertThatThrownBy(() -> service.retry(5L,1L,"retry-key")).hasMessageContaining("minimum advance notice");
+        verify(requests,times(1)).saveAndFlush(any());
+    }
     void accepted(){create();service.accept(9L,1L);}
     Confirm contact(){return new Confirm("VISA","A","B","a@example.com","0771234567","Address","Colombo","Sri Lanka");}
     void paying(){accepted();when(checkout.checkout(any(),any(),any())).thenReturn(new Checkout("https://sandbox.payhere.lk/pay/checkout",Map.of(),"PAYMENT_PENDING"));service.confirm(5L,1L,contact());}
@@ -260,9 +352,62 @@ class BookingRequestServiceTest {
         service.notification(notification("2","pay-1"));assertThat(request.getStatus()).isEqualTo("CONFIRMED");
     }
     @Test void successAfterFailedPaymentDoesNotConfirmReleasedCapacity(){
-        paying();service.notification(notification("-2","pay-1"));assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
+        paying();service.notification(notification("-2","pay-1"));service.cancel(5L,1L);assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
         service.notification(notification("2","pay-1"));assertThat(request.getStatus()).isEqualTo("PAYMENT_REVIEW");
         assertThat(request.getPaymentStatus()).isEqualTo("REFUND_REVIEW");assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
+    }
+    @Test void failedCardRetainsReservationAndCanStartNewCheckoutWithinFifteenMinuteWindow() {
+        paying();var firstOrder=request.getPaymentOrderId();var deadline=request.getConfirmationExpiresAt();
+        service.notification(notification("-2","failed-1"));
+        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");
+        assertThat(job.getJobStatus()).isEqualTo("AWAITING_PAYMENT");
+        assertThat(service.paymentWindow(5L,1L,false).canPay()).isTrue();
+        service.confirm(5L,1L,contact());assertThat(request.getPaymentOrderId()).isNotEqualTo(firstOrder);
+        assertThat(request.getConfirmationExpiresAt()).isEqualTo(deadline);
+        assertThat(request.getStatus()).isEqualTo("PAYMENT_PENDING");assertThat(job.getPaymentStatus()).isEqualTo("PENDING");
+        verify(bookings,times(1)).reserveRequestBooking(any(),any());
+    }
+    @Test void staleFailedOrderCannotFailNewAttemptAndLateOldSuccessRequiresReview() {
+        paying();String oldOrder=request.getPaymentOrderId();service.notification(notification("-2","failure"));
+        service.confirm(5L,1L,contact());
+        when(requests.findByPaymentOrderId(oldOrder)).thenReturn(Optional.empty());
+        var oldNotice=new BookingPaymentNotice();oldNotice.setRequestId(1L);oldNotice.setPaymentOrderId(oldOrder);
+        when(notices.findFirstByPaymentOrderIdOrderByNoticeIdAsc(oldOrder)).thenReturn(Optional.of(oldNotice));
+        when(requests.findById(1L)).thenReturn(Optional.of(request));
+        var stale=new HashMap<>(notification("-2","failure-late"));stale.put("order_id",oldOrder);
+        service.notification(stale);assertThat(request.getStatus()).isEqualTo("PAYMENT_PENDING");
+        stale.put("status_code","2");stale.put("payment_id","old-success");service.notification(stale);
+        assertThat(request.getStatus()).isEqualTo("PAYMENT_REVIEW");assertThat(job.getPaymentStatus()).isEqualTo("PAID_REVIEW");
+    }
+    @Test void verifiedFailureResolvesUnknownPaymentAndPreservesOnlyRemainingDeadline() {
+        paying();var deadline=request.getConfirmationExpiresAt();request.setPaymentStartedAt(Instant.now().minusSeconds(1000));
+        service.expire(1L);assertThat(request.getStatus()).isEqualTo("PAYMENT_RECONCILIATION");
+        service.notification(notification("-2","known-failure"));
+        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");
+        assertThat(request.getConfirmationExpiresAt()).isEqualTo(deadline);
+        assertThat(service.paymentWindow(5L,1L,false).canPay()).isTrue();
+    }
+    @Test void providerCanExtendUnpaidDeadlineIdempotentlyWithinLimitAndCancel() {
+        accepted();assertThat(request.getConfirmationExpiresAt()).isAfter(Instant.now().plusSeconds(890));
+        var deadline=request.getConfirmationExpiresAt().plusSeconds(300);
+        service.extendPaymentDeadline(9L,1L,deadline);service.extendPaymentDeadline(9L,1L,deadline);
+        assertThat(service.paymentWindow(5L,1L,false).confirmationExpiresAt()).isEqualTo(deadline);
+        verify(events,times(2)).save(argThat(e -> "PAYMENT_DEADLINE_EXTENDED".equals(e.getEventType())));
+        assertThatThrownBy(() -> service.extendPaymentDeadline(9L,1L,request.getPaymentDeadlineLimit().plusSeconds(1)))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.extendPaymentDeadline(99L,1L,deadline)).isInstanceOf(ResourceNotFoundException.class);
+        service.providerCancel(9L,1L);service.providerCancel(9L,1L);
+        assertThat(request.getStatus()).isEqualTo("CANCELLED");assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
+    }
+    @Test void unpaidTimeoutAutoCancelsButUnknownOrPaidPaymentsCannotCancelOrExtend() {
+        accepted();request.setConfirmationExpiresAt(Instant.now().minusSeconds(1));
+        assertThat(service.paymentWindow(5L,1L,false).canPay()).isFalse();assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
+        request.setStatus("PAYMENT_PENDING");request.setPaymentStatus("PENDING");request.setPaymentStartedAt(Instant.now());
+        assertThatThrownBy(() -> service.providerCancel(9L,1L)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.extendPaymentDeadline(9L,1L,Instant.now().plusSeconds(900))).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.cancel(5L,1L)).isInstanceOf(ConflictException.class);
+        request.setStatus("CONFIRMED");request.setPaymentStatus("PAID");
+        assertThat(service.paymentWindow(9L,1L,true).canCancel()).isFalse();
     }
     @Test void chargebackIsNotOverwrittenByLaterSuccess(){
         paying();service.notification(notification("2","pay-1"));service.notification(notification("-3","pay-1"));

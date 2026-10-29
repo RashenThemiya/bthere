@@ -15,4 +15,9 @@ public class BookingOffer extends CreatedEntity {
     private Long providerLocationId;
     private String status;
     private Instant expiresAt;
+    @Column(precision=38,scale=2) private java.math.BigDecimal quotedAmount;
+    private String currencyCode;
+    @Column(precision=38,scale=2) private java.math.BigDecimal platformFeePercentage;
+    @Column(precision=38,scale=2) private java.math.BigDecimal platformFee;
+    @Column(precision=38,scale=2) private java.math.BigDecimal providerEarnings;
 }

@@ -61,6 +61,7 @@ public class BookingRequestService {
         p.setOptionId(optionId); p.setEnabled(input.enabled()); p.setMinimumNoticeMinutes(input.minimumNoticeMinutes());
         p.setOfferTimeoutSeconds(input.offerTimeoutSeconds()); p.setConfirmationTimeoutSeconds(input.confirmationTimeoutSeconds());
         p.setMatchingTimeoutSeconds(input.matchingTimeoutSeconds()); p.setMaximumRadiusKm(input.maximumRadiusKm());
+        if(input.offerGroupSize()!=null)p.setOfferGroupSize(input.offerGroupSize());
         policies.save(p); return policyView(p);
     }
     @Transactional(readOnly=true)
@@ -71,14 +72,37 @@ public class BookingRequestService {
     }
     private Policy policyView(BookingRequestPolicy p) {
         return new Policy(p.isEnabled(),p.getMinimumNoticeMinutes(),p.getOfferTimeoutSeconds(),
-                p.getConfirmationTimeoutSeconds(),p.getMatchingTimeoutSeconds(),p.getMaximumRadiusKm());
+                p.getConfirmationTimeoutSeconds(),p.getMatchingTimeoutSeconds(),p.getMaximumRadiusKm(),p.getOfferGroupSize());
     }
     @Transactional
     public View create(Long userId,String key,Create input) {
+        return createRound(userId,key,input,null,Set.of(),Set.of());
+    }
+    /** Explicit customer retry: keep the old round/history and re-run current discovery. */
+    @Transactional
+    public View retry(Long userId,Long id,String key) {
+        users.lockById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        var source=owned(userId,id);
+        if(!"OPEN_REQUEST".equals(source.getSelectionMode()) || !"UNMATCHED".equals(source.getStatus()) || source.getJobId()!=null)
+            throw new ConflictException("Only an unmatched OPEN_REQUEST without a booking can be retried");
+        var excluded=new HashSet<Long>();var contacted=new HashSet<Long>();var visited=new HashSet<Long>();
+        var round=source;
+        while(round!=null && visited.add(round.getRequestId())) {
+            for(var offer:offers.findAllByRequestIdOrderByOfferIdAsc(round.getRequestId())) {
+                contacted.add(offer.getProviderId());
+                if("DECLINED".equals(offer.getStatus()) || offer.getExpiresAt()!=null && offer.getExpiresAt().plusSeconds(120).isAfter(Instant.now()))
+                    excluded.add(offer.getProviderId());
+            }
+            round=round.getRetryOfRequestId()==null?null:requests.findById(round.getRetryOfRequestId())
+                    .filter(r -> userId.equals(r.getUserId())).orElseThrow(() -> new ConflictException("Retry history is invalid"));
+        }
+        return createRound(userId,key,read(source.getPayloadJson(),Create.class),id,excluded,contacted);
+    }
+    private View createRound(Long userId,String key,Create input,Long parent,Set<Long> excluded,Set<Long> contacted) {
         if(key==null || key.isBlank() || key.length()>100) throw new IllegalArgumentException("Idempotency-Key of 1–100 characters is required");
         // Serialize all creates for this customer, including concurrent retries before a row exists.
         users.lockById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        String payload=write(input), fingerprint=sha256(payload);
+        String payload=write(input), fingerprint=sha256(payload+(parent==null?"":"|retry:"+parent));
         var existing=requests.findByUserIdAndIdempotencyKey(userId,key);
         if(existing.isPresent()) {
             if(!fingerprint.equals(existing.get().getPayloadHash())) throw new ConflictException("Idempotency key was used with different inputs");
@@ -133,10 +157,12 @@ public class BookingRequestService {
                 .filter(c -> !direct || b.providerId().equals(c.providerId()))
                 .filter(c -> b.providerLocationId()==null || b.providerLocationId().equals(c.providerLocationId())).toList();
         var unique=new LinkedHashMap<Long,Candidate>(); matches.forEach(c -> unique.putIfAbsent(c.providerId(),c));
-        var candidates=List.copyOf(unique.values());
+        var candidates=unique.values().stream().filter(c -> !excluded.contains(c.providerId()))
+                .sorted(Comparator.comparing(c -> contacted.contains(c.providerId()))).toList();
         var request=new BookingRequest(); request.setUserId(userId); request.setIdempotencyKey(key); request.setPayloadHash(fingerprint);
         request.setMarketId(input.marketId()); request.setOptionId(b.optionId()); request.setSelectionMode(option.getProviderSelectionMode());
         request.setPayloadJson(payload); request.setCandidatesJson(write(candidates)); request.setStatus("MATCHING"); request.setPaymentStatus("NOT_STARTED");
+        request.setRetryOfRequestId(parent);
         request.setExpiresAt(Instant.now().plusSeconds(policy.getMatchingTimeoutSeconds()));
         requests.saveAndFlush(request);
         dispatch(request,policy);
@@ -158,32 +184,44 @@ public class BookingRequestService {
     }
     private void dispatch(BookingRequest r,BookingRequestPolicy p) {
         List<Candidate> candidates=readCandidates(r.getCandidatesJson());
-        // One offer at a time; the persisted queue is bounded to the first 100 nearest candidate rows.
-        if(!p.isEnabled() || !Instant.now().isBefore(r.getExpiresAt()) || r.getNextCandidate()>=candidates.size()) {
-            r.setStatus("UNMATCHED"); event(r,r.getUserId(),null,"BOOKING_UNMATCHED",null); return;
-        }
-        Candidate candidate=null;
-        while(r.getNextCandidate()<candidates.size()) {
-            var next=candidates.get(r.getNextCandidate());r.setNextCandidate(r.getNextCandidate()+1);
+        // Stored queue is bounded to the first 100 nearest candidate rows.
+        if(offers.findAllByRequestIdOrderByOfferIdAsc(r.getRequestId()).stream().anyMatch(o -> "PENDING".equals(o.getStatus())))return;
+        if(!p.isEnabled() || !Instant.now().isBefore(r.getExpiresAt())) {stop(r,"UNMATCHED");return;}
+        int limit="DIRECT_REQUEST".equals(r.getSelectionMode())?1:Math.max(1,Math.min(100,p.getOfferGroupSize()));
+        int sent=0;
+        Instant deadline=Instant.now().plusSeconds(p.getOfferTimeoutSeconds());
+        if(deadline.isAfter(r.getExpiresAt()))deadline=r.getExpiresAt();
+        while(r.getNextCandidate()<candidates.size() && sent<limit) {
+            if(!Instant.now().isBefore(deadline))break;
+            var candidate=candidates.get(r.getNextCandidate());r.setNextCandidate(r.getNextCandidate()+1);
+            BookingQuoteResponse quote;
             try {
-                var quote=bookings.quote(r.getUserId(),selected(r,next.providerId(),next.providerLocationId()));
-                if(!"LKR".equals(quote.currencyCode()) || quote.expectedAmount().signum()<=0) continue;
-                r.setQuotedAmount(quote.expectedAmount());r.setCurrencyCode(quote.currencyCode());
-                r.setPlatformFeePercentage(quote.platformFeePercentage());r.setPlatformFee(quote.platformFee());
-                r.setProviderEarnings(quote.providerEarnings());candidate=next;break;
+                quote=bookings.quote(r.getUserId(),selected(r,candidate.providerId(),candidate.providerLocationId()));
+                if(!"LKR".equals(quote.currencyCode()) || quote.expectedAmount().signum()<=0)continue;
             } catch(IllegalArgumentException|ResourceNotFoundException|ConflictException|CustomerEligibilityException unavailable) {
-                // The quote uses a separate transaction, so validation cannot poison dispatch.
+                continue; // Separate quote transaction cannot poison this dispatch transaction.
             }
+            if(!Instant.now().isBefore(deadline))break;
+            var offer=new BookingOffer();offer.setRequestId(r.getRequestId());offer.setProviderId(candidate.providerId());
+            offer.setProviderLocationId(candidate.providerLocationId());offer.setStatus("PENDING");offer.setExpiresAt(deadline);
+            offer.setQuotedAmount(quote.expectedAmount());offer.setCurrencyCode(quote.currencyCode());
+            offer.setPlatformFeePercentage(quote.platformFeePercentage());offer.setPlatformFee(quote.platformFee());
+            offer.setProviderEarnings(quote.providerEarnings());offers.saveAndFlush(offer);
+            if(sent==0) {
+                r.setQuotedAmount(quote.expectedAmount());r.setCurrencyCode(quote.currencyCode());
+                r.setPlatformFeePercentage(quote.platformFeePercentage());r.setPlatformFee(quote.platformFee());r.setProviderEarnings(quote.providerEarnings());
+            }
+            sent++;
+            event(r,providers.findById(candidate.providerId()).orElseThrow().getUserId(),offer.getOfferId(),"BOOKING_OFFER",deadline);
         }
-        if(candidate==null) {r.setStatus("UNMATCHED");event(r,r.getUserId(),null,"BOOKING_UNMATCHED",null);return;}
-        var offer=new BookingOffer(); offer.setRequestId(r.getRequestId()); offer.setProviderId(candidate.providerId());
-        offer.setProviderLocationId(candidate.providerLocationId()); offer.setStatus("PENDING");
-        offer.setExpiresAt(Instant.now().plusSeconds(p.getOfferTimeoutSeconds()).isBefore(r.getExpiresAt())
-                ?Instant.now().plusSeconds(p.getOfferTimeoutSeconds()):r.getExpiresAt());
-        offers.saveAndFlush(offer);
-        var provider=providers.findById(candidate.providerId()).orElseThrow();
-        event(r,provider.getUserId(),offer.getOfferId(),"BOOKING_OFFER",offer.getExpiresAt());
+        if(sent==0)stop(r,"UNMATCHED");
     }
+    private java.math.BigDecimal offeredAmount(BookingOffer o,BookingRequest r){return o.getQuotedAmount()==null?r.getQuotedAmount():o.getQuotedAmount();}
+    private String offeredCurrency(BookingOffer o,BookingRequest r){return o.getCurrencyCode()==null?r.getCurrencyCode():o.getCurrencyCode();}
+    private java.math.BigDecimal offeredPercentage(BookingOffer o,BookingRequest r){return o.getQuotedAmount()==null?r.getPlatformFeePercentage():o.getPlatformFeePercentage();}
+    private java.math.BigDecimal offeredFee(BookingOffer o,BookingRequest r){return o.getQuotedAmount()==null?r.getPlatformFee():o.getPlatformFee();}
+    private java.math.BigDecimal offeredNet(BookingOffer o,BookingRequest r){return o.getQuotedAmount()==null?r.getProviderEarnings():o.getProviderEarnings();}
+
     @Transactional
     public View get(Long userId,Long id) { var r=owned(userId,id); tick(r); return view(r); }
     @Transactional
@@ -195,8 +233,8 @@ public class BookingRequestService {
             if(!"MATCHING".equals(r.getStatus()) || !"PENDING".equals(offer.getStatus()) || !Instant.now().isBefore(offer.getExpiresAt())) continue;
             var b=read(r.getPayloadJson(),Create.class).booking();
             result.add(new Offer(offer.getOfferId(),r.getRequestId(),offer.getStatus(),offer.getExpiresAt(),b.serviceTypeId(),b.optionId(),
-                    b.deliveryMode(),b.startDatetime(),b.expectedEndDatetime(),b.requestedPickupTime(),offer.getProviderLocationId(),r.getQuotedAmount(),r.getCurrencyCode(),
-                    b.pickup(),b.destination(),b.meetingPoint(),r.getPlatformFeePercentage(),r.getPlatformFee(),r.getProviderEarnings()));
+                    b.deliveryMode(),b.startDatetime(),b.expectedEndDatetime(),b.requestedPickupTime(),offer.getProviderLocationId(),offeredAmount(offer,r),offeredCurrency(offer,r),
+                    b.pickup(),b.destination(),b.meetingPoint(),offeredPercentage(offer,r),offeredFee(offer,r),offeredNet(offer,r)));
         }
         return result;
     }
@@ -207,18 +245,24 @@ public class BookingRequestService {
         if(!providerId.equals(initial.getProviderId())) throw new ResourceNotFoundException("Offer not found");
         var r=locked(initial.getRequestId());
         var offer=offers.findById(offerId).orElseThrow();
+        if(r.getJobId()!=null && !"MATCHING".equals(r.getStatus())) {
+            var existingJob=jobs.findById(r.getJobId()).orElseThrow();
+            if(providerId.equals(existingJob.getAssignedServiceProviderId()) && !"CANCELLED".equals(r.getStatus()))return view(r);
+            throw new ConflictException("Already accepted by another provider");
+        }
         if("ACCEPTED".equals(offer.getStatus()) && r.getJobId()!=null) return view(r);
         if(!"MATCHING".equals(r.getStatus()) || !"PENDING".equals(offer.getStatus())
                 || !Instant.now().isBefore(offer.getExpiresAt()) || !Instant.now().isBefore(r.getExpiresAt()))
-            throw new ConflictException("Offer is no longer available");
+            throw new ConflictException("CANCELLED".equals(offer.getStatus()) && r.getJobId()!=null
+                    ?"Already accepted by another provider":"Offer is no longer available");
         var policy=policies.findById(r.getOptionId()).filter(BookingRequestPolicy::isEnabled)
                 .orElseThrow(() -> new ConflictException("Booking requests disabled for this option"));
         var job=bookings.reserveRequestBooking(r.getUserId(),selected(r,providerId,offer.getProviderLocationId()));
-        if(r.getQuotedAmount()==null || r.getQuotedAmount().compareTo(job.getExpectedAmount())!=0
-                || !Objects.equals(r.getCurrencyCode(),job.getCurrencyCode())
-                || zero(r.getPlatformFeePercentage()).compareTo(zero(job.getPlatformFeePercentage()))!=0
-                || zero(r.getPlatformFee()).compareTo(zero(job.getPlatformFee()))!=0
-                || net(r.getQuotedAmount(),r.getPlatformFee(),r.getProviderEarnings()).compareTo(
+        if(offeredAmount(offer,r)==null || offeredAmount(offer,r).compareTo(job.getExpectedAmount())!=0
+                || !Objects.equals(offeredCurrency(offer,r),job.getCurrencyCode())
+                || zero(offeredPercentage(offer,r)).compareTo(zero(job.getPlatformFeePercentage()))!=0
+                || zero(offeredFee(offer,r)).compareTo(zero(job.getPlatformFee()))!=0
+                || net(offeredAmount(offer,r),offeredFee(offer,r),offeredNet(offer,r)).compareTo(
                         net(job.getExpectedAmount(),job.getPlatformFee(),job.getProviderEarnings()))!=0)
             throw new ConflictException("The offered price or platform fee changed; cancel this request and request a new quote");
         var providerMarket=job.getMarketId();
@@ -227,8 +271,16 @@ public class BookingRequestService {
         r.setPlatformFeePercentage(zero(job.getPlatformFeePercentage()));r.setPlatformFee(zero(job.getPlatformFee()));
         r.setProviderEarnings(net(job.getExpectedAmount(),job.getPlatformFee(),job.getProviderEarnings()));
         if(!"LKR".equals(job.getCurrencyCode())) throw new IllegalArgumentException("Only LKR is supported");
-        offer.setStatus("ACCEPTED"); r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");
+        offer.setStatus("ACCEPTED");
+        for(var other:offers.findAllByRequestIdOrderByOfferIdAsc(r.getRequestId())) {
+            if(!other.getOfferId().equals(offerId) && "PENDING".equals(other.getStatus())) {
+                other.setStatus("CANCELLED");
+                event(r,providers.findById(other.getProviderId()).orElseThrow().getUserId(),other.getOfferId(),"OFFER_CANCELLED",null);
+            }
+        }
+        r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");
         r.setConfirmationExpiresAt(Instant.now().plusSeconds(policy.getConfirmationTimeoutSeconds()));
+        r.setPaymentDeadlineLimit(r.getConfirmationExpiresAt().plusSeconds(900));
         event(r,r.getUserId(),offerId,"PROVIDER_ACCEPTED",r.getConfirmationExpiresAt());
         event(r,userId,offerId,"OFFER_ACCEPTED",null);
         return view(r);
@@ -248,7 +300,7 @@ public class BookingRequestService {
         if("DECLINED".equals(offer.getStatus())) return view(r);
         if(!"MATCHING".equals(r.getStatus()) || !"PENDING".equals(offer.getStatus())) throw new ConflictException("Offer no longer pending");
         offer.setStatus("DECLINED");event(r,userId,offerId,"OFFER_DECLINED",null);
-        dispatch(r,policies.findById(r.getOptionId()).orElseThrow()); return view(r);
+        tick(r); return view(r);
     }
     @Transactional
     public Checkout confirm(Long userId,Long id,Confirm contact) {
@@ -266,6 +318,7 @@ public class BookingRequestService {
         if(!job.getStartDatetime().atZone(zone).toInstant().isAfter(Instant.now())) throw new ConflictException("Booking start time has passed");
         r.setPaymentOrderId("BR-"+UUID.randomUUID()); r.setCheckoutMethod(contact.cardMethod());
         var session=checkout.checkout(r,job,contact);
+        job.setPaymentStatus("PENDING");
         r.setPaymentFundingMode(checkout.fundingMode());
         r.setCheckoutJson(write(session)); r.setStatus("PAYMENT_PENDING"); r.setPaymentStatus("PENDING"); r.setPaymentStartedAt(Instant.now());
         return session;
@@ -330,6 +383,48 @@ public class BookingRequestService {
         confirmService(r,job);return view(r);
     }
     private String requestMethod(BookingRequest r) {return read(r.getPayloadJson(),Create.class).booking().paymentMethod();}
+    private BookingRequest providerOwnedRequest(Long userId,Long id) {
+        var r=locked(id);
+        if(r.getJobId()==null)throw new ResourceNotFoundException("Accepted booking request not found");
+        var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+        if(!providerId(userId).equals(job.getAssignedServiceProviderId()))throw new ResourceNotFoundException("Booking request not found");
+        return r;
+    }
+    private boolean unpaidWindow(BookingRequest r) {
+        return "AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) && r.getConfirmationExpiresAt()!=null
+                && Instant.now().isBefore(r.getConfirmationExpiresAt())
+                && Set.of("NOT_STARTED","FAILED").contains(r.getPaymentStatus());
+    }
+    @Transactional
+    public PaymentWindow paymentWindow(Long userId,Long id,boolean provider) {
+        var r=provider?providerOwnedRequest(userId,id):owned(userId,id);tick(r);
+        boolean unpaid=unpaidWindow(r);
+        return new PaymentWindow(id,r.getStatus(),r.getPaymentStatus(),r.getConfirmationExpiresAt(),r.getPaymentDeadlineLimit(),
+                !provider && unpaid,provider?unpaid:Set.of("MATCHING","AWAITING_CUSTOMER_CONFIRMATION","UNMATCHED","EXPIRED","CANCELLED").contains(r.getStatus()),
+                provider && unpaid && r.getPaymentDeadlineLimit()!=null && r.getConfirmationExpiresAt().isBefore(r.getPaymentDeadlineLimit()));
+    }
+    @Transactional
+    public View providerCancel(Long userId,Long id) {
+        var r=providerOwnedRequest(userId,id);
+        if("CANCELLED".equals(r.getStatus()))return view(r);
+        if(!unpaidWindow(r))throw new ConflictException("Only an accepted unpaid request can be cancelled; pending or paid payments require reconciliation/refund");
+        stop(r,"CANCELLED");audit.record(userId,"PROVIDER_CANCELLED_UNPAID_REQUEST","BOOKING_REQUEST",id,null,view(r));return view(r);
+    }
+    @Transactional
+    public View extendPaymentDeadline(Long userId,Long id,Instant deadline) {
+        var r=providerOwnedRequest(userId,id);
+        if(!unpaidWindow(r))throw new ConflictException("Only an unexpired unpaid confirmation window can be extended");
+        if(deadline.equals(r.getConfirmationExpiresAt()))return view(r);
+        var job=jobs.findById(r.getJobId()).orElseThrow();
+        var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
+        if(r.getPaymentDeadlineLimit()==null || !deadline.isAfter(r.getConfirmationExpiresAt())
+                || deadline.isAfter(r.getPaymentDeadlineLimit()) || !deadline.isBefore(job.getStartDatetime().atZone(zone).toInstant()))
+            throw new IllegalArgumentException("Deadline must extend the current window, stay within its extension limit and precede service start");
+        var previous=r.getConfirmationExpiresAt();r.setConfirmationExpiresAt(deadline);
+        event(r,r.getUserId(),null,"PAYMENT_DEADLINE_EXTENDED",deadline);event(r,userId,null,"PAYMENT_DEADLINE_EXTENDED",deadline);
+        audit.record(userId,"PAYMENT_DEADLINE_EXTENDED","BOOKING_REQUEST",id,Map.of("deadline",previous),Map.of("deadline",deadline));
+        return view(r);
+    }
     private boolean paymentReady(Job job) {
         return "CARD".equals(job.getPaymentMethod()) && "PAID".equals(job.getPaymentStatus())
             || "WALLET".equals(job.getPaymentMethod()) && "RESERVED".equals(job.getPaymentStatus());
@@ -357,7 +452,9 @@ public class BookingRequestService {
     @Transactional
     public void notification(Map<String,String> params) {
         checkout.verify(params);
-        var found=requests.findByPaymentOrderId(params.get("order_id")).orElseThrow(() -> new ResourceNotFoundException("Payment order not found"));
+        var found=requests.findByPaymentOrderId(params.get("order_id")).orElseGet(() ->
+                notices.findFirstByPaymentOrderIdOrderByNoticeIdAsc(params.get("order_id"))
+                    .flatMap(n -> requests.findById(n.getRequestId())).orElseThrow(() -> new ResourceNotFoundException("Payment order not found")));
         var r=locked(found.getRequestId()); var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow();
         if("MOCK".equals(r.getPaymentFundingMode()))throw new ConflictException("Merchant notifications cannot fund mock bookings");
         if(!"CARD".equals(job.getPaymentMethod()))throw new ConflictException("Gateway notifications cannot fund WALLET bookings");
@@ -372,7 +469,18 @@ public class BookingRequestService {
             return;
         }
         var notice=new BookingPaymentNotice();notice.setRequestId(r.getRequestId());notice.setPaymentId(params.get("payment_id"));
+        notice.setPaymentOrderId(params.get("order_id"));
         notice.setStatusCode(status);notice.setReceivedAt(Instant.now());notices.saveAndFlush(notice);
+        if(!Objects.equals(r.getPaymentOrderId(),params.get("order_id"))) {
+            if("2".equals(status)) {
+                if(Set.of("PAID","SETTLED","CHARGEDBACK").contains(r.getPaymentStatus()))event(r,r.getUserId(),null,"DUPLICATE_PAYMENT_REVIEW",null);
+                else {
+                    r.setPaymentStatus("REFUND_REVIEW");r.setGatewayPaymentId(params.get("payment_id"));job.setPaymentStatus("PAID_REVIEW");stop(r,"PAYMENT_REVIEW");
+                }
+            }
+            if("-3".equals(status))event(r,r.getUserId(),null,"PAYMENT_REVIEW_REQUIRED",null);
+            return; // A stale failed order cannot fail a newer checkout.
+        }
         if("-3".equals(status)) {
             if(r.getGatewayPaymentId()!=null && !r.getGatewayPaymentId().equals(params.get("payment_id"))) {
                 event(r,r.getUserId(),null,"DUPLICATE_PAYMENT_REVIEW",null);return;
@@ -405,8 +513,13 @@ public class BookingRequestService {
             }
             r.setGatewayPaymentId(params.get("payment_id"));r.setPaymentStatus("PAID");job.setPaymentStatus("PAID");
             confirmService(r,job);
-        } else if(Set.of("-1","-2").contains(status) && "PAYMENT_PENDING".equals(r.getStatus())) {
-            r.setGatewayPaymentId(params.get("payment_id")); r.setPaymentStatus("FAILED"); job.setPaymentStatus("FAILED"); stop(r,"PAYMENT_FAILED");
+        } else if(Set.of("-1","-2").contains(status) && Set.of("PAYMENT_PENDING","PAYMENT_RECONCILIATION").contains(r.getStatus())) {
+            r.setGatewayPaymentId(params.get("payment_id")); r.setPaymentStatus("FAILED"); job.setPaymentStatus("FAILED");
+            if(r.getConfirmationExpiresAt()!=null && Instant.now().isBefore(r.getConfirmationExpiresAt())) {
+                r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");
+                event(r,r.getUserId(),null,"PAYMENT_FAILED",r.getConfirmationExpiresAt());
+                event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"PAYMENT_FAILED",r.getConfirmationExpiresAt());
+            } else stop(r,"EXPIRED");
         }
         // Pending or stale failure callbacks never undo a successful payment.
     }
@@ -513,11 +626,14 @@ public class BookingRequestService {
         if("MATCHING".equals(r.getStatus())) {
             var pending=offers.findAllByRequestIdOrderByOfferIdAsc(r.getRequestId()).stream().filter(o -> "PENDING".equals(o.getStatus())).toList();
             if(!Instant.now().isBefore(r.getExpiresAt())) {stop(r,"UNMATCHED");return;}
-            if(!pending.isEmpty() && !Instant.now().isBefore(pending.get(0).getExpiresAt())) {
-                pending.get(0).setStatus("EXPIRED");
-                event(r,providers.findById(pending.get(0).getProviderId()).orElseThrow().getUserId(),pending.get(0).getOfferId(),"OFFER_EXPIRED",null);
-                dispatch(r,policies.findById(r.getOptionId()).orElseThrow());
+            for(var offer:pending) {
+                if(!Instant.now().isBefore(offer.getExpiresAt())) {
+                    offer.setStatus("EXPIRED");
+                    event(r,providers.findById(offer.getProviderId()).orElseThrow().getUserId(),offer.getOfferId(),"OFFER_EXPIRED",null);
+                }
             }
+            if(pending.stream().noneMatch(o -> "PENDING".equals(o.getStatus())))
+                dispatch(r,policies.findById(r.getOptionId()).orElseThrow());
         } else if("AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) && !Instant.now().isBefore(r.getConfirmationExpiresAt())) stop(r,"EXPIRED");
         else if("PAYMENT_PENDING".equals(r.getStatus()) && Instant.now().isAfter(r.getPaymentStartedAt().plus(Duration.ofMinutes(15)))) {
             r.setStatus("PAYMENT_RECONCILIATION");

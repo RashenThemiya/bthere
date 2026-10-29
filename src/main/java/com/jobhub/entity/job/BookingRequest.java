@@ -24,6 +24,7 @@ public class BookingRequest extends AuditedEntity {
     @Column(columnDefinition = "LONGTEXT") private String payloadJson;
     @Column(columnDefinition = "LONGTEXT") private String candidatesJson;
     private int nextCandidate;
+    private Long retryOfRequestId;
     private String status;
     private java.math.BigDecimal quotedAmount;
     @Column(precision=5,scale=2) private java.math.BigDecimal platformFeePercentage;
@@ -33,6 +34,7 @@ public class BookingRequest extends AuditedEntity {
     @Column(unique=true) private Long jobId;
     private Instant expiresAt;
     private Instant confirmationExpiresAt;
+    private Instant paymentDeadlineLimit;
     private Instant paymentStartedAt;
     @Column(length = 100) private String paymentOrderId;
     @Column(length = 100) private String gatewayPaymentId;

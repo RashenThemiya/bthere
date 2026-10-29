@@ -22,6 +22,9 @@ public class CustomerBookingRequestController {
                        @Valid @RequestBody Create input) {return service.create(user.id(),key,input);}
     @GetMapping("/booking-requests/{id}")
     public View get(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.get(user.id(),id);}
+    @PostMapping("/booking-requests/{id}/retry") @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    public View retry(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id,
+                      @RequestHeader("Idempotency-Key") String key) {return service.retry(user.id(),id,key);}
     @PostMapping("/booking-requests/{id}/confirm")
     public Checkout confirm(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id,@Valid @RequestBody Confirm input) {
         return service.confirm(user.id(),id,input);
@@ -34,6 +37,8 @@ public class CustomerBookingRequestController {
     }
     @PostMapping("/booking-requests/{id}/cancel")
     public View cancel(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.cancel(user.id(),id);}
+    @GetMapping("/booking-requests/{id}/payment-window")
+    public PaymentWindow paymentWindow(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.paymentWindow(user.id(),id,false);}
     @GetMapping("/bookings/{jobId}/verification-codes")
     public Codes codes(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long jobId) {return service.customerCodes(user.id(),jobId);}
     @PostMapping("/bookings/{jobId}/confirm-completion")

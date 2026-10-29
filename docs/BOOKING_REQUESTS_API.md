@@ -49,6 +49,33 @@ to select `confirm-mock-card` versus the existing hosted `/confirm` route.
 See [MOCK booking card contract](MOCK_BOOKING_CARD_API.md). WALLET is unchanged.
 Implemented locally; deployment is not verified.
 
+## Accepted unpaid booking window
+
+New policies default to a 15-minute confirmation window. Definite card failure
+keeps an unpaid booking retryable until its deadline. Assigned providers can
+cancel unpaid requests or extend their deadline by up to another 15 minutes;
+customers retain unpaid cancellation. Read action flags via payment-window.
+See [payment window APIs](UNPAID_BOOKING_WINDOW_API.md) for full examples,
+errors and the unknown-payment reconciliation exception. Local implementation;
+deployment is not verified.
+
+## Search longer after UNMATCHED
+
+Customer POST `/api/v1/customers/me/booking-requests/{id}/retry`, no body,
+Idempotency-Key required, creates a new matching round from current discovery.
+New providers are prioritized; declined providers are excluded and other contacted
+providers have a 120-second post-deadline cooldown. See
+[Search longer contract](BOOKING_SEARCH_LONGER_API.md) for responses/errors.
+Implemented locally; deployment is not verified.
+
+## Grouped OPEN_REQUEST dispatch
+
+OPEN_REQUEST now broadcasts in configurable groups, default 20; the first valid
+acceptance wins and cancels remaining offers. DIRECT_REQUEST remains single-target.
+See [grouped offers contract](GROUPED_BOOKING_OFFERS_API.md) and its additive
+schema migration. This update supersedes older sequential-offer descriptions
+below. Implemented locally; deployment is not verified.
+
 ## Admin configuration
 
 SUPER_ADMIN:

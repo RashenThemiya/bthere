@@ -10,7 +10,8 @@ public class BookingRequestPolicy {
     private boolean enabled;
     private int minimumNoticeMinutes = 120;
     private int offerTimeoutSeconds = 60;
-    private int confirmationTimeoutSeconds = 120;
+    @Column(nullable=false) private int offerGroupSize = 20;
+    private int confirmationTimeoutSeconds = 900;
     private int matchingTimeoutSeconds = 600;
     private BigDecimal maximumRadiusKm = new BigDecimal("50");
 }

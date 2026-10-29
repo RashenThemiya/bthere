@@ -22,7 +22,13 @@ public final class BookingRequestsApi {
                          @Min(15) @Max(600) int offerTimeoutSeconds,
                          @Min(30) @Max(900) int confirmationTimeoutSeconds,
                          @Min(60) @Max(3600) int matchingTimeoutSeconds,
-                         @NotNull @DecimalMin("0.1") @DecimalMax("500") BigDecimal maximumRadiusKm) {}
+                         @NotNull @DecimalMin("0.1") @DecimalMax("500") BigDecimal maximumRadiusKm,
+                         @Min(1) @Max(100) Integer offerGroupSize) {
+        public Policy(boolean enabled,int minimumNoticeMinutes,int offerTimeoutSeconds,
+                      int confirmationTimeoutSeconds,int matchingTimeoutSeconds,BigDecimal maximumRadiusKm) {
+            this(enabled,minimumNoticeMinutes,offerTimeoutSeconds,confirmationTimeoutSeconds,matchingTimeoutSeconds,maximumRadiusKm,null);
+        }
+    }
     public record View(Long requestId, String status, String selectionMode, Long offerId,
                        Long providerId, Instant offerExpiresAt, Instant confirmationExpiresAt,
                        Long jobId, String paymentStatus, BigDecimal expectedAmount, String currencyCode,
@@ -46,6 +52,9 @@ public final class BookingRequestsApi {
                           @NotBlank @Size(max=100) String country) {}
     public record Checkout(String actionUrl, Map<String,String> fields, String status) {}
     public record MockCard(@NotNull @Positive Long methodId) {}
+    public record PaymentDeadline(@NotNull Instant confirmationExpiresAt) {}
+    public record PaymentWindow(Long requestId,String status,String paymentStatus,Instant confirmationExpiresAt,
+                                Instant paymentDeadlineLimit,boolean canPay,boolean canCancel,boolean canExtend) {}
     public record Code(@NotBlank @Pattern(regexp="[0-9]{6}") String code) {}
     public record Codes(String purpose, String code, Instant expiresAt) {}
     public record Transition(boolean successful, String status) {}

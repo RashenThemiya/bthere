@@ -31,4 +31,12 @@ public class ProviderBookingOfferController {
     public List<BookingDispatchEvent> events(@AuthenticationPrincipal AuthenticatedUser user,@RequestParam(defaultValue="0") Long after){
         if(after<0)throw new IllegalArgumentException("after must be nonnegative");return service.events(user.id(),after);
     }
+    @GetMapping("/booking-requests/{id}/payment-window")
+    public PaymentWindow paymentWindow(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.paymentWindow(user.id(),id,true);}
+    @PostMapping("/booking-requests/{id}/cancel")
+    public View cancel(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.providerCancel(user.id(),id);}
+    @PutMapping("/booking-requests/{id}/payment-deadline")
+    public View extend(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id,@Valid @RequestBody PaymentDeadline input) {
+        return service.extendPaymentDeadline(user.id(),id,input.confirmationExpiresAt());
+    }
 }

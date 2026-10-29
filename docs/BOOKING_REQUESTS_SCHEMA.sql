@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS booking_request_policy (
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     minimum_notice_minutes INT NOT NULL DEFAULT 120,
     offer_timeout_seconds INT NOT NULL DEFAULT 60,
-    confirmation_timeout_seconds INT NOT NULL DEFAULT 120,
+    offer_group_size INT NOT NULL DEFAULT 20,
+    confirmation_timeout_seconds INT NOT NULL DEFAULT 900,
     matching_timeout_seconds INT NOT NULL DEFAULT 600,
     maximum_radius_km DECIMAL(38,2) DEFAULT 50
 );
@@ -21,12 +22,14 @@ CREATE TABLE IF NOT EXISTS booking_request (
     payload_json LONGTEXT,
     candidates_json LONGTEXT,
     next_candidate INT NOT NULL DEFAULT 0,
+    retry_of_request_id BIGINT NULL,
     status VARCHAR(255),
     quoted_amount DECIMAL(38,2),
     currency_code VARCHAR(255),
     job_id BIGINT,
     expires_at TIMESTAMP(6) NULL,
     confirmation_expires_at TIMESTAMP(6) NULL,
+    payment_deadline_limit TIMESTAMP(6) NULL,
     payment_started_at TIMESTAMP(6) NULL,
     payment_order_id VARCHAR(100),
     gateway_payment_id VARCHAR(100),
@@ -50,6 +53,11 @@ CREATE TABLE IF NOT EXISTS booking_offer (
     request_id BIGINT NOT NULL,
     provider_id BIGINT,
     provider_location_id BIGINT,
+    quoted_amount DECIMAL(38,2),
+    currency_code VARCHAR(255),
+    platform_fee_percentage DECIMAL(38,2),
+    platform_fee DECIMAL(38,2),
+    provider_earnings DECIMAL(38,2),
     status VARCHAR(255),
     expires_at TIMESTAMP(6) NULL,
     created_at DATETIME(6) NOT NULL,
@@ -60,9 +68,11 @@ CREATE TABLE IF NOT EXISTS booking_offer (
 CREATE TABLE IF NOT EXISTS booking_payment_notice (
     notice_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     request_id BIGINT NOT NULL,
+    payment_order_id VARCHAR(100) NULL,
     payment_id VARCHAR(100),
     status_code VARCHAR(255),
     received_at TIMESTAMP(6) NULL,
+    INDEX idx_booking_notice_order (payment_order_id),
     CONSTRAINT uk_booking_payment_notice UNIQUE (payment_id,status_code),
     CONSTRAINT fk_booking_notice_request FOREIGN KEY (request_id) REFERENCES booking_request(request_id)
 );

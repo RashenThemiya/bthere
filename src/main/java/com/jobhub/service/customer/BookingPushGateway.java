@@ -37,7 +37,7 @@ public class BookingPushGateway {
         if(event.getExpiresAt()!=null)data.put("expiresAt",event.getExpiresAt().toString());
         boolean incoming="BOOKING_OFFER".equals(event.getEventType());
         // Offer notifications ring through the app-created channel. Revocations are data updates.
-        if(incoming || Set.of("PROVIDER_ACCEPTED","BOOKING_CONFIRMED","COMPLETION_REQUESTED","BOOKING_COMPLETED").contains(event.getEventType())) {
+        if(incoming || Set.of("PROVIDER_ACCEPTED","BOOKING_CONFIRMED","COMPLETION_REQUESTED","BOOKING_COMPLETED","PAYMENT_FAILED","PAYMENT_DEADLINE_EXTENDED").contains(event.getEventType())) {
             var notification=message.putObject("notification");notification.put("title",incoming?"New booking request":"Booking update");
             notification.put("body",incoming?"Open the app to accept before the offer expires.":"Open the app to view your booking.");
         }

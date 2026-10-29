@@ -8,6 +8,31 @@ PayHere customer-confirmed bookings now support automatic provider earnings cred
 See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
 payment references, earnings history and environment separation.
 
+## Accepted booking payment actions
+
+Use GET `/api/v1/customers/me/booking-requests/{id}/payment-window` to show Pay now,
+retry, cancellation and the server deadline. New policies default to 15 minutes;
+the accepted provider can extend within a bounded extra 15 minutes. Known failures
+are retryable; unknown card outcomes require reconciliation. See
+[payment window contract](UNPAID_BOOKING_WINDOW_API.md). Local implementation;
+deployment is not verified.
+
+## Search longer
+
+After an UNMATCHED OPEN_REQUEST, show an explicit Search longer action using
+`POST /api/v1/customers/me/booking-requests/{id}/retry` with no body and a fresh
+Idempotency-Key. Poll the returned new requestId; the old round stays in history.
+See [retry contract](BOOKING_SEARCH_LONGER_API.md). Local implementation;
+deployment is not verified.
+
+## Grouped OPEN_REQUEST offers
+
+OPEN_REQUEST uses groups of up to 20 eligible providers; first valid acceptance
+wins. While MATCHING show “Finding a provider”; providerId in the legacy View is
+only the first pending offer, not an assigned provider. See
+[grouped booking contract](GROUPED_BOOKING_OFFERS_API.md). Local implementation;
+deployment is not verified.
+
 ## MOCK booking card checkout (2026-10-29)
 
 OPEN_REQUEST and DIRECT_REQUEST now support an explicit synthetic card confirmation
