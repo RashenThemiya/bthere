@@ -330,7 +330,7 @@ class BookingRequestServiceTest {
     @Test void verifiedSuccessConfirmsAndStoresProtectedStartCode(){
         paying();service.notification(notification("2","pay-1"));
         assertThat(request.getStatus()).isEqualTo("CONFIRMED");assertThat(job.getPaymentStatus()).isEqualTo("PAID");
-        assertThat(codes.decrypt(request.getStartCode())).matches("[0-9]{6}");
+        assertThat(codes.decrypt(request.getStartCode())).matches("[0-9]{4}");
         verify(checkout).verify(any());verify(notices).saveAndFlush(any());
     }
     @Test void replayedNotificationDoesNotRegenerateCodesOrTransitionAgain(){
@@ -415,10 +415,18 @@ class BookingRequestServiceTest {
     }
     @Test void codeAttemptsPersistAndLockAtFiveWithoutStateChange(){
         paying();service.notification(notification("2","pay-1"));job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));
-        String wrong=codes.decrypt(request.getStartCode()).equals("000000")?"000001":"000000";
+        String wrong=codes.decrypt(request.getStartCode()).equals("0000")?"0001":"0000";
         for(int i=0;i<5;i++)assertThat(service.verifyStartCode(9L,70L,wrong).successful()).isFalse();
         assertThat(request.getStartAttempts()).isEqualTo(5);assertThat(service.verifyStartCode(9L,70L,codes.decrypt(request.getStartCode())).status()).isEqualTo("CODE_LOCKED");
         assertThat(request.getStatus()).isEqualTo("CONFIRMED");
+    }
+    @Test void legacyCodeRefreshKeepsFailedAttemptsAndExpiry() {
+        paying();service.notification(notification("2","pay-1"));job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));
+        request.setStartCode(codes.encrypt("012345"));request.setStartAttempts(3);var expiry=request.getCodeExpiresAt();
+        var current=service.customerCodes(5L,70L);assertThat(current.code()).matches("[0-9]{4}");
+        assertThat(service.customerCodes(5L,70L).code()).isEqualTo(current.code());
+        assertThat(request.getStartAttempts()).isEqualTo(3);assertThat(current.expiresAt()).isEqualTo(expiry);
+        assertThat(service.verifyStartCode(9L,70L,current.code()).successful()).isTrue();
     }
     @Test void startNeedsCodeButCompletionNeedsOnlyOwningCustomerConfirmation(){
         paying();service.notification(notification("2","pay-1"));job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));

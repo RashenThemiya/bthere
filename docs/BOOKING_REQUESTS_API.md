@@ -247,7 +247,7 @@ already claimed offers return 409. Declined/expired direct offers end UNMATCHED.
 
 ## Start code and customer completion confirmation
 
-Customer code response: {purpose:"START",code:"six digits",expiresAt}.
+Customer code response: {purpose:"START",code:"four digits",expiresAt}.
 The START code is available only for CONFIRMED, is encrypted at rest, and is
 never in provider responses or push events. It becomes available 30 minutes before
 scheduled start and expires 24 hours after expected end unless support issues a

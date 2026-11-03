@@ -51,4 +51,16 @@ class BookingCompletionControllerTest {
         mvc.perform(post("/api/v1/providers/me/bookings/70/start")).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
+    @Test void startAcceptsFourDigitsIncludingLeadingZero() throws Exception {
+        when(service.verifyStartCode(5L,70L,"0123")).thenReturn(new Transition(true,"IN_PROGRESS"));
+        mvc.perform(post("/api/v1/providers/me/bookings/70/start").contentType("application/json").content("{\"code\":\"0123\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.successful").value(true));
+        verify(service).verifyStartCode(5L,70L,"0123");
+    }
+    @Test void startRejectsOldSixDigitAndNonNumericCode() throws Exception {
+        for(String code:List.of("123456","123","12345","abcd"))
+            mvc.perform(post("/api/v1/providers/me/bookings/70/start").contentType("application/json").content("{\"code\":\""+code+"\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
 }

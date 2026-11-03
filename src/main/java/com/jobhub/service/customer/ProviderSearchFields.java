@@ -35,8 +35,7 @@ public class ProviderSearchFields {
 
     public List<ServiceCustomFieldResponse> definitions(Long serviceId, Long optionId) {
         return fields.listForOption(serviceId, optionId, false).stream()
-                .filter(f -> "PROVIDER_REQUIREMENT".equals(f.scope()) && f.customerVisible())
-                .filter(f -> f.condition() == null || f.condition().isNull()).toList();
+                .filter(f -> "PROVIDER_REQUIREMENT".equals(f.scope()) && f.customerVisible()).toList();
     }
 
     public List<ProviderFilterDefinition> schema(List<ServiceCustomFieldResponse> definitions) {
@@ -81,12 +80,15 @@ public class ProviderSearchFields {
                                           List<ServiceCustomFieldResponse> definitions) {
         if (definitions.isEmpty()) return Map.of();
         Map<Long, JsonNode> result = new LinkedHashMap<>();
-        for (var answer : fields.resolvedProviderAnswers(assignment)) {
-            if (!"APPROVED".equals(answer.verificationStatus())
-                    && !("PROVIDER_PROFILE".equals(answer.valueSource()) && "PROVIDED".equals(answer.verificationStatus()))) continue;
+        var approved = fields.resolvedProviderAnswers(assignment).stream()
+                .filter(answer -> "APPROVED".equals(answer.verificationStatus())
+                        || "PROVIDER_PROFILE".equals(answer.valueSource()) && "PROVIDED".equals(answer.verificationStatus()))
+                .toList();
+        Map<String, JsonNode> byCode = new HashMap<>();
+        approved.forEach(answer -> { if (answer.fieldCode() != null) byCode.put(answer.fieldCode(), answer.value()); });
+        for (var answer : approved) {
             definitions.stream().filter(f -> f.fieldId().equals(answer.fieldId()) && f.customerVisible()
-                            && "PROVIDER_REQUIREMENT".equals(f.scope())
-                            && (f.condition() == null || f.condition().isNull()))
+                            && "PROVIDER_REQUIREMENT".equals(f.scope()) && conditionApplies(f, byCode))
                     .filter(f -> validAnswer(f, answer.value()))
                     .findFirst().ifPresent(f -> {
                         if (f.fieldType().endsWith("UPLOAD")) {
@@ -142,6 +144,18 @@ public class ProviderSearchFields {
             }
         }
         return true;
+    }
+
+    // Same rule as booking: a conditional field is shown only when the provider's approved
+    // answer to the parent field satisfies it (e.g. vehicle photo only when "has vehicle" = true).
+    private boolean conditionApplies(ServiceCustomFieldResponse field, Map<String, JsonNode> answersByCode) {
+        JsonNode condition = field.condition();
+        if (condition == null || condition.isNull()) return true;
+        JsonNode actual = answersByCode.get(condition.path("fieldCode").asText());
+        if (actual == null) return false;
+        JsonNode expected = condition.get("value");
+        return "NOT_EQUALS".equals(condition.path("operator").asText("EQUALS"))
+                ? !actual.equals(expected) : actual.equals(expected);
     }
 
     private boolean validAnswer(ServiceCustomFieldResponse field, JsonNode value) {

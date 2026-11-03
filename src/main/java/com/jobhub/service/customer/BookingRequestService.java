@@ -528,7 +528,11 @@ public class BookingRequestService {
         var r=requests.findByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking request not found"));
         if(!userId.equals(r.getUserId())) throw new ResourceNotFoundException("Booking request not found");
         r=locked(r.getRequestId()); var job=jobs.findById(jobId).orElseThrow(); requireCodeWindow(r,job);
-        if("CONFIRMED".equals(r.getStatus())) return new Codes("START",codes.decrypt(r.getStartCode()),r.getCodeExpiresAt());
+        if("CONFIRMED".equals(r.getStatus())) {
+            // Refresh legacy six-digit codes without resetting failed attempts or expiry.
+            if(codes.decrypt(r.getStartCode()).length()!=4)r.setStartCode(codes.encrypt(codes.generate()));
+            return new Codes("START",codes.decrypt(r.getStartCode()),r.getCodeExpiresAt());
+        }
         throw new ConflictException("No verification code is available in this booking state");
     }
     @Transactional

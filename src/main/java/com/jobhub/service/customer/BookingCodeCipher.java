@@ -23,7 +23,7 @@ public class BookingCodeCipher {
             return new SecretKeySpec(value,"AES");
         } catch(IllegalArgumentException e) { throw new PaymentUnavailableException("A 32-byte base64 booking verification key is required"); }
     }
-    public String generate() { return String.format(Locale.ROOT,"%06d",random.nextInt(1_000_000)); }
+    public String generate() { return String.format(Locale.ROOT,"%04d",random.nextInt(10_000)); }
     public String encrypt(String code) {
         try {
             byte[] iv=new byte[12]; random.nextBytes(iv);

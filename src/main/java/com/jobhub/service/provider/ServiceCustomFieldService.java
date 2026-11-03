@@ -339,11 +339,11 @@ public class ServiceCustomFieldService {
         String scope = normalizeScope(request.scope());
         String fieldType = request.fieldType().trim().toUpperCase(Locale.ROOT);
         ProviderProfileFields.validate(request, scope, fieldType);
-        if (request.customerVisible() || request.searchable()) {
-            if (!PROVIDER_REQUIREMENT.equals(scope)
-                    || request.condition() != null && !request.condition().isNull()) {
-                throw new IllegalArgumentException("Customer-visible fields must be unconditional provider requirements");
-            }
+        if ((request.customerVisible() || request.searchable()) && !PROVIDER_REQUIREMENT.equals(scope)) {
+            throw new IllegalArgumentException("Customer-visible fields must be provider requirements");
+        }
+        if (request.searchable() && request.condition() != null && !request.condition().isNull()) {
+            throw new IllegalArgumentException("Searchable fields must be unconditional");
         }
         if (request.searchable() && !Set.of("SELECT", "MULTI_SELECT", "NUMBER", "BOOLEAN").contains(fieldType)) {
             throw new IllegalArgumentException(fieldType + " fields are display-only and cannot be searchable");

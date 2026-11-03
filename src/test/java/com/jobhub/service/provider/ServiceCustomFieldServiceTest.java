@@ -244,7 +244,26 @@ class ServiceCustomFieldServiceTest {
         assertThat(service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)).customerVisible()).isTrue();
         ((com.fasterxml.jackson.databind.node.ObjectNode)json).put("fieldType", "IMAGE_UPLOAD").put("scope", "BOOKING_FIELD");
         assertThatThrownBy(() -> service.create(1L, mapper.treeToValue(json, ServiceCustomFieldRequest.class)))
-                .hasMessageContaining("unconditional");
+                .hasMessageContaining("provider requirements");
+    }
+
+    @Test void conditionalFieldsCanBeCustomerVisibleButNotSearchable() throws Exception {
+        var mapper = new ObjectMapper();
+        var request = mapper.readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"VEHICLE_PHOTO","label":"Vehicle photo",
+                 "fieldType":"IMAGE_UPLOAD","customerVisible":true,"searchable":false,
+                 "minimumFiles":0,"maximumFiles":3,"allowedFileTypes":["JPG","PNG"],
+                 "condition":{"fieldCode":"HAS_VEHICLE","operator":"EQUALS","value":true}}
+                """, ServiceCustomFieldRequest.class);
+        when(fieldRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        assertThat(service.create(1L, request).customerVisible()).isTrue();
+
+        var searchable = mapper.readValue("""
+                {"scope":"PROVIDER_REQUIREMENT","code":"VEHICLE_INSURED","label":"Vehicle insured",
+                 "fieldType":"BOOLEAN","customerVisible":true,"searchable":true,
+                 "condition":{"fieldCode":"HAS_VEHICLE","operator":"EQUALS","value":true}}
+                """, ServiceCustomFieldRequest.class);
+        assertThatThrownBy(() -> service.create(1L, searchable)).hasMessageContaining("unconditional");
     }
 
     @Test void everyFieldTypeCanBePublishedButOnlyExistingFilterTypesCanBeSearched() throws Exception {
