@@ -247,7 +247,7 @@ class ServiceCustomFieldServiceTest {
                 .hasMessageContaining("provider requirements");
     }
 
-    @Test void conditionalFieldsCanBeCustomerVisibleButNotSearchable() throws Exception {
+    @Test void conditionalFieldsCanBeCustomerVisibleAndSearchable() throws Exception {
         var mapper = new ObjectMapper();
         var request = mapper.readValue("""
                 {"scope":"PROVIDER_REQUIREMENT","code":"VEHICLE_PHOTO","label":"Vehicle photo",
@@ -263,7 +263,9 @@ class ServiceCustomFieldServiceTest {
                  "fieldType":"BOOLEAN","customerVisible":true,"searchable":true,
                  "condition":{"fieldCode":"HAS_VEHICLE","operator":"EQUALS","value":true}}
                 """, ServiceCustomFieldRequest.class);
-        assertThatThrownBy(() -> service.create(1L, searchable)).hasMessageContaining("unconditional");
+        var saved = service.create(1L, searchable);
+        assertThat(saved.customerVisible()).isTrue();
+        assertThat(saved.searchable()).isTrue();
     }
 
     @Test void everyFieldTypeCanBePublishedButOnlyExistingFilterTypesCanBeSearched() throws Exception {
@@ -284,7 +286,7 @@ class ServiceCustomFieldServiceTest {
         }
     }
 
-    @Test void rejectsSearchOnPrivateUploadAndConditionalFields() throws Exception {
+    @Test void rejectsSearchOnPrivateAndUploadFields() throws Exception {
         assertThatThrownBy(() -> service.create(1L, request("\"searchable\":true")))
                 .hasMessageContaining("customer visible");
         var upload = new ObjectMapper().readValue("""
@@ -292,9 +294,6 @@ class ServiceCustomFieldServiceTest {
                  "fieldType":"IMAGE_UPLOAD","customerVisible":true,"searchable":true}
                 """, ServiceCustomFieldRequest.class);
         assertThatThrownBy(() -> service.create(1L, upload)).hasMessageContaining("display-only");
-        assertThatThrownBy(() -> service.create(1L,
-                request("\"searchable\":true,\"customerVisible\":true,\"condition\":{}")))
-                .hasMessageContaining("unconditional");
     }
 
     @Test void richChoicesRoundTripAndProvidersSubmitOnlyTheirValues() throws Exception {

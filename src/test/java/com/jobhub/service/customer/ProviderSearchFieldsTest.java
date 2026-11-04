@@ -230,6 +230,45 @@ class ProviderSearchFieldsTest {
         assertThat(values.get(1L).asText()).isEqualTo("A");
     }
 
+    @Test void conditionalFieldsArePublicAndFilterableOnlyWhenTheParentAnswerMatches() throws Exception {
+        var hasVehicle = mapper.readValue("""
+                {"fieldId":50,"scope":"PROVIDER_REQUIREMENT","code":"HAS_VEHICLE","fieldType":"BOOLEAN",
+                 "customerVisible":false,"searchable":false,"status":"ACTIVE"}
+                """, ServiceCustomFieldResponse.class);
+        var vehicleType = mapper.readValue("""
+                {"fieldId":51,"scope":"PROVIDER_REQUIREMENT","code":"VEHICLE_TYPE","fieldType":"SELECT",
+                 "customerVisible":true,"searchable":true,"options":["CAR","BIKE"],"filterOperator":"IN",
+                 "condition":{"fieldCode":"HAS_VEHICLE","operator":"EQUALS","value":true},"status":"ACTIVE"}
+                """, ServiceCustomFieldResponse.class);
+        when(fields.listForOption(2L, 12L, false)).thenReturn(List.of(hasVehicle, vehicleType));
+        var definitions = service.definitions(2L, 12L);
+        assertThat(definitions).extracting(ServiceCustomFieldResponse::fieldId).containsExactly(51L);
+        assertThat(service.schema(definitions)).extracting(f -> f.fieldId()).containsExactly(51L);
+        var filters = List.of(choice(51, "[\"CAR\"]"));
+        service.validate(definitions, filters);
+
+        var assignment = new ServiceProviderTypeAssignment();
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                coded(50, "HAS_VEHICLE", "true", "APPROVED"), coded(51, "VEHICLE_TYPE", "\"CAR\"", "APPROVED")));
+        var attributes = service.attributes(assignment, definitions);
+        assertThat(attributes).containsOnlyKeys(51L);
+        assertThat(service.matches(attributes, filters)).isTrue();
+
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                coded(50, "HAS_VEHICLE", "false", "APPROVED"), coded(51, "VEHICLE_TYPE", "\"CAR\"", "APPROVED")));
+        assertThat(service.attributes(assignment, definitions)).isEmpty();
+        assertThat(service.matches(service.attributes(assignment, definitions), filters)).isFalse();
+
+        when(fields.resolvedProviderAnswers(assignment)).thenReturn(List.of(
+                coded(50, "HAS_VEHICLE", "true", "PENDING"), coded(51, "VEHICLE_TYPE", "\"CAR\"", "APPROVED")));
+        assertThat(service.attributes(assignment, definitions)).isEmpty();
+    }
+
+    ProviderCustomSubmissionResponse coded(long fieldId, String code, String value, String status) throws Exception {
+        return new ProviderCustomSubmissionResponse(1L, 14L, fieldId, code, "Field", mapper.readTree(value),
+                status, null, null, null, "PROVIDER", false, 15L);
+    }
+
     ProviderCustomSubmissionResponse answer(long fieldId, String value, String status, boolean reused) throws Exception {
         return new ProviderCustomSubmissionResponse(1L, 14L, fieldId, "FIELD", "Field", mapper.readTree(value),
                 status, null, null, null, "PROVIDER", reused, 15L);
