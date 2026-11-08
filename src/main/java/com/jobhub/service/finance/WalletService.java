@@ -83,8 +83,10 @@ public class WalletService {
         requireLegacyBooking(jobId);
         return reserve(userId,jobId,false);
     }
-    /** Internal request confirmation hook; its caller owns the surrounding atomic confirmation. */
-    @Transactional
+    /** Internal request confirmation hook; its caller owns the surrounding atomic confirmation.
+     *  Insufficient funds is thrown before any posting, so it must not poison the caller's transaction
+     *  (the caller records the failed attempt and opens the retry window). */
+    @Transactional(noRollbackFor=com.jobhub.exception.InsufficientWalletFundsException.class)
     public Operation reserveRequestBooking(Long userId,Long jobId) {
         var r=bookingRequests.lockByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking request not found"));
         if(!userId.equals(r.getUserId()))throw new ResourceNotFoundException("Booking not found");

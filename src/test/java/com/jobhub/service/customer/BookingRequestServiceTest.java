@@ -250,12 +250,20 @@ class BookingRequestServiceTest {
         assertThat(job.getPaymentStatus()).isEqualTo("SETTLED");assertThat(request.getPaymentStatus()).isEqualTo("SETTLED");
         verify(wallets,never()).settleCardBooking(any(),any());verifyNoInteractions(checkout);
     }
-    @Test void walletInsufficiencyKeepsConfirmationDeadlineAndDoesNotConfirm() {
-        walletInput();accepted();var deadline=request.getConfirmationExpiresAt();
+    @Test void walletInsufficiencyOpensOneFifteenMinuteRetryWindowThatIsNotReset() {
+        walletInput();accepted();
+        assertThat(request.getConfirmationExpiresAt()).isBefore(Instant.now().plusSeconds(121));
         doThrow(new InsufficientWalletFundsException("LKR",new BigDecimal("1000"),new BigDecimal("200"))).when(wallets).reserveRequestBooking(5L,70L);
         assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(InsufficientWalletFundsException.class);
-        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");assertThat(request.getConfirmationExpiresAt()).isEqualTo(deadline);
+        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");assertThat(request.getPaymentStatus()).isEqualTo("FAILED");
+        var retryDeadline=request.getConfirmationExpiresAt();
+        assertThat(retryDeadline).isAfter(Instant.now().plusSeconds(890));assertThat(request.getPaymentRetryStartedAt()).isNotNull();
         assertThat(request.getStartCode()).isNull();assertThat(job.getPaymentStatus()).isEqualTo("PENDING");
+        assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(InsufficientWalletFundsException.class);
+        assertThat(request.getConfirmationExpiresAt()).isEqualTo(retryDeadline);
+        verify(events,times(2)).save(argThat(e -> "PAYMENT_FAILED".equals(e.getEventType())));
+        var window=service.paymentWindow(5L,1L,false);
+        assertThat(window.canPay()).isTrue();assertThat(window.paymentRetryStartedAt()).isEqualTo(request.getPaymentRetryStartedAt());
     }
     @Test void walletOnlyRequestDoesNotRequirePayHereAndCannotUseCardCheckout() {
         walletInput();option.setAllowedPaymentMethods(Set.of("WALLET"));
@@ -357,8 +365,9 @@ class BookingRequestServiceTest {
         assertThat(request.getPaymentStatus()).isEqualTo("REFUND_REVIEW");assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
     }
     @Test void failedCardRetainsReservationAndCanStartNewCheckoutWithinFifteenMinuteWindow() {
-        paying();var firstOrder=request.getPaymentOrderId();var deadline=request.getConfirmationExpiresAt();
+        paying();var firstOrder=request.getPaymentOrderId();
         service.notification(notification("-2","failed-1"));
+        var deadline=request.getConfirmationExpiresAt();assertThat(deadline).isAfter(Instant.now().plusSeconds(890));
         assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");
         assertThat(job.getJobStatus()).isEqualTo("AWAITING_PAYMENT");
         assertThat(service.paymentWindow(5L,1L,false).canPay()).isTrue();
@@ -384,11 +393,34 @@ class BookingRequestServiceTest {
         service.expire(1L);assertThat(request.getStatus()).isEqualTo("PAYMENT_RECONCILIATION");
         service.notification(notification("-2","known-failure"));
         assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");
-        assertThat(request.getConfirmationExpiresAt()).isEqualTo(deadline);
+        assertThat(request.getConfirmationExpiresAt()).isAfter(deadline).isAfter(Instant.now().plusSeconds(890));
         assertThat(service.paymentWindow(5L,1L,false).canPay()).isTrue();
     }
+    @Test void initialWindowIsTwoMinutesAndFailureAfterItWhilePendingStillOpensRetry() {
+        paying();assertThat(request.getConfirmationExpiresAt()).isBefore(Instant.now().plusSeconds(121));
+        request.setConfirmationExpiresAt(Instant.now().minusSeconds(5)); // 2 min ran out while PayHere was pending
+        service.expire(1L);assertThat(request.getStatus()).isEqualTo("PAYMENT_PENDING");
+        service.notification(notification("-2","late-failure"));
+        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");
+        assertThat(request.getConfirmationExpiresAt()).isAfter(Instant.now().plusSeconds(890));
+        assertThat(request.getPaymentDeadlineLimit()).isAfterOrEqualTo(request.getConfirmationExpiresAt());
+    }
+    @Test void repeatedCardFailuresDoNotResetRetryWindowAndFailureAfterItExpires() {
+        paying();service.notification(notification("-2","fail-1"));var retryDeadline=request.getConfirmationExpiresAt();
+        service.confirm(5L,1L,contact());service.notification(notification("-2","fail-2"));
+        assertThat(request.getConfirmationExpiresAt()).isEqualTo(retryDeadline);
+        assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");
+        service.confirm(5L,1L,contact());request.setConfirmationExpiresAt(Instant.now().minusSeconds(1));
+        service.notification(notification("-2","fail-3"));
+        assertThat(request.getStatus()).isEqualTo("EXPIRED");assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
+    }
+    @Test void retryWindowNeverRunsPastServiceStart() {
+        job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5));
+        paying();service.notification(notification("-2","fail-1"));
+        assertThat(request.getConfirmationExpiresAt()).isBefore(Instant.now().plusSeconds(301));
+    }
     @Test void providerCanExtendUnpaidDeadlineIdempotentlyWithinLimitAndCancel() {
-        accepted();assertThat(request.getConfirmationExpiresAt()).isAfter(Instant.now().plusSeconds(890));
+        accepted();assertThat(request.getConfirmationExpiresAt()).isAfter(Instant.now().plusSeconds(110));
         var deadline=request.getConfirmationExpiresAt().plusSeconds(300);
         service.extendPaymentDeadline(9L,1L,deadline);service.extendPaymentDeadline(9L,1L,deadline);
         assertThat(service.paymentWindow(5L,1L,false).confirmationExpiresAt()).isEqualTo(deadline);

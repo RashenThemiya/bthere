@@ -54,7 +54,7 @@ public final class BookingRequestsApi {
     public record MockCard(@NotNull @Positive Long methodId) {}
     public record PaymentDeadline(@NotNull Instant confirmationExpiresAt) {}
     public record PaymentWindow(Long requestId,String status,String paymentStatus,Instant confirmationExpiresAt,
-                                Instant paymentDeadlineLimit,boolean canPay,boolean canCancel,boolean canExtend) {}
+                                Instant paymentDeadlineLimit,Instant paymentRetryStartedAt,boolean canPay,boolean canCancel,boolean canExtend) {}
     public record Code(@NotBlank @Pattern(regexp="[0-9]{4}") String code) {}
     public record Codes(String purpose, String code, Instant expiresAt) {}
     public record Transition(boolean successful, String status) {}

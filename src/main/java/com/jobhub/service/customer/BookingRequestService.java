@@ -44,6 +44,8 @@ public class BookingRequestService {
     private final com.jobhub.service.finance.WalletService wallets;
     private final com.jobhub.payments.PaymentGateway paymentGateway;
     private final com.jobhub.repository.finance.PaymentInstrumentRepository instruments;
+    /** After the first failed payment attempt the customer gets one fresh retry window; later failures never reset it. */
+    static final Duration PAYMENT_RETRY_WINDOW=Duration.ofMinutes(15);
 
     private void requireCardReady() {
         if(paymentGateway.isMock()) paymentGateway.requireEnabled();
@@ -364,7 +366,7 @@ public class BookingRequestService {
         return view(r);
     }
     /** Reserve existing wallet funds only after provider acceptance and explicit customer confirmation. */
-    @Transactional
+    @Transactional(noRollbackFor=InsufficientWalletFundsException.class)
     public View confirmWallet(Long userId,Long id) {
         var r=owned(userId,id);
         if(!"WALLET".equals(requestMethod(r)) || r.getJobId()==null)throw new ConflictException("Provider must accept a WALLET request first");
@@ -378,7 +380,14 @@ public class BookingRequestService {
             throw new ConflictException("Customer confirmation expired or provider has not accepted");
         var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
         if(!job.getStartDatetime().atZone(zone).toInstant().isAfter(Instant.now()))throw new ConflictException("Booking start time has passed");
-        var reservation=wallets.reserveRequestBooking(userId,job.getJobId());
+        com.jobhub.dto.customer.WalletApi.Operation reservation;
+        try { reservation=wallets.reserveRequestBooking(userId,job.getJobId()); }
+        catch(InsufficientWalletFundsException e) {
+            // A failed attempt inside the window: keep the job and grant the one-time retry window (committed via noRollbackFor).
+            r.setPaymentStatus("FAILED");
+            if(startRetryWindow(r,job)) paymentFailedEvents(r,job);
+            throw e;
+        }
         r.setPaymentFundingMode(reservation.fundingMode());r.setPaymentStatus("RESERVED");r.setPaymentStartedAt(Instant.now());
         confirmService(r,job);return view(r);
     }
@@ -400,6 +409,7 @@ public class BookingRequestService {
         var r=provider?providerOwnedRequest(userId,id):owned(userId,id);tick(r);
         boolean unpaid=unpaidWindow(r);
         return new PaymentWindow(id,r.getStatus(),r.getPaymentStatus(),r.getConfirmationExpiresAt(),r.getPaymentDeadlineLimit(),
+                r.getPaymentRetryStartedAt(),
                 !provider && unpaid,provider?unpaid:Set.of("MATCHING","AWAITING_CUSTOMER_CONFIRMATION","UNMATCHED","EXPIRED","CANCELLED").contains(r.getStatus()),
                 provider && unpaid && r.getPaymentDeadlineLimit()!=null && r.getConfirmationExpiresAt().isBefore(r.getPaymentDeadlineLimit()));
     }
@@ -424,6 +434,27 @@ public class BookingRequestService {
         event(r,r.getUserId(),null,"PAYMENT_DEADLINE_EXTENDED",deadline);event(r,userId,null,"PAYMENT_DEADLINE_EXTENDED",deadline);
         audit.record(userId,"PAYMENT_DEADLINE_EXTENDED","BOOKING_REQUEST",id,Map.of("deadline",previous),Map.of("deadline",deadline));
         return view(r);
+    }
+    /**
+     * Opens the single retry window after the first failed payment attempt: deadline becomes
+     * max(current deadline, now + 15 min), capped at service start. Returns false if it was already opened.
+     */
+    private boolean startRetryWindow(BookingRequest r,Job job) {
+        if(r.getPaymentRetryStartedAt()!=null) return false;
+        var now=Instant.now();
+        var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
+        var serviceStart=job.getStartDatetime().atZone(zone).toInstant();
+        var deadline=now.plus(PAYMENT_RETRY_WINDOW);
+        if(deadline.isAfter(serviceStart)) deadline=serviceStart;
+        r.setPaymentRetryStartedAt(now);
+        if(r.getConfirmationExpiresAt()==null || deadline.isAfter(r.getConfirmationExpiresAt())) r.setConfirmationExpiresAt(deadline);
+        if(r.getPaymentDeadlineLimit()==null || r.getConfirmationExpiresAt().isAfter(r.getPaymentDeadlineLimit()))
+            r.setPaymentDeadlineLimit(r.getConfirmationExpiresAt());
+        return true;
+    }
+    private void paymentFailedEvents(BookingRequest r,Job job) {
+        event(r,r.getUserId(),null,"PAYMENT_FAILED",r.getConfirmationExpiresAt());
+        event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"PAYMENT_FAILED",r.getConfirmationExpiresAt());
     }
     private boolean paymentReady(Job job) {
         return "CARD".equals(job.getPaymentMethod()) && "PAID".equals(job.getPaymentStatus())
@@ -515,10 +546,12 @@ public class BookingRequestService {
             confirmService(r,job);
         } else if(Set.of("-1","-2").contains(status) && Set.of("PAYMENT_PENDING","PAYMENT_RECONCILIATION").contains(r.getStatus())) {
             r.setGatewayPaymentId(params.get("payment_id")); r.setPaymentStatus("FAILED"); job.setPaymentStatus("FAILED");
+            // The checkout was started inside a valid window, so the first failure opens the retry window
+            // even when the initial 2-minute window ran out while PayHere was pending.
+            startRetryWindow(r,job);
             if(r.getConfirmationExpiresAt()!=null && Instant.now().isBefore(r.getConfirmationExpiresAt())) {
                 r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");
-                event(r,r.getUserId(),null,"PAYMENT_FAILED",r.getConfirmationExpiresAt());
-                event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"PAYMENT_FAILED",r.getConfirmationExpiresAt());
+                paymentFailedEvents(r,job);
             } else stop(r,"EXPIRED");
         }
         // Pending or stale failure callbacks never undo a successful payment.
