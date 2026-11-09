@@ -92,7 +92,8 @@ Returns the same body as #8, without the ownership check. **404** if the booking
   "journeyStartedAt": null,
   "arrivedAt": null,
   "target": {"label": "PICKUP", "latitude": 6.927100, "longitude": 79.845000,
-             "address": "Galle Face Green, Colombo 03"}
+             "address": "Galle Face Green, Colombo 03",
+             "navigationUrl": "https://www.google.com/maps/dir/?api=1&destination=6.927100,79.845000&travelmode=driving"}
 }
 ```
 
@@ -104,6 +105,7 @@ Returns the same body as #8, without the ownership check. **404** if the booking
 | `canMarkArrived` | show the **Arrived** button |
 | `sendLocation` | stream GPS to #7 every `updateIntervalSeconds` while true |
 | `target` | where the provider is heading: `PICKUP` or `SERVICE_LOCATION`, then `DESTINATION` during the trip. `null` if the booking has no location |
+| `target.navigationUrl` | open it to start Google Maps directions to the target (the app on a phone). Re-read it after the trip starts: it switches to the destination |
 
 | Status | When |
 |---|---|
@@ -194,7 +196,8 @@ Poll every `pollIntervalSeconds` while the screen is open.
   "pollIntervalSeconds": 4,
   "staleAfterSeconds": 30,
   "target": {"label": "PICKUP", "latitude": 6.927100, "longitude": 79.845000,
-             "address": "Galle Face Green, Colombo 03"},
+             "address": "Galle Face Green, Colombo 03",
+             "navigationUrl": "https://www.google.com/maps/dir/?api=1&destination=6.927100,79.845000&travelmode=driving"},
   "providerDisplayFields": [
     {"fieldId": 4, "code": "RIDE_NORMAL_VEHICLE_TYPE", "label": "Vehicle type", "fieldType": "SELECT",
      "options": ["…same as option context providerDisplayFields…"], "filterOperator": "…", "icon": {"url": "…"}}

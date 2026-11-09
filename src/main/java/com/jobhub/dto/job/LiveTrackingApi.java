@@ -29,8 +29,17 @@ public final class LiveTrackingApi {
     public record Location(BigDecimal latitude, BigDecimal longitude, Double headingDegrees, Double speedKmh,
                            Double accuracyMeters, Instant recordedAt, Instant receivedAt) {}
 
-    /** label: PICKUP | DESTINATION | SERVICE_LOCATION. */
-    public record Target(String label, BigDecimal latitude, BigDecimal longitude, String address) {}
+    /**
+     * label: PICKUP | DESTINATION | SERVICE_LOCATION. navigationUrl opens turn-by-turn directions in Google Maps
+     * (the app on a phone, the website otherwise).
+     */
+    public record Target(String label, BigDecimal latitude, BigDecimal longitude, String address, String navigationUrl) {
+        public Target(String label, BigDecimal latitude, BigDecimal longitude, String address) {
+            this(label, latitude, longitude, address, latitude == null || longitude == null ? null
+                    : "https://www.google.com/maps/dir/?api=1&destination=" + latitude.toPlainString() + ","
+                    + longitude.toPlainString() + "&travelmode=driving");
+        }
+    }
 
     /**
      * status: NOT_SUPPORTED | WAITING_FOR_CONFIRMATION | NOT_STARTED | EN_ROUTE | ARRIVED | IN_TRIP | ENDED.

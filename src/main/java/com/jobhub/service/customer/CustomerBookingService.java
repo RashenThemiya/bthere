@@ -62,7 +62,7 @@ public class CustomerBookingService {
         if (requestPolicies.findById(request.optionId()).filter(com.jobhub.entity.job.BookingRequestPolicy::isEnabled).isPresent()) {
             throw new com.jobhub.exception.ConflictException("Use booking-requests for this option; provider acceptance and payment confirmation are required");
         }
-        PreparedBooking prepared = prepare(userId, request, true);
+        PreparedBooking prepared = prepare(userId, request, true, true);
         Job job = jobRepository.save(prepared.job());
         saveProviderAssignments(job.getJobId(), prepared.providerIds());
         saveAnswers(job.getJobId(), prepared.answers());
@@ -74,7 +74,8 @@ public class CustomerBookingService {
     @Transactional
     public Job reserveRequestBooking(Long userId, CreateBookingRequest request) {
         if (!Set.of("CARD","WALLET").contains(request.paymentMethod())) throw new IllegalArgumentException("Booking requests support CARD or WALLET");
-        PreparedBooking prepared = prepare(userId, request, true);
+        // Notice was checked when the request was created; provider acceptance can come later.
+        PreparedBooking prepared = prepare(userId, request, true, false);
         Job job = prepared.job();
         job.setJobStatus("AWAITING_PAYMENT");
         job.setPaymentStatus("PENDING");
@@ -102,7 +103,17 @@ public class CustomerBookingService {
 
     @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public com.jobhub.dto.job.BookingQuoteResponse quote(Long userId, CreateBookingRequest request) {
-        Job job = prepare(userId, request, false).job();
+        return quote(userId, request, false);
+    }
+
+    /** Customer-facing quote: also enforces the option's booking notice. Dispatch uses {@link #quote(Long, CreateBookingRequest)}. */
+    @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public com.jobhub.dto.job.BookingQuoteResponse customerQuote(Long userId, CreateBookingRequest request) {
+        return quote(userId, request, true);
+    }
+
+    private com.jobhub.dto.job.BookingQuoteResponse quote(Long userId, CreateBookingRequest request, boolean checkNotice) {
+        Job job = prepare(userId, request, false, checkNotice).job();
         return new com.jobhub.dto.job.BookingQuoteResponse(job.getRateId(), job.getCurrencyCode(),
                 job.getExpectedAmount(), job.getStartDatetime(), job.getExpectedEndDatetime(),
                 job.getEstimatedDistanceKm(), read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()),
@@ -135,10 +146,10 @@ public class CustomerBookingService {
         }
         BookingTime time = resolveTime(option, request);
         java.time.ZoneId marketZone = java.time.ZoneId.of(market.getTimezone());
-        if (time.start().isBefore(java.time.LocalDateTime.now(marketZone))
-                || java.time.Duration.between(time.start(), time.end()).compareTo(java.time.Duration.ofDays(31)) > 0) {
+        if (java.time.Duration.between(time.start(), time.end()).compareTo(java.time.Duration.ofDays(31)) > 0) {
             throw new IllegalArgumentException("Choose a future interval of at most 31 days");
         }
+        BookingNoticeService.require(marketZone, time.start(), BookingNoticeService.minutes(option));
         CustomerDiscoveryService.requireUnambiguous(marketZone, time.start(), time.end());
         Route route = resolveRoute(option, request, null);
         // Area prices use the same point the booking will: route destination, customer meeting
@@ -167,7 +178,7 @@ public class CustomerBookingService {
                 price.feeAllocation().providerEarnings());
     }
 
-    private PreparedBooking prepare(Long userId, CreateBookingRequest request, boolean locked) {
+    private PreparedBooking prepare(Long userId, CreateBookingRequest request, boolean locked, boolean checkNotice) {
         Customer customer = customerRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Complete the customer profile first"));
         ServiceOption option = optionRepository.findByOptionIdAndServiceProviderTypeId(
@@ -201,10 +212,11 @@ public class CustomerBookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Market not found"));
         availabilityService.requireOffering(market.getMarketId(), request.serviceTypeId());
         java.time.ZoneId marketZone = java.time.ZoneId.of(market.getTimezone());
-        if (time.start().isBefore(java.time.LocalDateTime.now(marketZone))
-                || java.time.Duration.between(time.start(), time.end()).compareTo(java.time.Duration.ofDays(31)) > 0) {
+        if (java.time.Duration.between(time.start(), time.end()).compareTo(java.time.Duration.ofDays(31)) > 0) {
             throw new IllegalArgumentException("Choose a future interval of at most 31 days");
         }
+        // Dispatch re-prepares a request after the customer created it, so only customer entry points check notice.
+        if (checkNotice) BookingNoticeService.require(marketZone, time.start(), BookingNoticeService.minutes(option));
         CustomerDiscoveryService.requireUnambiguous(marketZone, time.start(), time.end());
         for (var selected : assignments) {
             if (!availabilityService.qualified(selected, option, market.getMarketId())

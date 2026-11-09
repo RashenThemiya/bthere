@@ -18,7 +18,7 @@ public final class BookingRequestsApi {
     /** Same shape as Create so the booking form can send its draft; providerId must be omitted. */
     public record Estimate(@NotNull Long marketId, @NotNull @Valid CreateBookingRequest booking,
                            @Valid Point searchLocation) {}
-    public record Policy(boolean enabled, @Min(1) @Max(43200) int minimumNoticeMinutes,
+    public record Policy(boolean enabled, @Min(0) @Max(43200) int minimumNoticeMinutes,
                          @Min(15) @Max(600) int offerTimeoutSeconds,
                          @Min(30) @Max(900) int confirmationTimeoutSeconds,
                          @Min(60) @Max(3600) int matchingTimeoutSeconds,

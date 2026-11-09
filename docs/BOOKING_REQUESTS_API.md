@@ -105,7 +105,7 @@ For an enabled option, the legacy POST /customers/me/bookings endpoint returns
 Disabling a policy stops future offers; existing accepted/payment-in-progress
 requests still resolve through their lifecycle.
 
-Validation ranges: minimumNoticeMinutes 1–43200; offerTimeoutSeconds 15–600;
+Validation ranges: minimumNoticeMinutes 0–43200 (0 allows "now" requests; saving it also updates the option's booking notice, see BOOKING_NOTICE_API.md); offerTimeoutSeconds 15–600;
 confirmationTimeoutSeconds 30–900; matchingTimeoutSeconds 60–3600;
 maximumRadiusKm 0.1–500. The request radius cannot exceed the option policy.
 

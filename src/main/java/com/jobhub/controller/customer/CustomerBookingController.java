@@ -33,7 +33,7 @@ public class CustomerBookingController {
     public ResponseEntity<com.jobhub.dto.job.BookingQuoteResponse> quote(
             @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody CreateBookingRequest request) {
-        return ResponseEntity.ok(service.quote(user.id(), request));
+        return ResponseEntity.ok(service.customerQuote(user.id(), request));
     }
 
     @PostMapping("/estimate")

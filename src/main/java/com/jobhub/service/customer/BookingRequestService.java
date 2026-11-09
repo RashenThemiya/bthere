@@ -62,6 +62,7 @@ public class BookingRequestService {
         }
         var p=policies.findById(optionId).orElseGet(BookingRequestPolicy::new);
         p.setOptionId(optionId); p.setEnabled(input.enabled()); p.setMinimumNoticeMinutes(input.minimumNoticeMinutes());
+        option.setMinimumNoticeMinutes(input.minimumNoticeMinutes());
         p.setOfferTimeoutSeconds(input.offerTimeoutSeconds()); p.setConfirmationTimeoutSeconds(input.confirmationTimeoutSeconds());
         p.setMatchingTimeoutSeconds(input.matchingTimeoutSeconds()); p.setMaximumRadiusKm(input.maximumRadiusKm());
         if(input.offerGroupSize()!=null)p.setOfferGroupSize(input.offerGroupSize());
@@ -132,8 +133,8 @@ public class BookingRequestService {
         boolean route="ROUTE_BASED".equals(option.getSchedulingModel());
         LocalDateTime start=route?b.requestedPickupTime():b.startDatetime();
         Instant starts=start.atZone(zone).toInstant();
-        if(starts.isBefore(Instant.now().plusSeconds(policy.getMinimumNoticeMinutes()*60L)))
-            throw new IllegalArgumentException("Choose a pickup/start after this option's minimum advance notice");
+        // Older policies may hold a longer notice than the option; the stricter one wins.
+        BookingNoticeService.require(starts,Math.max(BookingNoticeService.minutes(option),policy.getMinimumNoticeMinutes()));
         BigDecimal radius=input.radiusKm()==null?policy.getMaximumRadiusKm():input.radiusKm();
         if(radius.compareTo(policy.getMaximumRadiusKm())>0) throw new IllegalArgumentException("Search radius exceeds option policy");
         Point location=null;
@@ -270,6 +271,7 @@ public class BookingRequestService {
             throw new ConflictException("The offered price or platform fee changed; cancel this request and request a new quote");
         var providerMarket=job.getMarketId();
         if(!r.getMarketId().equals(providerMarket)) throw new ConflictException("Provider market changed; search again");
+        startNoEarlierThanAcceptance(job);
         r.setJobId(job.getJobId()); r.setQuotedAmount(job.getExpectedAmount()); r.setCurrencyCode(job.getCurrencyCode());
         r.setPlatformFeePercentage(zero(job.getPlatformFeePercentage()));r.setPlatformFee(zero(job.getPlatformFee()));
         r.setProviderEarnings(net(job.getExpectedAmount(),job.getPlatformFee(),job.getProviderEarnings()));
@@ -287,6 +289,19 @@ public class BookingRequestService {
         event(r,r.getUserId(),offerId,"PROVIDER_ACCEPTED",r.getConfirmationExpiresAt());
         event(r,userId,offerId,"OFFER_ACCEPTED",null);
         return view(r);
+    }
+    /**
+     * "Now" requests (options with 0 notice) carry a start that has already passed when a provider accepts.
+     * The service clock starts at acceptance, keeping the booked duration.
+     */
+    void startNoEarlierThanAcceptance(Job job) {
+        if(job.getStartDatetime()==null) return;
+        var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
+        LocalDateTime now=LocalDateTime.now(zone).withNano(0);
+        if(!job.getStartDatetime().isBefore(now)) return;
+        Duration length=job.getExpectedEndDatetime()==null?Duration.ZERO:Duration.between(job.getStartDatetime(),job.getExpectedEndDatetime());
+        job.setStartDatetime(now);
+        if(job.getExpectedEndDatetime()!=null) job.setExpectedEndDatetime(now.plus(length));
     }
     @Transactional(readOnly=true)
     public BookingResponse providerBooking(Long userId,Long jobId) {

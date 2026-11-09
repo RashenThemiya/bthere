@@ -34,6 +34,7 @@ public class CustomerDiscoveryService {
     private final ProviderSearchFields providerSearchFields;
     private final MapMarkerResolver mapMarkerResolver;
     private final com.jobhub.service.market.ServicePricingService pricing;
+    private final RatingService ratings;
 
     public List<ServiceCard> services(Long userId, Long marketId) {
         profiles.get(userId); availability.market(marketId);
@@ -108,10 +109,10 @@ public class CustomerDiscoveryService {
             throw new IllegalArgumentException("Time-based search cannot contain route points");
         }
         if (endAt == null || !request.startAt().isBefore(endAt)
-                || request.startAt().toInstant().isBefore(Instant.now())
                 || Duration.between(request.startAt(), endAt).compareTo(Duration.ofDays(31)) > 0) {
             throw new IllegalArgumentException("Choose a future interval of at most 31 days");
         }
+        BookingNoticeService.require(request.startAt().toInstant(), BookingNoticeService.minutes(option));
         if ("ONLINE".equals(mode) && centre != null || !"ONLINE".equals(mode) && centre == null) {
             throw new IllegalArgumentException("Physical searches require location; ONLINE searches do not accept location");
         }
@@ -176,10 +177,21 @@ public class CustomerDiscoveryService {
         int from = (int) Math.min((long) page * size, candidates.size()), until = Math.min(from + size, candidates.size());
         int count = "ONE_CUSTOMER_MANY_PROVIDERS".equals(option.getFulfillmentModel()) ? option.getRequiredProviderCount() : 1;
         long distinct = candidates.stream().map(Candidate::providerId).distinct().count();
+        List<Candidate> pageItems = distinct < count ? List.of() : withOptionRatings(option.getOptionId(), candidates.subList(from, until));
         return new Results(Instant.now(), request.marketId(), zone.getId(), request.startAt(), endAt,
                 option.getProviderSelectionMode(), count, distinct < count ? "NO_AVAILABLE_PROVIDERS" : "AVAILABLE",
-                candidates.size(), page, size, until < candidates.size(),
-                distinct < count ? List.of() : candidates.subList(from, until));
+                candidates.size(), page, size, until < candidates.size(), pageItems);
+    }
+
+    /** Adds each provider's rating for this option to the returned page of candidates. */
+    private List<Candidate> withOptionRatings(Long optionId, List<Candidate> page) {
+        if (page.isEmpty() || ratings == null) return page;
+        var summaries = ratings.optionSummaries(optionId, page.stream().map(Candidate::providerId).distinct().toList());
+        if (summaries == null || summaries.isEmpty()) return page;
+        return page.stream().map(c -> {
+            var s = summaries.get(c.providerId());
+            return s == null ? c : c.withOptionRating(s.averageRating(), s.totalRatings());
+        }).toList();
     }
 
     private List<ServiceProviderTypeAssignment> sharedRegistrations(ServiceOption option, Long marketId) {

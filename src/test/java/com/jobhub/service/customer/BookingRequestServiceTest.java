@@ -217,7 +217,7 @@ class BookingRequestServiceTest {
         create();request.setStatus("UNMATCHED");stored.get(0).setStatus("EXPIRED");
         assertThatThrownBy(() -> service.retry(6L,1L,"retry-key")).isInstanceOf(ResourceNotFoundException.class);
         policy.setMinimumNoticeMinutes(10000);
-        assertThatThrownBy(() -> service.retry(5L,1L,"retry-key")).hasMessageContaining("minimum advance notice");
+        assertThatThrownBy(() -> service.retry(5L,1L,"retry-key")).hasMessage(BookingNoticeService.message(10000));
         verify(requests,times(1)).saveAndFlush(any());
     }
     void accepted(){create();service.accept(9L,1L);}
@@ -306,10 +306,38 @@ class BookingRequestServiceTest {
         assertThatThrownBy(() -> service.create(5L,"key",changed)).isInstanceOf(ConflictException.class);
         verify(requests,times(1)).saveAndFlush(any());
     }
+    private void startAt(LocalDateTime at){
+        input=new Create(1L,new CreateBookingRequest(3L,12L,null,null,"ONLINE",at,at.plusHours(1),null,null,null,null,null,null,List.of(),"CARD",null),null,null,null,null,null);
+    }
+    @Test void optionNoticeAppliesEvenWhenPolicyAllowsLess(){
+        policy.setMinimumNoticeMinutes(0);
+        startAt(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(60).withNano(0));
+        assertThatIllegalArgumentException().isThrownBy(this::create).withMessage(BookingNoticeService.message(120));
+        verify(requests,never()).saveAndFlush(any());
+    }
+    @Test void instantOptionAcceptsNowButNotThePast(){
+        option.setMinimumNoticeMinutes(0);policy.setMinimumNoticeMinutes(0);
+        startAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(30).withNano(0));
+        assertThatIllegalArgumentException().isThrownBy(this::create).withMessage(BookingNoticeService.message(0));
+        startAt(LocalDateTime.now(ZoneOffset.UTC).withNano(0));
+        create();
+        verify(requests).saveAndFlush(any());
+    }
     @Test void minimumNoticeAndUnsupportedTeamPreventDispatch(){
         policy.setMinimumNoticeMinutes(10000);assertThatIllegalArgumentException().isThrownBy(this::create);
         policy.setMinimumNoticeMinutes(120);option.setFulfillmentModel("ONE_CUSTOMER_MANY_PROVIDERS");
         assertThatIllegalArgumentException().isThrownBy(this::create);verify(requests,never()).saveAndFlush(any());
+    }
+    @Test void nowRequestStartsAtAcceptanceKeepingDuration(){
+        var requested=LocalDateTime.now(ZoneOffset.UTC).minusMinutes(3).withNano(0);
+        job.setStartDatetime(requested);job.setExpectedEndDatetime(requested.plusMinutes(40));
+        service.startNoEarlierThanAcceptance(job);
+        assertThat(job.getStartDatetime()).isAfter(requested.plusMinutes(2));
+        assertThat(Duration.between(job.getStartDatetime(),job.getExpectedEndDatetime())).isEqualTo(Duration.ofMinutes(40));
+        var later=LocalDateTime.now(ZoneOffset.UTC).plusHours(3).withNano(0);
+        job.setStartDatetime(later);job.setExpectedEndDatetime(later.plusMinutes(40));
+        service.startNoEarlierThanAcceptance(job);
+        assertThat(job.getStartDatetime()).isEqualTo(later);
     }
     @Test void acceptingReservesCapacityAndWaitsForCustomerWithoutPayment(){
         accepted();assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");assertThat(request.getJobId()).isEqualTo(70L);

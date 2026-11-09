@@ -68,11 +68,14 @@ class JobhubApplicationTests {
     @MockitoBean private com.jobhub.repository.job.BookingPaymentNoticeRepository bookingPaymentNotices;
     @MockitoBean private com.jobhub.repository.job.JobProviderTrackingRepository jobProviderTrackings;
     @MockitoBean private com.jobhub.repository.job.ProviderLiveLocationRepository providerLiveLocations;
+    @MockitoBean private com.jobhub.repository.job.RatingRepository ratingRepository;
     @MockitoBean private com.jobhub.repository.auth.UserDeviceRepository bookingDevices;
     @Autowired private com.jobhub.controller.provider.ProviderBookingOfferController bookingOfferController;
     @Autowired private com.jobhub.controller.admin.AdminBookingRequestPolicyController bookingPolicyController;
     @Autowired private com.jobhub.controller.customer.CustomerBookingRequestController customerBookingRequestsController;
     @Autowired private com.jobhub.controller.admin.AdminPlatformFeeController platformFeeController;
+    @Autowired private com.jobhub.controller.customer.CustomerRatingController customerRatingController;
+    @Autowired private com.jobhub.controller.admin.AdminRatingController adminRatingController;
 
     @Autowired private com.jobhub.controller.admin.AdminBookingMonitorController bookingMonitor;
     @Test void superAdminCanReadBookingMonitoring() {
@@ -107,6 +110,27 @@ class JobhubApplicationTests {
                 org.assertj.core.api.Assertions.assertThatThrownBy(() -> platformFeeController.updateService(null,1L,null))
                         .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
                 org.assertj.core.api.Assertions.assertThatThrownBy(() -> platformFeeController.updateOption(null,12L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+        }
+    }
+
+    @Test void onlyCustomersRateAndOnlySuperAdminModerates() {
+        for(String role:java.util.List.of("SERVICE_PROVIDER","SUPER_ADMIN")) {
+            var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",
+                    java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerRatingController.rate(null,70L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+        }
+        for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","VERIFICATION_ADMIN")) {
+            var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",
+                    java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminRatingController.moderate(null,1L,null))
                         .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
             } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
         }

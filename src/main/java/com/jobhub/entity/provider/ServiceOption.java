@@ -63,6 +63,8 @@ public class ServiceOption extends AuditedEntity {
     private String liveTrackingMode = "NONE";
     /** Bookings confirmed with a start/pickup within this many minutes start tracking automatically. Null means 30. */
     private Integer liveTrackingAutoStartMinutes = 30;
+    /** Customers must book a start at least this many minutes ahead; 0 allows "now" bookings. Null means 120. */
+    private Integer minimumNoticeMinutes = 120;
 
     @ElementCollection
     @CollectionTable(name = "service_option_payment_method",

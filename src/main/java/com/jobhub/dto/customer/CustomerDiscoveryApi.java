@@ -46,7 +46,24 @@ public final class CustomerDiscoveryApi {
                             String displayName, String profilePhoto, BigDecimal averageRating,
                             Integer totalRatings, String locationLabel, Point mapPoint,
                             Double distanceKm, int remainingCapacity, List<String> languages,
-                            Map<Long, JsonNode> providerAttributes, MapMarker mapMarker) {}
+                            Map<Long, JsonNode> providerAttributes, MapMarker mapMarker,
+                            BigDecimal optionAverageRating, Integer optionTotalRatings) {
+        public Candidate(Long providerId, Long assignmentId, Long optionId, Long providerLocationId,
+                         String displayName, String profilePhoto, BigDecimal averageRating,
+                         Integer totalRatings, String locationLabel, Point mapPoint,
+                         Double distanceKm, int remainingCapacity, List<String> languages,
+                         Map<Long, JsonNode> providerAttributes, MapMarker mapMarker) {
+            this(providerId, assignmentId, optionId, providerLocationId, displayName, profilePhoto, averageRating,
+                    totalRatings, locationLabel, mapPoint, distanceKm, remainingCapacity, languages,
+                    providerAttributes, mapMarker, null, 0);
+        }
+        /** The same candidate with this option's rating attached. */
+        public Candidate withOptionRating(BigDecimal average, int total) {
+            return new Candidate(providerId, assignmentId, optionId, providerLocationId, displayName, profilePhoto,
+                    averageRating, totalRatings, locationLabel, mapPoint, distanceKm, remainingCapacity, languages,
+                    providerAttributes, mapMarker, average, total);
+        }
+    }
     public record MapMarker(String source, ServiceMediaPayload icon, Long fieldId, String choiceValue,
                             Long ruleId, List<com.jobhub.dto.market.PricingConditionRequest> conditions) {
         public MapMarker(String source, ServiceMediaPayload icon, Long fieldId, String choiceValue) {

@@ -43,9 +43,10 @@ class CustomerBookingEstimateTest {
     @InjectMocks CustomerBookingService service;
     List<PricingConditionRequest> selections = List.of(new PricingConditionRequest(45L, "CAR"));
     LocalDateTime start = LocalDateTime.now(java.time.ZoneId.of("Asia/Colombo")).plusDays(1);
+    ServiceOption option;
 
     @BeforeEach void setup() {
-        var option = new ServiceOption(); option.setOptionId(12L); option.setStatus("ACTIVE");
+        option = new ServiceOption(); option.setOptionId(12L); option.setStatus("ACTIVE");
         option.setServiceProviderTypeId(2L); option.setLocationEnabled(true);
         option.setDeliveryModes(Set.of("ONLINE", "CUSTOMER_TO_PROVIDER", "PROVIDER_TO_CUSTOMER"));
         option.getServiceTypes().add(new ServiceTypeOption(2L, 0, "ACTIVE"));
@@ -84,6 +85,27 @@ class CustomerBookingEstimateTest {
                 eq(new BigDecimal("7.1")), eq(new BigDecimal("80.1")), eq(selections));
     }
 
+    @Test void requiresTwoHoursNotice() {
+        start = LocalDateTime.now(java.time.ZoneId.of("Asia/Colombo")).plusMinutes(119);
+        assertThatIllegalArgumentException().isThrownBy(() -> service.estimate(new Estimate(1L, booking(null, "ONLINE", null), null)))
+                .withMessage(BookingNoticeService.message(120));
+        start = LocalDateTime.now(java.time.ZoneId.of("Asia/Colombo")).plusMinutes(125);
+        assertThat(service.estimate(new Estimate(1L, booking(null, "ONLINE", null), null)).expectedAmount()).isEqualByComparingTo("750");
+    }
+
+    @Test void instantOptionsAllowNowAndAdminCanRequireMore() {
+        option.setMinimumNoticeMinutes(0);
+        start = LocalDateTime.now(java.time.ZoneId.of("Asia/Colombo"));
+        assertThat(service.estimate(new Estimate(1L, booking(null, "ONLINE", null), null)).expectedAmount()).isEqualByComparingTo("750");
+        start = start.minusMinutes(10);
+        assertThatIllegalArgumentException().isThrownBy(() -> service.estimate(new Estimate(1L, booking(null, "ONLINE", null), null)))
+                .withMessage("Start time cannot be in the past");
+        option.setMinimumNoticeMinutes(1440);
+        start = LocalDateTime.now(java.time.ZoneId.of("Asia/Colombo")).plusHours(5);
+        assertThatIllegalArgumentException().isThrownBy(() -> service.estimate(new Estimate(1L, booking(null, "ONLINE", null), null)))
+                .withMessage(BookingNoticeService.message(1440));
+    }
+
     @Test void rejectsProviderMissingMeetingPointAndPastTime() {
         assertThatIllegalArgumentException().isThrownBy(() -> service.estimate(new Estimate(1L, booking(15L, "ONLINE", null), null)))
                 .withMessageContaining("does not take a provider");
@@ -92,7 +114,7 @@ class CustomerBookingEstimateTest {
                 .withMessage("Customer meeting point is required");
         start = start.minusDays(2);
         assertThatIllegalArgumentException().isThrownBy(() -> service.estimate(new Estimate(1L, booking(null, "ONLINE", null), null)))
-                .withMessageContaining("future interval");
+                .withMessage(BookingNoticeService.message(120));
         verifyNoInteractions(jobRepository);
     }
 }

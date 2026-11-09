@@ -30,7 +30,9 @@ public record ServiceOptionResponse(
         List<ServiceCustomFieldResponse> dynamicFields,
         ServiceMediaPayload mapMarkerIcon,
         Long mapMarkerFieldId,
-        Long configurationServiceTypeId
+        Long configurationServiceTypeId,
+        int minimumNoticeMinutes,
+        boolean instantBooking
 ) {
     public record DeliveryModeConfiguration(
             String code,

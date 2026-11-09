@@ -162,6 +162,8 @@ class LiveTrackingServiceTest {
         var trip = service.customerTracking(27L, 29L);
         assertThat(trip.status()).isEqualTo("IN_TRIP");
         assertThat(trip.target().label()).isEqualTo("DESTINATION");
+        assertThat(trip.target().navigationUrl()).startsWith("https://www.google.com/maps/dir/?api=1&destination=")
+                .contains(trip.target().latitude().toPlainString() + "," + trip.target().longitude().toPlainString());
         assertThat(trip.providers().get(0).location()).isNotNull();
 
         job.setJobStatus("AWAITING_COMPLETION_CONFIRMATION");

@@ -436,7 +436,9 @@ public class ServiceOptionService {
                 ServiceContentSupport.responsibilities(item.getResponsibilities()),
                 customFieldService.listForOption(serviceTypeId,
                         item.getOptionId(), includeInactiveFields),
-                ServiceContentSupport.mapMarkerIcon(item.getMedia()), item.getMapMarkerFieldId(), item.getServiceProviderTypeId());
+                ServiceContentSupport.mapMarkerIcon(item.getMedia()), item.getMapMarkerFieldId(), item.getServiceProviderTypeId(),
+                com.jobhub.service.customer.BookingNoticeService.minutes(item),
+                com.jobhub.service.customer.BookingNoticeService.minutes(item) == 0);
     }
 
     private ServiceOptionResponse.DeliveryModeConfiguration deliveryConfiguration(
