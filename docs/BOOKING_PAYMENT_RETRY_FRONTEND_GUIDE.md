@@ -200,6 +200,7 @@ before card checkout starts; a failed wallet reservation can also switch to CARD
 A started card checkout, reconciliation, funded booking, or expired confirmation
 window cannot switch. The service option must allow the selected method. See
 [booking request API](BOOKING_REQUESTS_API.md#change-payment-method-after-provider-acceptance).
+
 ### Avoiding a double charge
 
 - Never start a new checkout while status is `PAYMENT_PENDING` or `PAYMENT_RECONCILIATION`.

@@ -44,6 +44,7 @@ public class BookingRequestService {
     private final com.jobhub.service.finance.WalletService wallets;
     private final com.jobhub.payments.PaymentGateway paymentGateway;
     private final com.jobhub.repository.finance.PaymentInstrumentRepository instruments;
+    private final LiveTrackingService tracking;
     /** After the first failed payment attempt the customer gets one fresh retry window; later failures never reset it. */
     static final Duration PAYMENT_RETRY_WINDOW=Duration.ofMinutes(15);
 
@@ -508,6 +509,7 @@ public class BookingRequestService {
         r.setCodeExpiresAt(job.getExpectedEndDatetime().atZone(zone).toInstant().plus(Duration.ofHours(24)));
         event(r,r.getUserId(),null,"BOOKING_CONFIRMED",null);
         event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"BOOKING_CONFIRMED",null);
+        tracking.onConfirmed(job);
     }
     @Transactional
     public View cancel(Long userId,Long id) {

@@ -64,7 +64,8 @@ public class CustomerDiscoveryService {
                 .findFirst().orElseThrow(() -> new ResourceNotFoundException("Active service option not found"));
         var publicFields = providerSearchFields.definitions(serviceId, optionId);
         return new Context(marketId, availability.market(marketId).getTimezone(), card,
-                fields.schema(serviceId, "BOOKING_FIELD", optionId), List.of("languages", "requiredSkillIds", "providerFilters"), false,
+                fields.schema(serviceId, "BOOKING_FIELD", optionId), List.of("languages", "requiredSkillIds", "providerFilters"),
+                !LiveTrackingService.NONE.equals(LiveTrackingService.mode(options.findById(optionId).orElse(null))),
                 providerSearchFields.schema(publicFields),
                 pricing.pricingFieldIds(marketId, serviceId, optionId, card.option().schedulingModel(),
                         pricingLatitude, pricingLongitude), providerSearchFields.displaySchema(publicFields));

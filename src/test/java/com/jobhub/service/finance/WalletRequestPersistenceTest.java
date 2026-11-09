@@ -175,6 +175,7 @@ class WalletRequestPersistenceTest {
             mock(CustomerDiscoveryService.class),mock(CustomerBookingService.class),mock(PayHereBookingCheckout.class),
             new BookingCodeCipher(validKey?Base64.getEncoder().encodeToString(new byte[32]):"invalid"),new ObjectMapper().findAndRegisterModules(),audit,walletService,
             mockMode?new com.jobhub.payments.MockPaymentGateway():mock(com.jobhub.payments.PaymentGateway.class),
-            mockMode?repos.getRepository(PaymentInstrumentRepository.class):mock(PaymentInstrumentRepository.class));
+            mockMode?repos.getRepository(PaymentInstrumentRepository.class):mock(PaymentInstrumentRepository.class),
+            mock(com.jobhub.service.customer.LiveTrackingService.class));
     }
 }

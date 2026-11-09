@@ -58,6 +58,11 @@ public class ServiceOption extends AuditedEntity {
     private String pricingOwner = "ADMIN";
     @Column(precision=5,scale=2)
     private java.math.BigDecimal platformFeePercentage;
+    /** NONE, EN_ROUTE (until arrival/start) or FULL_TRIP (until the provider requests completion). Null means NONE. */
+    @Column(length = 20)
+    private String liveTrackingMode = "NONE";
+    /** Bookings confirmed with a start/pickup within this many minutes start tracking automatically. Null means 30. */
+    private Integer liveTrackingAutoStartMinutes = 30;
 
     @ElementCollection
     @CollectionTable(name = "service_option_payment_method",

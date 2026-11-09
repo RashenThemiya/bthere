@@ -88,6 +88,7 @@ class GroupedOfferConcurrencyTest {
             providers,mock(com.jobhub.repository.market.MarketRepository.class),mock(com.jobhub.repository.auth.UserRepository.class),repos.getRepository(JobRepository.class),
             mock(CustomerDiscoveryService.class),bookings,mock(com.jobhub.payments.PayHereBookingCheckout.class),mock(BookingCodeCipher.class),
             new ObjectMapper().findAndRegisterModules(),mock(com.jobhub.service.audit.AuditService.class),mock(com.jobhub.service.finance.WalletService.class),
-            mock(com.jobhub.payments.PaymentGateway.class),mock(com.jobhub.repository.finance.PaymentInstrumentRepository.class));
+            mock(com.jobhub.payments.PaymentGateway.class),mock(com.jobhub.repository.finance.PaymentInstrumentRepository.class),
+            mock(LiveTrackingService.class));
     }
 }

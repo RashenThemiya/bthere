@@ -44,6 +44,7 @@ class BookingRequestServiceTest {
     @Mock com.jobhub.service.finance.WalletService wallets;
     @Mock com.jobhub.payments.PaymentGateway paymentGateway;
     @Mock com.jobhub.repository.finance.PaymentInstrumentRepository instruments;
+    @Mock LiveTrackingService tracking;
     @Spy BookingCodeCipher codes=new BookingCodeCipher(Base64.getEncoder().encodeToString(new byte[32]));
     @Spy ObjectMapper mapper=new ObjectMapper().findAndRegisterModules();
     @InjectMocks BookingRequestService service;
@@ -244,6 +245,7 @@ class BookingRequestServiceTest {
         assertThat(first.paymentStatus()).isEqualTo("RESERVED");assertThat(first.paymentMethod()).isEqualTo("WALLET");
         assertThat(first.paymentFundingMode()).isEqualTo("PAYHERE");
         assertThat(service.confirmWallet(5L,1L).status()).isEqualTo("CONFIRMED");verify(wallets,times(1)).reserveRequestBooking(5L,70L);
+        verify(tracking,times(1)).onConfirmed(job);
         job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));service.verifyStartCode(9L,70L,codes.decrypt(request.getStartCode()));
         service.requestCompletion(9L,70L);verify(wallets,never()).settleRequestWalletBooking(any(),any());
         service.confirmCompletion(5L,70L);service.confirmCompletion(5L,70L);
