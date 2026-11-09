@@ -52,6 +52,7 @@ public final class BookingRequestsApi {
                           @NotBlank @Size(max=100) String country) {}
     public record Checkout(String actionUrl, Map<String,String> fields, String status) {}
     public record MockCard(@NotNull @Positive Long methodId) {}
+    public record PaymentMethodChange(@NotBlank @Pattern(regexp="CARD|WALLET") String paymentMethod) {}
     public record PaymentDeadline(@NotNull Instant confirmationExpiresAt) {}
     public record PaymentWindow(Long requestId,String status,String paymentStatus,Instant confirmationExpiresAt,
                                 Instant paymentDeadlineLimit,Instant paymentRetryStartedAt,boolean canPay,boolean canCancel,boolean canExtend) {}

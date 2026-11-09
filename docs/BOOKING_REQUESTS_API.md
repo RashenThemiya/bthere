@@ -140,6 +140,7 @@ application/json. Paths below begin /api/v1/customers/me.
 | GET /booking-requests/{requestId} | 200 current View |
 | POST /booking-requests/{requestId}/confirm | 200 hosted Checkout for CARD |
 | POST /booking-requests/{requestId}/confirm-wallet | 200 View for WALLET; no body |
+| POST /booking-requests/{requestId}/payment-method | Change CARD/WALLET on accepted unpaid request |
 | POST /booking-requests/{requestId}/cancel | 200 cancelled View where allowed |
 | GET /bookings/{jobId}/verification-codes | 200 currently available own code |
 | POST /bookings/{jobId}/confirm-completion | 200 confirms provider-requested completion; no body or code |
@@ -223,6 +224,40 @@ amount, currency and card method are checked; replayed notification status does
 not repeat booking transitions. Multiple successful payments for one order are
 flagged for review. Reopening/resubmitting a hosted payment page is not a new
 booking and may need merchant review if the gateway processes an extra charge.
+
+### Change payment method after provider acceptance
+
+The assigned provider is retained. The customer may change the payment method
+while the request is `AWAITING_CUSTOMER_CONFIRMATION`, before a card checkout has
+started. A failed wallet reservation may also switch to CARD. The target method
+must be enabled for the service option; switching to CARD additionally requires
+card checkout to be configured. A started card checkout, payment reconciliation,
+funded booking, or expired confirmation window cannot be switched.
+
+```http
+POST /api/v1/customers/me/booking-requests/{requestId}/payment-method
+Authorization: Bearer <customer-token>
+Content-Type: application/json
+```
+
+```json
+{"paymentMethod":"WALLET"}
+```
+
+The response is the updated request `View`, for example:
+
+```json
+{"requestId":91,"status":"AWAITING_CUSTOMER_CONFIRMATION","selectionMode":"OPEN_REQUEST",
+ "offerId":null,"providerId":42,"offerExpiresAt":null,"confirmationExpiresAt":"2026-11-09T11:30:00Z",
+ "jobId":125,"paymentStatus":"NOT_STARTED","expectedAmount":2500.00,"currencyCode":"LKR",
+ "platformFeePercentage":10.00,"platformFee":250.00,"providerEarnings":2250.00,
+ "settlementStatus":null,"settlementOperationId":null,"paymentFundingMode":null,"paymentMethod":"WALLET"}
+```
+
+Then call `/confirm-wallet` for WALLET or `/confirm` for hosted CARD (or
+`/confirm-mock-card` in mock mode). Same-method requests are idempotent.
+Unsupported state or disallowed method returns 409; malformed body returns 400.
+`PAYMENT_METHOD_CHANGED` is emitted to customer and assigned-provider event streams.
 
 ## Provider endpoints
 

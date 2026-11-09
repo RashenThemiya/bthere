@@ -391,6 +391,43 @@ public class BookingRequestService {
         r.setPaymentFundingMode(reservation.fundingMode());r.setPaymentStatus("RESERVED");r.setPaymentStartedAt(Instant.now());
         confirmService(r,job);return view(r);
     }
+    /** Change CARD/WALLET on an accepted request before a card checkout can be in flight. */
+    @Transactional
+    public View changePaymentMethod(Long userId,Long id,String targetMethod) {
+        var r=owned(userId,id);
+        if(!Set.of("CARD","WALLET").contains(targetMethod))
+            throw new IllegalArgumentException("Payment method must be CARD or WALLET");
+        var currentMethod=requestMethod(r);
+        if(currentMethod.equals(targetMethod))return view(r);
+        var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow(() -> new ResourceNotFoundException("Accepted booking not found"));
+        if(!"AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) || r.getConfirmationExpiresAt()==null
+                || !Instant.now().isBefore(r.getConfirmationExpiresAt()) || !"AWAITING_PAYMENT".equals(job.getJobStatus()))
+            throw new ConflictException("Payment method can only be changed on an accepted, unpaid request");
+        boolean untouched="NOT_STARTED".equals(r.getPaymentStatus()) && r.getPaymentOrderId()==null;
+        boolean failedWallet="WALLET".equals(currentMethod) && "FAILED".equals(r.getPaymentStatus())
+                && r.getPaymentOrderId()==null;
+        if(!untouched && !failedWallet)
+            throw new ConflictException("Payment method cannot be changed after a card checkout starts or payment is funded");
+        var option=options.findLockedById(r.getOptionId()).orElseThrow(() -> new ResourceNotFoundException("Option not found"));
+        if(!option.getAllowedPaymentMethods().contains(targetMethod))
+            throw new ConflictException("The selected payment method is not allowed for this service");
+        if("CARD".equals(targetMethod))requireCardReady();
+        var oldRequest=read(r.getPayloadJson(),Create.class);
+        var oldBooking=oldRequest.booking();
+        var updatedBooking=new CreateBookingRequest(oldBooking.serviceTypeId(),oldBooking.optionId(),oldBooking.providerId(),
+                oldBooking.providerIds(),oldBooking.deliveryMode(),oldBooking.startDatetime(),oldBooking.expectedEndDatetime(),
+                oldBooking.requestedPickupTime(),oldBooking.pickup(),oldBooking.destination(),oldBooking.providerLocationId(),
+                oldBooking.meetingPoint(),oldBooking.customerNote(),oldBooking.answers(),targetMethod,oldBooking.pricingSelections());
+        r.setPayloadJson(write(new Create(oldRequest.marketId(),updatedBooking,oldRequest.searchLocation(),oldRequest.radiusKm(),
+                oldRequest.languages(),oldRequest.requiredSkillIds(),oldRequest.providerFilters())));
+        job.setPaymentMethod(targetMethod);
+        job.setPaymentStatus("PENDING");
+        r.setPaymentStatus("NOT_STARTED");
+        event(r,r.getUserId(),null,"PAYMENT_METHOD_CHANGED",null);
+        event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"PAYMENT_METHOD_CHANGED",null);
+        audit.record(userId,"BOOKING_PAYMENT_METHOD_CHANGED","BOOKING_REQUEST",id,Map.of("paymentMethod",currentMethod),Map.of("paymentMethod",targetMethod));
+        return view(r);
+    }
     private String requestMethod(BookingRequest r) {return read(r.getPayloadJson(),Create.class).booking().paymentMethod();}
     private BookingRequest providerOwnedRequest(Long userId,Long id) {
         var r=locked(id);

@@ -193,10 +193,13 @@ PayHere retry rules:
 | `AWAITING_CUSTOMER_CONFIRMATION` + `FAILED` | Creates a **new merchant order** (`BR-<uuid>`). `VISA` ↔ `MASTER` change is allowed here |
 | `PAYMENT_RECONCILIATION` | 409; do not retry |
 
-**Card ↔ Wallet switch is not supported.** `paymentMethod` is fixed when the
-request is created. To change it, cancel and create a new request with a new
-`Idempotency-Key`. That restarts matching and may get a different provider.
-
+For an accepted request, CARD/WALLET can be changed without restarting provider
+matching by calling `POST /api/v1/customers/me/booking-requests/{requestId}/payment-method`
+with `{"paymentMethod":"CARD"}` or `{"paymentMethod":"WALLET"}`. This is allowed
+before card checkout starts; a failed wallet reservation can also switch to CARD.
+A started card checkout, reconciliation, funded booking, or expired confirmation
+window cannot switch. The service option must allow the selected method. See
+[booking request API](BOOKING_REQUESTS_API.md#change-payment-method-after-provider-acceptance).
 ### Avoiding a double charge
 
 - Never start a new checkout while status is `PAYMENT_PENDING` or `PAYMENT_RECONCILIATION`.

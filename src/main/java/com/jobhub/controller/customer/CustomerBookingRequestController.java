@@ -31,6 +31,11 @@ public class CustomerBookingRequestController {
     }
     @PostMapping("/booking-requests/{id}/confirm-wallet")
     public View confirmWallet(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id) {return service.confirmWallet(user.id(),id);}
+    @PostMapping("/booking-requests/{id}/payment-method")
+    public View changePaymentMethod(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id,
+                                    @Valid @RequestBody PaymentMethodChange input) {
+        return service.changePaymentMethod(user.id(),id,input.paymentMethod());
+    }
     @PostMapping("/booking-requests/{id}/confirm-mock-card")
     public View confirmMockCard(@AuthenticationPrincipal AuthenticatedUser user,@PathVariable Long id,@Valid @RequestBody MockCard input) {
         return service.confirmMockCard(user.id(),id,input.methodId());
