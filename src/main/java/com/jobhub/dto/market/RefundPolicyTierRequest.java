@@ -9,6 +9,12 @@ public record RefundPolicyTierRequest(
         @NotNull @PositiveOrZero Integer minimumMinutesBeforeStart,
         @NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal refundPercentage,
         @NotNull @DecimalMin("0.00") BigDecimal cancellationFee,
-        @NotNull @Positive Integer priority
+        @NotNull @Positive Integer priority,
+        @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal providerPenaltyPercentage,
+        @DecimalMin("0.00") BigDecimal providerPenaltyFee
 ) {
+    public RefundPolicyTierRequest(String name, Integer minimumMinutesBeforeStart, BigDecimal refundPercentage,
+                                   BigDecimal cancellationFee, Integer priority) {
+        this(name, minimumMinutesBeforeStart, refundPercentage, cancellationFee, priority, null, null);
+    }
 }

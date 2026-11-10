@@ -68,8 +68,76 @@ and the customer gets `BOOKING_CANCELLED` in the booking events feed.
 
 ## 4. Cancel (provider)
 
-Same body (`expectedRefundAmount` is ignored). The customer is refunded 100% to their wallet and
-receives `BOOKING_CANCELLED`. Works even when no refund policy exists.
+Same body, plus optional `expectedPenaltyAmount` (send the preview's `penaltyAmount`; 409
+`"The penalty changed to {amount}; review it and try again"` if it moved). `expectedRefundAmount`
+is ignored. The customer is refunded 100% to their wallet and receives `BOOKING_CANCELLED`. Works
+even when no refund policy exists (then there is no penalty).
+
+The response adds `penalty` (see below) and `providerSuspended`.
+
+### Provider preview
+
+`GET /api/v1/providers/me/bookings/{jobId}/cancellation-preview` (SERVICE_PROVIDER) returns the
+quote from #1 with the penalty fields:
+
+```json
+{"penaltyAmount": 500.00, "penaltyPercentage": 5.00, "penaltyFee": 0.00,
+ "penaltyCustomerAmount": 200.00, "penaltyTierName": "Two hours", "penaltyGraceApplied": false}
+```
+
+Show the provider: "Cancelling now costs LKR 500 (Two hours rule)."
+
+## Provider penalties
+
+**Amount.** The tier reached (same tiers and minutes-before-start as the customer refund) gives
+`providerPenaltyPercentage` and `providerPenaltyFee`: penalty = paid × percentage + fee, at most the
+paid amount. No penalty when the provider cancels within `providerPenaltyGraceMinutes` of accepting.
+`penaltyCustomerSharePercentage` of the penalty goes to the customer's wallet; the rest to the platform.
+
+Example: paid 10,000, start in 5 hours → tier "Two hours" 5% → penalty 500; customer share 40% →
+customer gets 200 (on top of the full 10,000 refund), platform 300.
+
+**Collection.** Taken at once from the provider's wallet `AVAILABLE` balance, customer's share
+first. What cannot be taken stays `OUTSTANDING` and is recovered automatically from the provider's
+next booking earnings. While anything is outstanding, wallet withdrawals return 409
+`"Pay the outstanding cancellation penalty of LKR {amount} before withdrawing"`.
+
+**Suspension.** When `providerCancellationLimit` and `providerCancellationWindowDays` are set, the
+provider is suspended (`service_provider.status = SUSPENDED`) on reaching the limit within the window
+(counted per provider across bookings; waived cancellations do not count). A suspended provider gets
+no new offers, and accepting returns 409 `"Your provider account is suspended; contact support"`.
+They can still log in and see their wallet and penalties. Only a Super Admin can reactivate.
+
+`penalty` object:
+
+```json
+{
+  "penaltyId": 31, "jobId": 70, "serviceProviderId": 15, "currencyCode": "LKR",
+  "penaltyAmount": 500.00, "penaltyPercentage": 5.00, "penaltyFee": 0.00, "tierName": "Two hours",
+  "customerShareAmount": 200.00, "customerPaidAmount": 200.00, "collectedAmount": 350.00,
+  "outstandingAmount": 150.00, "status": "OUTSTANDING", "refundPolicyId": 3, "refundPolicyVersion": 2,
+  "waiveReason": null, "waivedAt": null, "createdAt": "2026-11-10T10:15:00"
+}
+```
+
+`status`: `OUTSTANDING`, `COLLECTED` or `WAIVED`.
+
+| Method | Path | Role | Purpose |
+|---|---|---|---|
+| GET | `/api/v1/providers/me/penalties` | SERVICE_PROVIDER | `{currencyCode, outstandingTotal, providerStatus, penalties[]}` |
+| GET | `/api/v1/admin/provider-penalties?providerId=&status=&page=&size=` | SUPER_ADMIN | Page of penalties |
+| GET | `/api/v1/admin/provider-penalties/{penaltyId}` | SUPER_ADMIN | One penalty |
+| POST | `/api/v1/admin/provider-penalties/{penaltyId}/waive` | SUPER_ADMIN | `{"reason": "Hospital admission"}` (required, up to 500) |
+| POST | `/api/v1/admin/providers/{providerId}/reactivate` | SUPER_ADMIN | `{"note": "optional"}`; 409 unless SUSPENDED |
+
+**Waive** returns whatever was collected to the provider's wallet (from the platform fee account);
+the customer keeps compensation already paid. The cancellation stops counting towards suspension.
+Waiving does not reactivate a suspended provider; call reactivate as well.
+
+Ledger: collections are `PROVIDER_PENALTY` operations (`PENALTY:{penaltyId}:{n}`), debit provider
+`AVAILABLE`, credit customer `AVAILABLE` and `PLATFORM_FEE`. Waiver is `PROVIDER_PENALTY_WAIVE`
+(`PENALTY:{penaltyId}:WAIVE`). If the customer's wallet holds funds of a different funding mode,
+only the platform's part is collected and the customer's part waits.
 
 ## 3, 5, 6. Read a cancellation
 
@@ -117,10 +185,33 @@ can spend the wallet balance or withdraw it.
 `POST/PUT /api/v1/admin/markets/{marketId}/refund-policies[/{policyId}]` accept and return:
 
 ```json
-{"retainedProviderSharePercentage": 70.00}
+{
+  "retainedProviderSharePercentage": 70.00,
+  "penaltyCustomerSharePercentage": 40.00,
+  "providerPenaltyGraceMinutes": 5,
+  "providerCancellationLimit": 3,
+  "providerCancellationWindowDays": 30,
+  "tiers": [
+    {"name": "Early", "minimumMinutesBeforeStart": 1440, "refundPercentage": 100, "cancellationFee": 0, "priority": 1,
+     "providerPenaltyPercentage": 0, "providerPenaltyFee": 0},
+    {"name": "Two hours", "minimumMinutesBeforeStart": 120, "refundPercentage": 50, "cancellationFee": 200, "priority": 2,
+     "providerPenaltyPercentage": 5, "providerPenaltyFee": 0},
+    {"name": "Late", "minimumMinutesBeforeStart": 0, "refundPercentage": 0, "cancellationFee": 0, "priority": 3,
+     "providerPenaltyPercentage": 10, "providerPenaltyFee": 200}
+  ]
+}
 ```
 
-0–100, optional. Only DRAFT policies can be edited; create a new version to change it.
+| Field | Range | Empty means |
+|---|---|---|
+| `retainedProviderSharePercentage` | 0–100 | booking's normal split |
+| `penaltyCustomerSharePercentage` | 0–100 | whole penalty to the platform |
+| `providerPenaltyGraceMinutes` | 0–1440 | no grace |
+| `providerCancellationLimit` + `providerCancellationWindowDays` | 1–100, 1–365; set both or neither (400) | never suspend |
+| tier `providerPenaltyPercentage` / `providerPenaltyFee` | 0–100 / ≥ 0 | 0 |
+
+Only DRAFT policies can be edited; create a new version to change them. Bookings keep the policy in
+force when they were confirmed.
 
 ## Schema
 

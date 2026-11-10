@@ -61,6 +61,18 @@ public class RefundPolicy extends AuditedEntity {
      */
     @Column(precision = 5, scale = 2)
     private BigDecimal retainedProviderSharePercentage;
+
+    /** When a provider cancels: share of their penalty credited to the customer's wallet; the rest goes to the platform. */
+    @Column(precision = 5, scale = 2)
+    private BigDecimal penaltyCustomerSharePercentage;
+
+    /** A provider cancelling within this many minutes of accepting pays no penalty (null = no grace). */
+    private Integer providerPenaltyGraceMinutes;
+
+    /** Suspend the provider at this many cancellations within providerCancellationWindowDays (null = never). */
+    private Integer providerCancellationLimit;
+
+    private Integer providerCancellationWindowDays;
     @Column(nullable = false)
     private boolean platformFeeRefundable;
 

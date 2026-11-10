@@ -70,6 +70,9 @@ class JobhubApplicationTests {
     @MockitoBean private com.jobhub.repository.job.ProviderLiveLocationRepository providerLiveLocations;
     @MockitoBean private com.jobhub.repository.job.RatingRepository ratingRepository;
     @MockitoBean private com.jobhub.repository.job.JobCancellationRepository jobCancellationRepository;
+    @MockitoBean private com.jobhub.repository.job.ProviderPenaltyRepository providerPenaltyRepository;
+    @Autowired private com.jobhub.controller.provider.ProviderPenaltyController providerPenaltyController;
+    @Autowired private com.jobhub.controller.admin.AdminProviderPenaltyController adminProviderPenaltyController;
     @MockitoBean private com.jobhub.repository.auth.UserDeviceRepository bookingDevices;
     @Autowired private com.jobhub.controller.provider.ProviderBookingOfferController bookingOfferController;
     @Autowired private com.jobhub.controller.admin.AdminBookingRequestPolicyController bookingPolicyController;
@@ -157,6 +160,18 @@ class JobhubApplicationTests {
         for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","VERIFICATION_ADMIN")) as(role, () ->
                 org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminBookingNoticeController.update(1L,null))
                         .isInstanceOf(org.springframework.security.access.AccessDeniedException.class));
+        for(String role:java.util.List.of("CUSTOMER","SUPER_ADMIN")) as(role, () -> {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> providerPenaltyController.mine(null))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> providerCancellationController.preview(null,70L))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        });
+        for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","VERIFICATION_ADMIN")) as(role, () -> {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminProviderPenaltyController.waive(null,1L,null))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminProviderPenaltyController.reactivate(null,1L,null))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        });
     }
 
     @Test void providerCannotConfirmCompletionOnCustomersBehalf() {

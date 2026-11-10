@@ -24,10 +24,7 @@ public final class RefundCalculator {
     public static Quote customer(RefundPolicy policy, Job job, long minutesBeforeStart) {
         BigDecimal paid = money(job.getExpectedAmount());
         BigDecimal platformFee = job.getPlatformFee() == null ? BigDecimal.ZERO : money(job.getPlatformFee()).min(paid);
-        RefundPolicyTier tier = policy.getTiers().stream()
-                .filter(t -> t.getMinimumMinutesBeforeStart() <= Math.max(0, minutesBeforeStart))
-                .max(Comparator.comparing(RefundPolicyTier::getMinimumMinutesBeforeStart))
-                .orElse(null);
+        RefundPolicyTier tier = tier(policy, minutesBeforeStart);
         BigDecimal percentage = tier == null ? BigDecimal.ZERO : tier.getRefundPercentage();
         BigDecimal fee = tier == null || tier.getCancellationFee() == null ? BigDecimal.ZERO : money(tier.getCancellationFee());
         BigDecimal base = policy.isPlatformFeeRefundable() ? paid : paid.subtract(platformFee);
@@ -44,11 +41,44 @@ public final class RefundCalculator {
 
     /** Provider cancellation always refunds the customer in full; the provider and platform keep nothing. */
     public static Quote provider(RefundPolicy policy, Job job, long minutesBeforeStart) {
+        return provider(policy, job, minutesBeforeStart, Long.MAX_VALUE);
+    }
+
+    /**
+     * Provider cancellation: the customer is refunded in full, and the provider owes a penalty from the tier
+     * reached (paid x providerPenaltyPercentage + providerPenaltyFee, at most the paid amount). No penalty within
+     * the policy's grace minutes after accepting. penaltyCustomerSharePercentage of the penalty goes to the customer.
+     */
+    public static Quote provider(RefundPolicy policy, Job job, long minutesBeforeStart, long minutesSinceAccepted) {
         BigDecimal paid = money(job.getExpectedAmount());
+        BigDecimal zero = BigDecimal.ZERO.setScale(2);
+        BigDecimal penalty = zero, percentage = null, fee = null, customerShare = zero;
+        String tierName = null;
+        boolean grace = false;
+        if (policy != null) {
+            Integer graceMinutes = policy.getProviderPenaltyGraceMinutes();
+            grace = graceMinutes != null && graceMinutes > 0 && minutesSinceAccepted < graceMinutes;
+            RefundPolicyTier tier = grace ? null : tier(policy, minutesBeforeStart);
+            if (tier != null) {
+                tierName = tier.getName();
+                percentage = tier.getProviderPenaltyPercentage() == null ? zero : tier.getProviderPenaltyPercentage();
+                fee = tier.getProviderPenaltyFee() == null ? zero : money(tier.getProviderPenaltyFee());
+                penalty = percent(paid, percentage).add(fee).min(paid);
+                customerShare = policy.getPenaltyCustomerSharePercentage() == null ? zero
+                        : percent(penalty, policy.getPenaltyCustomerSharePercentage()).min(penalty);
+            }
+        }
         return new Quote(job.getJobId(), PROVIDER, job.getCurrencyCode(), paid, paid, HUNDRED.setScale(2),
-                BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2),
-                BigDecimal.ZERO.setScale(2), true, WALLET, minutesBeforeStart,
-                policy == null ? null : policy.getPolicyId(), policy == null ? null : policy.getVersion(), null);
+                zero, zero, zero, zero, true, WALLET, minutesBeforeStart,
+                policy == null ? null : policy.getPolicyId(), policy == null ? null : policy.getVersion(), null,
+                penalty, percentage, fee, customerShare, tierName, grace);
+    }
+
+    private static RefundPolicyTier tier(RefundPolicy policy, long minutesBeforeStart) {
+        return policy.getTiers().stream()
+                .filter(t -> t.getMinimumMinutesBeforeStart() <= Math.max(0, minutesBeforeStart))
+                .max(Comparator.comparing(RefundPolicyTier::getMinimumMinutesBeforeStart))
+                .orElse(null);
     }
 
     private static BigDecimal providerRatio(Job job, BigDecimal paid, BigDecimal retained) {

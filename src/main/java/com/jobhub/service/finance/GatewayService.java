@@ -56,6 +56,13 @@ public class GatewayService {
         if (!Set.of("TOPUP","WITHDRAWAL").contains(purpose)) throw new IllegalArgumentException("Invalid purpose");
         currency=WalletService.currency(currency);amount=WalletService.money(amount,currency);
         lockUser(userId);wallets.get(userId,currency);
+        if ("WITHDRAWAL".equals(purpose)) {
+            // Provider penalties are recovered first; withdrawing is blocked while any remain unpaid.
+            wallets.recoverProviderPenalties(userId,currency,userId);
+            BigDecimal owed=wallets.outstandingPenalties(userId,currency);
+            if (owed!=null && owed.signum()>0)
+                throw new ConflictException("Pay the outstanding cancellation penalty of "+currency+" "+owed+" before withdrawing");
+        }
         validateMethod(userId,methodId,"WITHDRAWAL".equals(purpose)?"BANK_ACCOUNT":"CARD","WITHDRAWAL".equals(purpose));
         var intent=create(userId,purpose,currency,amount,null,methodId,key);
         if ("WITHDRAWAL".equals(purpose) && "PENDING".equals(intent.getStatus())) {

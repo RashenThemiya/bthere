@@ -45,4 +45,11 @@ public class JobCancellation extends CreatedEntity {
     @Column(length = 100)
     private String refundTierName;
     private Long walletOperationId;
+    /** Provider cancellations: the penalty charged (0 when none) and its ledger row. */
+    private BigDecimal penaltyAmount;
+    private Long penaltyId;
+    /** An admin waived the penalty; the cancellation no longer counts towards suspension. */
+    private boolean penaltyWaived;
+    /** This cancellation reached the policy's limit and suspended the provider. */
+    private boolean providerSuspended;
 }

@@ -72,5 +72,44 @@ class RefundCalculatorTest {
         assertThat(quote.providerAmount()).isEqualByComparingTo("0");
         assertThat(quote.platformAmount()).isEqualByComparingTo("0");
         assertThat(RefundCalculator.provider(null, job, 30).refundPolicyId()).isNull();
+        assertThat(quote.penaltyAmount()).isEqualByComparingTo("0");
+    }
+
+    private void penalties() {
+        policy.getTiers().forEach(t -> {
+            switch (t.getName()) {
+                case "Two hours" -> { t.setProviderPenaltyPercentage(new BigDecimal("5")); t.setProviderPenaltyFee(new BigDecimal("200")); }
+                case "Late" -> t.setProviderPenaltyPercentage(new BigDecimal("10"));
+                default -> { }
+            }
+        });
+        policy.setPenaltyCustomerSharePercentage(new BigDecimal("50"));
+    }
+
+    @Test void providerPenaltyFollowsTierAndSplitsCustomerShare() {
+        penalties();
+        var early = RefundCalculator.provider(policy, job, 2000, 600);
+        assertThat(early.penaltyAmount()).isEqualByComparingTo("0");
+        assertThat(early.penaltyTierName()).isEqualTo("Early");
+        var middle = RefundCalculator.provider(policy, job, 300, 600);
+        assertThat(middle.penaltyAmount()).isEqualByComparingTo("700");
+        assertThat(middle.penaltyCustomerAmount()).isEqualByComparingTo("350");
+        assertThat(middle.refundAmount()).isEqualByComparingTo("10000");
+        var late = RefundCalculator.provider(policy, job, -30, 600);
+        assertThat(late.penaltyAmount()).isEqualByComparingTo("1000");
+        assertThat(late.penaltyTierName()).isEqualTo("Late");
+    }
+
+    @Test void graceAfterAcceptingAndCapAtPaidAmount() {
+        penalties();
+        policy.setProviderPenaltyGraceMinutes(5);
+        var grace = RefundCalculator.provider(policy, job, 0, 3);
+        assertThat(grace.penaltyAmount()).isEqualByComparingTo("0");
+        assertThat(grace.penaltyGraceApplied()).isTrue();
+        assertThat(RefundCalculator.provider(policy, job, 0, 5).penaltyAmount()).isEqualByComparingTo("1000");
+        policy.getTiers().forEach(t -> t.setProviderPenaltyFee(new BigDecimal("50000")));
+        assertThat(RefundCalculator.provider(policy, job, 0, 60).penaltyAmount()).isEqualByComparingTo("10000");
+        policy.setPenaltyCustomerSharePercentage(null);
+        assertThat(RefundCalculator.provider(policy, job, 0, 60).penaltyCustomerAmount()).isEqualByComparingTo("0");
     }
 }

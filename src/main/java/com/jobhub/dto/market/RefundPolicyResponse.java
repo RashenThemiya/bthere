@@ -26,6 +26,10 @@ public record RefundPolicyResponse(
         List<RefundPolicyTierResponse> tiers,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        BigDecimal retainedProviderSharePercentage
+        BigDecimal retainedProviderSharePercentage,
+        BigDecimal penaltyCustomerSharePercentage,
+        Integer providerPenaltyGraceMinutes,
+        Integer providerCancellationLimit,
+        Integer providerCancellationWindowDays
 ) {
 }

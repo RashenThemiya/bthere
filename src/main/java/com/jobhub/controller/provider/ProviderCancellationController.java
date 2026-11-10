@@ -15,6 +15,12 @@ import org.springframework.web.bind.annotation.*;
 public class ProviderCancellationController {
     private final BookingCancellationService service;
 
+    /** Penalty the provider would pay for cancelling now; nothing is saved. */
+    @GetMapping("/cancellation-preview")
+    public Quote preview(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long jobId) {
+        return service.providerPreview(user.id(), jobId);
+    }
+
     @PostMapping("/cancel")
     public Cancellation cancel(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long jobId,
                                @Valid @RequestBody Cancel input) {

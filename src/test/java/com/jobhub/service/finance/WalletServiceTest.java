@@ -411,6 +411,58 @@ class WalletServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service,"paymentProvider","MOCK");
         assertThatThrownBy(() -> service.gatewayMovement(25L,"LKR",BigDecimal.TEN,1L,"TOPUP")).hasMessageContaining("cannot be mixed");
     }
+
+    com.jobhub.entity.job.ProviderPenalty penalty(String amount, String customerShare) {
+        var repo = mock(ProviderPenaltyRepository.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "penalties", repo);
+        var p = new com.jobhub.entity.job.ProviderPenalty(); p.setPenaltyId(31L); p.setJobId(100L); p.setServiceProviderId(15L);
+        p.setProviderUserId(42L); p.setCustomerUserId(25L); p.setCurrencyCode("LKR"); p.setPenaltyAmount(new BigDecimal(amount));
+        p.setCustomerShareAmount(new BigDecimal(customerShare)); p.setCollectedAmount(new BigDecimal("0.00"));
+        p.setCustomerPaidAmount(new BigDecimal("0.00")); p.setStatus("OUTSTANDING");
+        lenient().when(repo.lockById(31L)).thenReturn(Optional.of(p));
+        lenient().when(repo.outstandingIds(42L, "LKR")).thenAnswer(i -> "OUTSTANDING".equals(p.getStatus()) ? List.of(31L) : List.of());
+        lenient().when(users.findById(anyLong())).thenAnswer(i -> { var u = new User(); u.setUserId(i.getArgument(0)); u.setStatus("ACTIVE"); return Optional.of(u); });
+        return p;
+    }
+
+    @Test void penaltyTakesWhatTheProviderHasPaysCustomerFirstAndWaiverReturnsIt() {
+        cardFixture(); balances.get(25L).setFundingMode("PAYHERE");
+        service.settleCardBooking(25L, 100L);
+        var p = penalty("25.00", "10.00");
+        assertThat(service.collectProviderPenalty(31L, 42L)).isEqualByComparingTo("18");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("0");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("110");
+        assertThat(entries).anyMatch(e -> "PLATFORM_FEE".equals(e.getBucket()) && e.getDelta().compareTo(new BigDecimal("8")) == 0);
+        assertThat(p.getStatus()).isEqualTo("OUTSTANDING");
+        assertThat(p.outstanding()).isEqualByComparingTo("7");
+        assertThat(service.collectProviderPenalty(31L, 42L)).isEqualByComparingTo("0");
+        service.waiveProviderPenalty(31L, 1L, "Hospital admission");
+        assertThat(p.getStatus()).isEqualTo("WAIVED");
+        assertThat(p.outstanding()).isEqualByComparingTo("0");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("18");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("110");
+        assertThat(entries).anyMatch(e -> "PLATFORM_FEE".equals(e.getBucket()) && e.getDelta().compareTo(new BigDecimal("-18")) == 0);
+    }
+
+    @Test void customerWalletOfAnotherFundingModeOnlyLetsThePlatformPartBeCollected() {
+        cardFixture(); balances.get(25L).setFundingMode("MOCK");
+        service.settleCardBooking(25L, 100L);
+        var p = penalty("15.00", "10.00");
+        assertThat(service.collectProviderPenalty(31L, 42L)).isEqualByComparingTo("5");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("100");
+        assertThat(p.getCustomerPaidAmount()).isEqualByComparingTo("0");
+        assertThat(p.outstanding()).isEqualByComparingTo("10");
+    }
+
+    @Test void laterEarningsRecoverOutstandingPenalty() {
+        cardFixture(); balances.get(25L).setFundingMode("PAYHERE");
+        var p = penalty("5.00", "0.00");
+        service.settleCardBooking(25L, 100L);
+        assertThat(p.getStatus()).isEqualTo("COLLECTED");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("13");
+        assertThat(entries.stream().filter(e -> e.getWalletId() != null && e.getWalletId() == 42L).map(WalletLedgerEntry::getDelta)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)).isEqualByComparingTo("13");
+    }
 }
 
 

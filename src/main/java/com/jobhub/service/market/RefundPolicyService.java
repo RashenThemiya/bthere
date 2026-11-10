@@ -174,6 +174,10 @@ public class RefundPolicyService {
         if (request.offeringId() != null) {
             requireOfferingInMarket(marketId, request.offeringId());
         }
+        if ((request.providerCancellationLimit() == null) != (request.providerCancellationWindowDays() == null)) {
+            throw new IllegalArgumentException(
+                    "Set providerCancellationLimit and providerCancellationWindowDays together");
+        }
         Set<Integer> thresholds = new HashSet<>();
         Set<Integer> priorities = new HashSet<>();
         boolean hasCatchAll = false;
@@ -206,6 +210,10 @@ public class RefundPolicyService {
         policy.setServiceFailureRefundPercentage(request.serviceFailureRefundPercentage());
         policy.setCustomerNoShowRefundPercentage(request.customerNoShowRefundPercentage());
         policy.setRetainedProviderSharePercentage(request.retainedProviderSharePercentage());
+        policy.setPenaltyCustomerSharePercentage(request.penaltyCustomerSharePercentage());
+        policy.setProviderPenaltyGraceMinutes(request.providerPenaltyGraceMinutes());
+        policy.setProviderCancellationLimit(request.providerCancellationLimit());
+        policy.setProviderCancellationWindowDays(request.providerCancellationWindowDays());
         policy.setPlatformFeeRefundable(request.platformFeeRefundable());
         policy.setProcessingFeeRefundable(request.processingFeeRefundable());
         policy.setEffectiveFrom(request.effectiveFrom());
@@ -220,6 +228,8 @@ public class RefundPolicyService {
         tier.setRefundPercentage(request.refundPercentage());
         tier.setCancellationFee(request.cancellationFee());
         tier.setPriority(request.priority());
+        tier.setProviderPenaltyPercentage(request.providerPenaltyPercentage());
+        tier.setProviderPenaltyFee(request.providerPenaltyFee());
         return tier;
     }
 
@@ -259,8 +269,11 @@ public class RefundPolicyService {
                 policy.getStatus(), policy.getEffectiveFrom(), policy.getEffectiveTo(),
                 policy.getTiers().stream().map(item -> new RefundPolicyTierResponse(
                         item.getTierId(), item.getName(), item.getMinimumMinutesBeforeStart(),
-                        item.getRefundPercentage(), item.getCancellationFee(), item.getPriority()
+                        item.getRefundPercentage(), item.getCancellationFee(), item.getPriority(),
+                        item.getProviderPenaltyPercentage(), item.getProviderPenaltyFee()
                 )).toList(), policy.getCreatedAt(), policy.getUpdatedAt(),
-                policy.getRetainedProviderSharePercentage());
+                policy.getRetainedProviderSharePercentage(), policy.getPenaltyCustomerSharePercentage(),
+                policy.getProviderPenaltyGraceMinutes(), policy.getProviderCancellationLimit(),
+                policy.getProviderCancellationWindowDays());
     }
 }

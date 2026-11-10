@@ -8,6 +8,8 @@ public record RefundPolicyTierResponse(
         Integer minimumMinutesBeforeStart,
         BigDecimal refundPercentage,
         BigDecimal cancellationFee,
-        Integer priority
+        Integer priority,
+        BigDecimal providerPenaltyPercentage,
+        BigDecimal providerPenaltyFee
 ) {
 }

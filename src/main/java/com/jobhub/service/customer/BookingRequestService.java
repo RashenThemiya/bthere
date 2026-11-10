@@ -252,6 +252,8 @@ public class BookingRequestService {
         var initial=offers.findById(offerId).orElseThrow(() -> new ResourceNotFoundException("Offer not found"));
         Long providerId=providerId(userId);
         if(!providerId.equals(initial.getProviderId())) throw new ResourceNotFoundException("Offer not found");
+        if("SUSPENDED".equals(providers.findById(providerId).map(p -> p.getStatus()).orElse(null)))
+            throw new ConflictException("Your provider account is suspended; contact support");
         var r=locked(initial.getRequestId());
         var offer=offers.findById(offerId).orElseThrow();
         if(r.getJobId()!=null && !"MATCHING".equals(r.getStatus())) {

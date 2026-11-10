@@ -338,6 +338,7 @@ public class WalletService {
         request.setSettlementStatus("POSTED");request.setSettlementOperationId(op.getOperationId());
         if(walletPayment)request.setPaymentStatus("SETTLED");
         audit.record(customerUserId,walletPayment?"WALLET_REQUEST_BOOKING_SETTLED":"CARD_BOOKING_SETTLED","WALLET_OPERATION",op.getOperationId(),null,response(op));
+        recoverProviderPenalties(provider.getUserId(),currency,null);
         return response(op);
     }
 
@@ -410,6 +411,135 @@ public class WalletService {
         request.setPaymentStatus(status);request.setSettlementStatus("POSTED");request.setSettlementOperationId(op.getOperationId());
         audit.record(actorId,"BOOKING_CANCELLATION_REFUNDED","WALLET_OPERATION",op.getOperationId(),null,response(op));
         return response(op);
+    }
+
+    // ---------- provider cancellation penalties ----------
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.jobhub.repository.job.ProviderPenaltyRepository penalties;
+
+    /**
+     * Collects as much of an outstanding provider penalty as the provider's AVAILABLE balance allows: the customer's
+     * share first (to their wallet), then the platform's. The rest stays OUTSTANDING. Never throws for a wallet that
+     * cannot take part right now (inactive user, frozen wallet, other funding mode); it simply collects nothing.
+     * Returns the amount collected.
+     */
+    @Transactional
+    public BigDecimal collectProviderPenalty(Long penaltyId, Long actorId) {
+        if (penalties == null) return BigDecimal.ZERO;
+        var p = penalties.lockById(penaltyId).orElseThrow(() -> new ResourceNotFoundException("Penalty not found"));
+        BigDecimal outstanding = p.outstanding();
+        if (outstanding.signum() <= 0) return BigDecimal.ZERO;
+        String currency = currency(p.getCurrencyCode());
+        if (!activeUser(p.getProviderUserId())) return BigDecimal.ZERO;
+        BigDecimal customerDue = p.getCustomerShareAmount().subtract(p.getCustomerPaidAmount()).max(BigDecimal.ZERO);
+        boolean customerActive = customerDue.signum() > 0 && activeUser(p.getCustomerUserId());
+        // Users first, then wallets: the same order as every other wallet operation.
+        lockUsers(customerActive ? List.of(p.getProviderUserId(), p.getCustomerUserId()) : List.of(p.getProviderUserId()));
+        var provider = wallets.lockOwned(p.getProviderUserId(), currency).orElse(null);
+        if (provider == null || !"ACTIVE".equals(provider.getStatus()) || provider.getAvailableBalance() == null) return BigDecimal.ZERO;
+        String mode = provider.getFundingMode();
+        if (!Set.of("PAYHERE", "PAYHERE_SANDBOX", "MOCK").contains(mode == null ? "" : mode)) return BigDecimal.ZERO;
+        if (p.getFundingMode() != null && !p.getFundingMode().equals(mode)) return BigDecimal.ZERO;
+        if ("MOCK".equals(mode) && !"MOCK".equalsIgnoreCase(selectedGateway == null ? paymentProvider : selectedGateway.name()))
+            return BigDecimal.ZERO;
+        BigDecimal take = outstanding.min(provider.getAvailableBalance()).setScale(2, RoundingMode.DOWN);
+        if (take.signum() <= 0) return BigDecimal.ZERO;
+        BigDecimal toCustomer = take.min(customerDue);
+        Wallet customer = null;
+        if (toCustomer.signum() > 0) {
+            boolean usable = customerActive;
+            if (usable) {
+                customer = lockedWallet(p.getCustomerUserId(), currency);
+                usable = "ACTIVE".equals(customer.getStatus()) && (!hasFunds(customer) || mode.equals(customer.getFundingMode()));
+            }
+            if (!usable) {
+                // Collect only the platform's part now; the customer's part waits for a later collection.
+                customer = null;
+                toCustomer = BigDecimal.ZERO;
+                BigDecimal platformDue = outstanding.subtract(customerDue).max(BigDecimal.ZERO);
+                take = take.min(platformDue);
+                if (take.signum() <= 0) return BigDecimal.ZERO;
+            }
+        }
+        BigDecimal toPlatform = take.subtract(toCustomer);
+        var op = new WalletOperation();
+        op.setOperationKey("PENALTY:" + p.getPenaltyId() + ":" + (p.getCollectionCount() + 1));
+        op.setType("PROVIDER_PENALTY"); op.setOwnerUserId(p.getProviderUserId()); op.setJobId(p.getJobId());
+        op.setCurrencyCode(currency); op.setAmount(take); op.setActorUserId(actorId); op.setStatus("PROCESSING");
+        op.setFundingMode(mode); op.setPaymentReference("PENALTY:" + p.getPenaltyId());
+        op = operations.save(op);
+        var postings = new ArrayList<Posting>();
+        postings.add(new Posting(provider, "AVAILABLE", take.negate()));
+        if (toCustomer.signum() > 0) postings.add(new Posting(customer, "AVAILABLE", toCustomer));
+        if (toPlatform.signum() > 0) postings.add(new Posting(null, platformFeeAccount(mode), toPlatform));
+        post(op, postings);
+        p.setCollectedAmount(p.getCollectedAmount().add(take));
+        p.setCustomerPaidAmount(p.getCustomerPaidAmount().add(toCustomer));
+        p.setCollectionCount(p.getCollectionCount() + 1);
+        p.setLastOperationId(op.getOperationId());
+        if (p.getFundingMode() == null) p.setFundingMode(mode);
+        if (p.getCollectedAmount().compareTo(p.getPenaltyAmount()) >= 0) { p.setStatus("COLLECTED"); p.setCollectedAt(java.time.Instant.now()); }
+        penalties.save(p);
+        audit.record(actorId, "PROVIDER_PENALTY_COLLECTED", "PROVIDER_PENALTY", p.getPenaltyId(), null,
+                Map.of("amount", take, "toCustomer", toCustomer, "toPlatform", toPlatform, "operationId", op.getOperationId()));
+        return take;
+    }
+
+    /** Recovers a provider's outstanding penalties, oldest first, from their available balance. */
+    @Transactional
+    public void recoverProviderPenalties(Long providerUserId, String currency, Long actorId) {
+        if (penalties == null) return;
+        for (Long id : penalties.outstandingIds(providerUserId, currency(currency))) {
+            if (collectProviderPenalty(id, actorId).signum() <= 0) break;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal outstandingPenalties(Long providerUserId, String currency) {
+        if (penalties == null) return BigDecimal.ZERO;
+        BigDecimal total = penalties.outstandingTotal(providerUserId, currency(currency));
+        return total == null ? BigDecimal.ZERO : total;
+    }
+
+    /**
+     * Waives a penalty. Anything already collected goes back to the provider from the platform fee account; the
+     * customer keeps compensation already paid (the platform absorbs it).
+     */
+    @Transactional
+    public com.jobhub.entity.job.ProviderPenalty waiveProviderPenalty(Long penaltyId, Long actorId, String reason) {
+        if (penalties == null) throw new ConflictException("Penalties are not available");
+        var p = penalties.lockById(penaltyId).orElseThrow(() -> new ResourceNotFoundException("Penalty not found"));
+        if ("WAIVED".equals(p.getStatus())) return p;
+        BigDecimal collected = p.getCollectedAmount();
+        if (collected.signum() > 0) {
+            String currency = currency(p.getCurrencyCode());
+            lockUsers(List.of(p.getProviderUserId()));
+            var provider = lockedWallet(p.getProviderUserId(), currency);
+            var op = new WalletOperation();
+            op.setOperationKey("PENALTY:" + p.getPenaltyId() + ":WAIVE");
+            op.setType("PROVIDER_PENALTY_WAIVE"); op.setOwnerUserId(p.getProviderUserId()); op.setJobId(p.getJobId());
+            op.setCurrencyCode(currency); op.setAmount(collected); op.setActorUserId(actorId); op.setStatus("PROCESSING");
+            op.setFundingMode(p.getFundingMode()); op.setPaymentReference("PENALTY:" + p.getPenaltyId());
+            op = operations.save(op);
+            post(op, List.of(new Posting(null, platformFeeAccount(p.getFundingMode()), collected.negate()),
+                    new Posting(provider, "AVAILABLE", collected)));
+            p.setLastOperationId(op.getOperationId());
+        }
+        String old = p.getStatus();
+        p.setStatus("WAIVED"); p.setWaivedByUserId(actorId); p.setWaiveReason(reason.trim()); p.setWaivedAt(java.time.Instant.now());
+        penalties.save(p);
+        audit.record(actorId, "PROVIDER_PENALTY_WAIVED", "PROVIDER_PENALTY", p.getPenaltyId(), Map.of("status", old),
+                Map.of("status", "WAIVED", "returnedToProvider", collected, "reason", p.getWaiveReason()));
+        return p;
+    }
+
+    private boolean activeUser(Long userId) {
+        return users.findById(userId).filter(u -> "ACTIVE".equals(u.getStatus())).isPresent();
+    }
+
+    private static String platformFeeAccount(String mode) {
+        return "PAYHERE_SANDBOX".equals(mode) ? "SANDBOX_PLATFORM_FEE" : "MOCK".equals(mode) ? "MOCK_PLATFORM_FEE" : "PLATFORM_FEE";
     }
 
     /** Chargeback does not silently reverse already-earned/spent money; freeze it for finance review. */

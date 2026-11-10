@@ -14,6 +14,8 @@ import com.jobhub.exception.ResourceNotFoundException;
 import com.jobhub.repository.job.BookingRequestRepository;
 import com.jobhub.repository.job.JobCancellationRepository;
 import com.jobhub.repository.job.JobRepository;
+import com.jobhub.repository.job.ProviderPenaltyRepository;
+import com.jobhub.entity.job.ProviderPenalty;
 import com.jobhub.repository.market.MarketRepository;
 import com.jobhub.repository.market.RefundPolicyRepository;
 import com.jobhub.repository.provider.ServiceProviderRepository;
@@ -50,6 +52,7 @@ class BookingCancellationServiceTest {
     @Mock WalletService wallets;
     @Mock BookingRequestService bookingRequests;
     @Mock AuditService audit;
+    @Mock ProviderPenaltyRepository penalties;
     @InjectMocks BookingCancellationService service;
 
     BookingRequest request;
@@ -144,6 +147,55 @@ class BookingCancellationServiceTest {
                 argThat(v -> v.signum() == 0), argThat(v -> v.signum() == 0), eq(9L));
         assertThat(result.cancelledBy()).isEqualTo("PROVIDER");
         assertThat(result.refundPercentage()).isEqualByComparingTo("100");
+    }
+
+    private void penaltyPolicy() {
+        policy.getTiers().forEach(t -> { if (t.getMinimumMinutesBeforeStart() == 120) t.setProviderPenaltyPercentage(new BigDecimal("5")); });
+        policy.setPenaltyCustomerSharePercentage(new BigDecimal("40"));
+        provider().setStatus("ACTIVE");
+        when(penalties.saveAndFlush(any())).thenAnswer(i -> { saved = i.getArgument(0); saved.setPenaltyId(31L); return saved; });
+        when(penalties.findById(31L)).thenAnswer(i -> Optional.ofNullable(saved));
+    }
+
+    private ProviderPenalty saved;
+
+    private ServiceProvider provider() { return providers.findById(15L).orElseThrow(); }
+
+    @Test void providerCancelChargesPenaltyFromSnapshotPolicyAndCollectsIt() {
+        penaltyPolicy();
+        var preview = service.providerPreview(9L, 70L);
+        assertThat(preview.penaltyAmount()).isEqualByComparingTo("500");
+        assertThat(preview.penaltyCustomerAmount()).isEqualByComparingTo("200");
+        var result = service.cancelByProvider(9L, 70L, new Cancel("Sick", null, null, new BigDecimal("500.00")));
+        verify(wallets).collectProviderPenalty(31L, 9L);
+        assertThat(saved.getCustomerShareAmount()).isEqualByComparingTo("200");
+        assertThat(saved.getCustomerUserId()).isEqualTo(5L);
+        assertThat(saved.getStatus()).isEqualTo("OUTSTANDING");
+        assertThat(result.penalty().penaltyAmount()).isEqualByComparingTo("500");
+        assertThat(result.providerSuspended()).isFalse();
+    }
+
+    @Test void changedPenaltyIsRefusedBeforeAnythingMoves() {
+        penaltyPolicy();
+        assertThatThrownBy(() -> service.cancelByProvider(9L, 70L, new Cancel("x", null, null, new BigDecimal("1"))))
+                .isInstanceOf(ConflictException.class).hasMessageContaining("penalty changed");
+        verifyNoInteractions(wallets);
+        verify(bookingRequests, never()).cancelConfirmed(any(), any(), any());
+    }
+
+    @Test void reachingTheCancellationLimitSuspendsTheProvider() {
+        penaltyPolicy();
+        policy.setProviderCancellationLimit(3); policy.setProviderCancellationWindowDays(30);
+        when(cancellations.countProviderCancellationsSince(eq(9L), any())).thenReturn(2L);
+        assertThat(service.cancelByProvider(9L, 70L, new Cancel("x", null, null)).providerSuspended()).isFalse();
+        assertThat(provider().getStatus()).isEqualTo("ACTIVE");
+        when(cancellations.findByJobId(70L)).thenReturn(Optional.empty());
+        request.setStatus("CONFIRMED"); job.setJobStatus("CONFIRMED");
+        when(cancellations.countProviderCancellationsSince(eq(9L), any())).thenReturn(3L);
+        assertThat(service.cancelByProvider(9L, 70L, new Cancel("x", null, null)).providerSuspended()).isTrue();
+        var suspended = provider();
+        assertThat(suspended.getStatus()).isEqualTo("SUSPENDED");
+        verify(providers).save(suspended);
     }
 
     @Test void onlyTheAssignedProviderCanCancel() {

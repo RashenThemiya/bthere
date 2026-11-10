@@ -4,12 +4,15 @@ import com.jobhub.dto.job.CancellationApi.*;
 import com.jobhub.entity.job.BookingRequest;
 import com.jobhub.entity.job.Job;
 import com.jobhub.entity.job.JobCancellation;
+import com.jobhub.entity.job.ProviderPenalty;
+import com.jobhub.entity.provider.ServiceProvider;
 import com.jobhub.entity.market.RefundPolicy;
 import com.jobhub.exception.ConflictException;
 import com.jobhub.exception.ResourceNotFoundException;
 import com.jobhub.repository.job.BookingRequestRepository;
 import com.jobhub.repository.job.JobCancellationRepository;
 import com.jobhub.repository.job.JobRepository;
+import com.jobhub.repository.job.ProviderPenaltyRepository;
 import com.jobhub.repository.market.MarketRepository;
 import com.jobhub.repository.market.RefundPolicyRepository;
 import com.jobhub.repository.provider.ServiceProviderRepository;
@@ -19,14 +22,18 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Map;
 
 /**
  * Cancelling a paid booking request before the service starts (status CONFIRMED). Refunds always go to the
  * customer's wallet. Customer cancellations follow the refund policy captured when the booking was confirmed;
- * provider cancellations refund the customer in full.
+ * provider cancellations refund the customer in full and charge the provider the policy's penalty; too many
+ * provider cancellations within the policy's window suspend the provider.
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +47,7 @@ public class BookingCancellationService {
     private final WalletService wallets;
     private final BookingRequestService bookingRequests;
     private final AuditService audit;
+    private final ProviderPenaltyRepository penalties;
 
     // ---------- customer ----------
 
@@ -63,7 +71,7 @@ public class BookingCancellationService {
         requireExpected(input, quote);
         Long providerUserId = providerUserId(job);
         bookingRequests.cancelConfirmed(request, providerUserId, "BOOKING_CANCELLED_BY_CUSTOMER");
-        return settle(request, job, quote, userId, input);
+        return view(settle(request, job, quote, userId, input), job);
     }
 
     @Transactional(readOnly = true)
@@ -74,17 +82,53 @@ public class BookingCancellationService {
 
     // ---------- provider ----------
 
+    /** What cancelling now would cost the provider; nothing is saved. */
+    @Transactional(readOnly = true)
+    public Quote providerPreview(Long userId, Long jobId) {
+        var job = jobs.findById(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+        if (!provider(userId).getServiceProviderId().equals(job.getAssignedServiceProviderId()))
+            throw new ResourceNotFoundException("Booking not found");
+        var request = requests.findByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+        requireCancellable(request, job);
+        return providerQuote(policy(request, job), job);
+    }
+
     @Transactional
     public Cancellation cancelByProvider(Long userId, Long jobId, Cancel input) {
         var request = requests.lockByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
         var job = jobs.lockPaymentJob(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
-        if (!providerId(userId).equals(job.getAssignedServiceProviderId())) throw new ResourceNotFoundException("Booking not found");
+        var provider = provider(userId);
+        if (!provider.getServiceProviderId().equals(job.getAssignedServiceProviderId())) throw new ResourceNotFoundException("Booking not found");
         var existing = cancellations.findByJobId(jobId);
         if (existing.isPresent()) return view(existing.get(), job);
         requireCancellable(request, job);
-        var quote = RefundCalculator.provider(policy(request, job), job, minutesBeforeStart(job));
+        var policy = policy(request, job);
+        var quote = providerQuote(policy, job);
+        if (input.expectedPenaltyAmount() != null && input.expectedPenaltyAmount().compareTo(quote.penaltyAmount()) != 0)
+            throw new ConflictException("The penalty changed to " + quote.penaltyAmount() + "; review it and try again");
         bookingRequests.cancelConfirmed(request, null, null);
-        var result = settle(request, job, quote, userId, input);
+        var row = settle(request, job, quote, userId, input);
+        row.setPenaltyAmount(quote.penaltyAmount());
+        if (quote.penaltyAmount().signum() > 0) {
+            var penalty = new ProviderPenalty();
+            penalty.setJobId(jobId); penalty.setCancellationId(row.getCancellationId());
+            penalty.setServiceProviderId(provider.getServiceProviderId()); penalty.setProviderUserId(userId);
+            penalty.setCustomerUserId(request.getUserId()); penalty.setCurrencyCode(quote.currencyCode());
+            penalty.setPenaltyAmount(quote.penaltyAmount()); penalty.setCustomerShareAmount(quote.penaltyCustomerAmount());
+            penalty.setCollectedAmount(BigDecimal.ZERO.setScale(2)); penalty.setCustomerPaidAmount(BigDecimal.ZERO.setScale(2));
+            penalty.setPenaltyPercentage(quote.penaltyPercentage()); penalty.setPenaltyFee(quote.penaltyFee());
+            penalty.setTierName(quote.penaltyTierName()); penalty.setRefundPolicyId(quote.refundPolicyId());
+            penalty.setRefundPolicyVersion(quote.refundPolicyVersion()); penalty.setStatus("OUTSTANDING");
+            penalty = penalties.saveAndFlush(penalty);
+            row.setPenaltyId(penalty.getPenaltyId());
+            wallets.collectProviderPenalty(penalty.getPenaltyId(), userId);
+        }
+        row = cancellations.saveAndFlush(row);
+        if (suspendIfOverLimit(provider, policy, userId)) {
+            row.setProviderSuspended(true);
+            row = cancellations.saveAndFlush(row);
+        }
+        var result = view(row, job);
         audit.record(userId, "PROVIDER_CANCELLED_PAID_BOOKING", "JOB", jobId, null, result);
         return result;
     }
@@ -105,7 +149,31 @@ public class BookingCancellationService {
 
     // ---------- internals ----------
 
-    private Cancellation settle(BookingRequest request, Job job, Quote quote, Long actorUserId, Cancel input) {
+    private Quote providerQuote(RefundPolicy policy, Job job) {
+        long sinceAccepted = job.getCreatedAt() == null ? Long.MAX_VALUE
+                : Duration.between(job.getCreatedAt(), LocalDateTime.now()).toMinutes();
+        return RefundCalculator.provider(policy, job, minutesBeforeStart(job), sinceAccepted);
+    }
+
+    /**
+     * Counts the provider's cancellations (waived ones excluded) within the policy's window, this one included, and
+     * suspends the provider at the limit. A suspended provider gets no new offers and cannot accept any.
+     */
+    private boolean suspendIfOverLimit(ServiceProvider provider, RefundPolicy policy, Long userId) {
+        if (policy == null || policy.getProviderCancellationLimit() == null || policy.getProviderCancellationWindowDays() == null)
+            return false;
+        long count = cancellations.countProviderCancellationsSince(userId,
+                LocalDateTime.now().minusDays(policy.getProviderCancellationWindowDays()));
+        if (count < policy.getProviderCancellationLimit() || !"ACTIVE".equals(provider.getStatus())) return false;
+        provider.setStatus("SUSPENDED");
+        providers.save(provider);
+        audit.record(null, "PROVIDER_SUSPENDED_FOR_CANCELLATIONS", "SERVICE_PROVIDER", provider.getServiceProviderId(),
+                Map.of("status", "ACTIVE"), Map.of("status", "SUSPENDED", "cancellations", count,
+                        "limit", policy.getProviderCancellationLimit(), "windowDays", policy.getProviderCancellationWindowDays()));
+        return true;
+    }
+
+    private JobCancellation settle(BookingRequest request, Job job, Quote quote, Long actorUserId, Cancel input) {
         var operation = wallets.refundCancelledRequestBooking(request.getUserId(), job.getJobId(), quote.refundAmount(),
                 quote.providerAmount(), quote.platformAmount(), actorUserId);
         var row = new JobCancellation();
@@ -121,8 +189,8 @@ public class BookingCancellationService {
         row.setWalletOperationId(operation.operationId());
         row = cancellations.saveAndFlush(row);
         audit.record(actorUserId, "BOOKING_CANCELLED", "JOB", job.getJobId(), null,
-                java.util.Map.of("cancelledBy", quote.cancelledBy(), "refundAmount", quote.refundAmount()));
-        return view(row, job);
+                Map.of("cancelledBy", quote.cancelledBy(), "refundAmount", quote.refundAmount()));
+        return row;
     }
 
     private void requireCancellable(BookingRequest request, Job job) {
@@ -167,8 +235,11 @@ public class BookingCancellationService {
     }
 
     private Long providerId(Long userId) {
-        return providers.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Provider not found"))
-                .getServiceProviderId();
+        return provider(userId).getServiceProviderId();
+    }
+
+    private ServiceProvider provider(Long userId) {
+        return providers.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
     }
 
     private Cancellation found(Long jobId) {
@@ -176,12 +247,21 @@ public class BookingCancellationService {
         return view(row, jobs.findById(jobId).orElse(null));
     }
 
-    private static Cancellation view(JobCancellation c, Job job) {
+    private Cancellation view(JobCancellation c, Job job) {
+        var penalty = c.getPenaltyId() == null || penalties == null ? null
+                : penalties.findById(c.getPenaltyId()).map(BookingCancellationService::penaltyView).orElse(null);
         return new Cancellation(c.getCancellationId(), c.getJobId(), c.getRequestId(), c.getCancelledBy(),
                 c.getCancelledByUserId(), c.getReason(), c.getNote(), c.getCurrencyCode(), c.getPaidAmount(),
                 c.getRefundAmount(), c.getRefundPercentage(), c.getCancellationFee(), c.getProviderAmount(),
                 c.getPlatformAmount(), c.getRefundDestination(), c.getMinutesBeforeStart(), c.getRefundPolicyId(),
                 c.getRefundPolicyVersion(), c.getRefundTierName(), c.getWalletOperationId(),
-                job == null ? null : job.getPaymentStatus(), c.getCreatedAt());
+                job == null ? null : job.getPaymentStatus(), c.getCreatedAt(), penalty, c.isProviderSuspended());
+    }
+
+    public static Penalty penaltyView(ProviderPenalty p) {
+        return new Penalty(p.getPenaltyId(), p.getJobId(), p.getServiceProviderId(), p.getCurrencyCode(), p.getPenaltyAmount(),
+                p.getPenaltyPercentage(), p.getPenaltyFee(), p.getTierName(), p.getCustomerShareAmount(),
+                p.getCustomerPaidAmount(), p.getCollectedAmount(), p.outstanding(), p.getStatus(), p.getRefundPolicyId(),
+                p.getRefundPolicyVersion(), p.getWaiveReason(), p.getWaivedAt(), p.getCreatedAt());
     }
 }

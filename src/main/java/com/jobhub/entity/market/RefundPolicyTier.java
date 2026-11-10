@@ -37,4 +37,11 @@ public class RefundPolicyTier {
 
     @Column(nullable = false)
     private Integer priority;
+
+    /** Provider cancels in this tier: penalty = paid amount x percentage + fee (null = 0). */
+    @Column(precision = 5, scale = 2)
+    private BigDecimal providerPenaltyPercentage;
+
+    @Column(precision = 12, scale = 2)
+    private BigDecimal providerPenaltyFee;
 }
