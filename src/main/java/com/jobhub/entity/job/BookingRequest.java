@@ -44,6 +44,8 @@ public class BookingRequest extends AuditedEntity {
     private String paymentFundingMode;
     private String settlementStatus;
     private Long settlementOperationId;
+    /** Refund policy in force when the booking was confirmed; cancellations use it even after the policy changes. */
+    private Long refundPolicyId;
     private String checkoutMethod;
     @Column(columnDefinition = "TEXT") private String checkoutJson;
     private String startCode;

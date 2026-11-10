@@ -341,6 +341,77 @@ public class WalletService {
         return response(op);
     }
 
+    /**
+     * Internal cancellation hook for a cancelled, paid booking request. Moves the whole paid amount out of the
+     * reservation (WALLET) or card clearing (CARD): refund to the customer's wallet, the provider's share to the
+     * provider's wallet, the rest to platform fees. Idempotent per job.
+     */
+    @Transactional
+    public Operation refundCancelledRequestBooking(Long customerUserId, Long jobId, BigDecimal refund,
+                                                   BigDecimal providerShare, BigDecimal platformShare, Long actorId) {
+        var request=bookingRequests.lockByJobId(jobId).orElseThrow(() -> new ResourceNotFoundException("Booking request not found"));
+        if(!customerUserId.equals(request.getUserId()))throw new ResourceNotFoundException("Booking not found");
+        var job=job(jobId);
+        String key="BOOKING:"+jobId+":CANCEL";
+        var previous=operations.findLockedByOperationKey(key);
+        if(previous.isPresent())return response(previous.get());
+        if(!"CANCELLED".equals(job.getJobStatus()) || !"CANCELLED".equals(request.getStatus()))
+            throw new ConflictException("Only a cancelled booking can be refunded");
+        if(operations.findByOperationKey("BOOKING:"+jobId+":SETTLE").isPresent())
+            throw new ConflictException("This booking was already settled");
+        boolean walletPayment="WALLET".equals(job.getPaymentMethod());
+        if(!walletPayment && !"CARD".equals(job.getPaymentMethod()))throw new ConflictException("Unsupported booking payment method");
+        String currency=currency(job.getCurrencyCode());
+        BigDecimal gross=money(job.getExpectedAmount(),currency);
+        refund=nonnegative(refund,currency);providerShare=nonnegative(providerShare,currency);platformShare=nonnegative(platformShare,currency);
+        if(refund.add(providerShare).add(platformShare).compareTo(gross)!=0)
+            throw new IllegalStateException("Cancellation split does not add up to the paid amount");
+        String mode;String reference;
+        if(walletPayment) {
+            if(!"RESERVED".equals(job.getPaymentStatus()))throw new ConflictException("Wallet booking funds are not reserved");
+            var reserved=reservation(jobId);requireReservationCurrency(job,reserved);
+            if(!customerUserId.equals(reserved.getOwnerUserId()) || gross.compareTo(reserved.getAmount())!=0)
+                throw new ConflictException("Wallet reservation does not match the booking");
+            mode=reserved.getFundingMode();reference="WALLET_RESERVATION:"+reserved.getOperationId();
+        } else {
+            if(!"PAID".equals(job.getPaymentStatus()))throw new ConflictException("Card payment is not confirmed");
+            reference=request.getGatewayPaymentId();mode=request.getPaymentFundingMode();
+            if(reference==null || paymentNotices.findByPaymentIdAndStatusCode(reference,"2")
+                    .filter(n -> request.getRequestId().equals(n.getRequestId())).isEmpty()
+                    || paymentNotices.findByPaymentIdAndStatusCode(reference,"-3").isPresent())
+                throw new ConflictException("Verified successful card payment is required for a refund");
+            if(!Set.of("PAYHERE","PAYHERE_SANDBOX","MOCK").contains(mode==null?"":mode))
+                throw new ConflictException("Payment environment is missing; merchant reconciliation is required");
+            if("MOCK".equals(mode) && !"MOCK".equalsIgnoreCase(selectedGateway == null ? paymentProvider : selectedGateway.name()))
+                throw new ConflictException("Mock funds cannot be used outside mock mode");
+        }
+        Long providerUserId=null;
+        if(providerShare.signum()>0) {
+            providerUserId=providers.findById(job.getAssignedServiceProviderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Provider not found")).getUserId();
+            if(customerUserId.equals(providerUserId))throw new ConflictException("Customer cannot receive provider earnings");
+        }
+        var locked=new ArrayList<Long>(List.of(customerUserId));if(providerUserId!=null)locked.add(providerUserId);
+        lockUsers(locked);
+        var customerWallet=lockedWallet(customerUserId,currency);
+        var op=operation(key,walletPayment?"WALLET_BOOKING_CANCEL":"CARD_BOOKING_CANCEL",customerUserId,job,gross,actorId,"PROCESSING");
+        op.setFundingMode(mode);op.setPaymentReference(reference);
+        op.setPlatformFeePercentage(job.getPlatformFeePercentage());op.setPlatformFee(platformShare);op.setProviderEarnings(providerShare);
+        var postings=new ArrayList<Posting>();
+        postings.add(walletPayment?new Posting(customerWallet,"RESERVED",gross.negate()):
+                new Posting(null,"MOCK".equals(mode)?"MOCK_CLEARING":"PAYHERE_SANDBOX".equals(mode)?"PAYHERE_SANDBOX_CLEARING":"PAYHERE_CLEARING",gross.negate()));
+        if(refund.signum()>0)postings.add(new Posting(customerWallet,"AVAILABLE",refund));
+        if(providerShare.signum()>0)postings.add(new Posting(lockedWallet(providerUserId,currency),"AVAILABLE",providerShare));
+        if(platformShare.signum()>0)postings.add(new Posting(null,
+                "PAYHERE_SANDBOX".equals(mode)?"SANDBOX_PLATFORM_FEE":"MOCK".equals(mode)?"MOCK_PLATFORM_FEE":"PLATFORM_FEE",platformShare));
+        post(op,postings);
+        String status=refund.compareTo(gross)==0?"REFUNDED":refund.signum()==0?"CANCELLATION_SETTLED":"PARTIALLY_REFUNDED";
+        job.setPaymentStatus(status);jobs.save(job);
+        request.setPaymentStatus(status);request.setSettlementStatus("POSTED");request.setSettlementOperationId(op.getOperationId());
+        audit.record(actorId,"BOOKING_CANCELLATION_REFUNDED","WALLET_OPERATION",op.getOperationId(),null,response(op));
+        return response(op);
+    }
+
     /** Chargeback does not silently reverse already-earned/spent money; freeze it for finance review. */
     @Transactional
     public void freezeCardSettlement(Long customerUserId,Long jobId) {

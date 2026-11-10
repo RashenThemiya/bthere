@@ -69,6 +69,7 @@ class JobhubApplicationTests {
     @MockitoBean private com.jobhub.repository.job.JobProviderTrackingRepository jobProviderTrackings;
     @MockitoBean private com.jobhub.repository.job.ProviderLiveLocationRepository providerLiveLocations;
     @MockitoBean private com.jobhub.repository.job.RatingRepository ratingRepository;
+    @MockitoBean private com.jobhub.repository.job.JobCancellationRepository jobCancellationRepository;
     @MockitoBean private com.jobhub.repository.auth.UserDeviceRepository bookingDevices;
     @Autowired private com.jobhub.controller.provider.ProviderBookingOfferController bookingOfferController;
     @Autowired private com.jobhub.controller.admin.AdminBookingRequestPolicyController bookingPolicyController;
@@ -76,6 +77,9 @@ class JobhubApplicationTests {
     @Autowired private com.jobhub.controller.admin.AdminPlatformFeeController platformFeeController;
     @Autowired private com.jobhub.controller.customer.CustomerRatingController customerRatingController;
     @Autowired private com.jobhub.controller.admin.AdminRatingController adminRatingController;
+    @Autowired private com.jobhub.controller.customer.CustomerCancellationController customerCancellationController;
+    @Autowired private com.jobhub.controller.provider.ProviderCancellationController providerCancellationController;
+    @Autowired private com.jobhub.controller.admin.AdminBookingNoticeController adminBookingNoticeController;
 
     @Autowired private com.jobhub.controller.admin.AdminBookingMonitorController bookingMonitor;
     @Test void superAdminCanReadBookingMonitoring() {
@@ -134,6 +138,25 @@ class JobhubApplicationTests {
                         .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
             } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
         }
+    }
+
+    private void as(String role, Runnable action) {
+        var auth=new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("test","unused",
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+        try { action.run(); } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
+
+    @Test void cancellationAndBookingNoticeEndpointsAreRoleScoped() {
+        for(String role:java.util.List.of("SERVICE_PROVIDER","SUPER_ADMIN")) as(role, () ->
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerCancellationController.cancel(null,70L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class));
+        for(String role:java.util.List.of("CUSTOMER","SUPER_ADMIN")) as(role, () ->
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> providerCancellationController.cancel(null,70L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class));
+        for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","VERIFICATION_ADMIN")) as(role, () ->
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminBookingNoticeController.update(1L,null))
+                        .isInstanceOf(org.springframework.security.access.AccessDeniedException.class));
     }
 
     @Test void providerCannotConfirmCompletionOnCustomersBehalf() {

@@ -205,6 +205,7 @@ public class RefundPolicyService {
         policy.setProviderNoShowRefundPercentage(request.providerNoShowRefundPercentage());
         policy.setServiceFailureRefundPercentage(request.serviceFailureRefundPercentage());
         policy.setCustomerNoShowRefundPercentage(request.customerNoShowRefundPercentage());
+        policy.setRetainedProviderSharePercentage(request.retainedProviderSharePercentage());
         policy.setPlatformFeeRefundable(request.platformFeeRefundable());
         policy.setProcessingFeeRefundable(request.processingFeeRefundable());
         policy.setEffectiveFrom(request.effectiveFrom());
@@ -259,6 +260,7 @@ public class RefundPolicyService {
                 policy.getTiers().stream().map(item -> new RefundPolicyTierResponse(
                         item.getTierId(), item.getName(), item.getMinimumMinutesBeforeStart(),
                         item.getRefundPercentage(), item.getCancellationFee(), item.getPriority()
-                )).toList(), policy.getCreatedAt(), policy.getUpdatedAt());
+                )).toList(), policy.getCreatedAt(), policy.getUpdatedAt(),
+                policy.getRetainedProviderSharePercentage());
     }
 }

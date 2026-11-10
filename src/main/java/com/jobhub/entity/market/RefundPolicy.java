@@ -55,6 +55,12 @@ public class RefundPolicy extends AuditedEntity {
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal customerNoShowRefundPercentage;
 
+    /**
+     * When a customer cancels, the share of the amount kept (not refunded) that goes to the provider; the rest
+     * goes to the platform. Null splits the kept amount like a normal booking (provider earnings ratio).
+     */
+    @Column(precision = 5, scale = 2)
+    private BigDecimal retainedProviderSharePercentage;
     @Column(nullable = false)
     private boolean platformFeeRefundable;
 

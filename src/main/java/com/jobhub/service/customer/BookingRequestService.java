@@ -47,6 +47,11 @@ public class BookingRequestService {
     private final LiveTrackingService tracking;
     /** After the first failed payment attempt the customer gets one fresh retry window; later failures never reset it. */
     static final Duration PAYMENT_RETRY_WINDOW=Duration.ofMinutes(15);
+    // Optional collaborators (field-injected so existing constructors and tests stay unchanged).
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.jobhub.service.market.RefundPolicyService refundPolicies;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.jobhub.repository.market.MarketServiceOfferingRepository marketOfferings;
 
     private void requireCardReady() {
         if(paymentGateway.isMock()) paymentGateway.requireEnabled();
@@ -522,6 +527,7 @@ public class BookingRequestService {
         r.setStatus("CONFIRMED");job.setJobStatus("CONFIRMED");r.setStartCode(codes.encrypt(codes.generate()));
         var zone=ZoneId.of(markets.findById(job.getMarketId()).orElseThrow().getTimezone());
         r.setCodeExpiresAt(job.getExpectedEndDatetime().atZone(zone).toInstant().plus(Duration.ofHours(24)));
+        r.setRefundPolicyId(currentRefundPolicyId(job));
         event(r,r.getUserId(),null,"BOOKING_CONFIRMED",null);
         event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"BOOKING_CONFIRMED",null);
         tracking.onConfirmed(job);
@@ -731,6 +737,20 @@ public class BookingRequestService {
             event(r,r.getUserId(),null,"PAYMENT_REVIEW_REQUIRED",null);
             // Keep capacity: a hosted checkout can still produce a late successful payment.
         }
+    }
+    /** The refund policy in force now for this booking's market and service, or null when none is configured. */
+    Long currentRefundPolicyId(Job job) {
+        if(refundPolicies==null || job.getMarketId()==null) return null;
+        Long offeringId=marketOfferings==null || job.getServiceProviderTypeId()==null ? null
+                : marketOfferings.findByMarketIdAndServiceProviderTypeId(job.getMarketId(),job.getServiceProviderTypeId())
+                        .map(com.jobhub.entity.market.MarketServiceOffering::getOfferingId).orElse(null);
+        try { return refundPolicies.resolve(job.getMarketId(),offeringId).policyId(); }
+        catch(ResourceNotFoundException none) { return null; }
+    }
+    /** Cancels a confirmed booking: offers, job status and customer/provider events. Money is handled by the caller. */
+    void cancelConfirmed(BookingRequest r,Long providerUserId,String providerEvent) {
+        stop(r,"CANCELLED");
+        if(providerUserId!=null) event(r,providerUserId,null,providerEvent,null);
     }
     private void stop(BookingRequest r,String status) {
         r.setStatus(status);

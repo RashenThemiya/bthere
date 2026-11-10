@@ -25,6 +25,7 @@ public record RefundPolicyResponse(
         Instant effectiveTo,
         List<RefundPolicyTierResponse> tiers,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        BigDecimal retainedProviderSharePercentage
 ) {
 }

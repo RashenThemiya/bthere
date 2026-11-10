@@ -20,6 +20,16 @@ public record RefundPolicyRequest(
         boolean processingFeeRefundable,
         @NotNull Instant effectiveFrom,
         Instant effectiveTo,
-        @NotEmpty List<@Valid RefundPolicyTierRequest> tiers
+        @NotEmpty List<@Valid RefundPolicyTierRequest> tiers,
+        @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal retainedProviderSharePercentage
 ) {
+    public RefundPolicyRequest(Long offeringId, String name, String description,
+            BigDecimal noProviderRefundPercentage, BigDecimal providerCancellationRefundPercentage,
+            BigDecimal providerNoShowRefundPercentage, BigDecimal serviceFailureRefundPercentage,
+            BigDecimal customerNoShowRefundPercentage, boolean platformFeeRefundable, boolean processingFeeRefundable,
+            Instant effectiveFrom, Instant effectiveTo, List<RefundPolicyTierRequest> tiers) {
+        this(offeringId, name, description, noProviderRefundPercentage, providerCancellationRefundPercentage,
+                providerNoShowRefundPercentage, serviceFailureRefundPercentage, customerNoShowRefundPercentage,
+                platformFeeRefundable, processingFeeRefundable, effectiveFrom, effectiveTo, tiers, null);
+    }
 }

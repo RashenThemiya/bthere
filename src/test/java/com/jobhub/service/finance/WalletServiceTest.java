@@ -183,6 +183,43 @@ class WalletServiceTest {
         job.setPaymentMethod("WALLET");job.setJobStatus("AWAITING_PAYMENT");job.setPaymentStatus("PENDING");
         balances.get(25L).setFundingMode(mode);return r;
     }
+    @Test void cardCancellationRefundsCustomerWalletPaysProviderShareAndPlatformOnce() {
+        var r=cardFixture();r.setStatus("CANCELLED");job.setJobStatus("CANCELLED");balances.get(25L).setFundingMode("PAYHERE");
+        var first=service.refundCancelledRequestBooking(25L,100L,new BigDecimal("10"),new BigDecimal("8"),new BigDecimal("2"),25L);
+        int count=entries.size();
+        assertThat(service.refundCancelledRequestBooking(25L,100L,new BigDecimal("10"),new BigDecimal("8"),new BigDecimal("2"),25L)
+                .operationId()).isEqualTo(first.operationId());
+        assertThat(entries).hasSize(count);assertThat(first.type()).isEqualTo("CARD_BOOKING_CANCEL");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("110");
+        assertThat(balances.get(42L).getAvailableBalance()).isEqualByComparingTo("8");
+        assertThat(entries).anyMatch(e -> "PAYHERE_CLEARING".equals(e.getBucket()) && e.getDelta().compareTo(new BigDecimal("-20"))==0);
+        assertThat(entries).anyMatch(e -> "PLATFORM_FEE".equals(e.getBucket()) && e.getDelta().compareTo(new BigDecimal("2"))==0);
+        assertThat(entries.stream().filter(e -> first.operationId().equals(e.getOperationId())).map(WalletLedgerEntry::getDelta)
+                .reduce(BigDecimal.ZERO,BigDecimal::add)).isEqualByComparingTo("0");
+        assertThat(job.getPaymentStatus()).isEqualTo("PARTIALLY_REFUNDED");assertThat(r.getPaymentStatus()).isEqualTo("PARTIALLY_REFUNDED");
+        assertThat(r.getSettlementOperationId()).isEqualTo(first.operationId());
+    }
+    @Test void walletCancellationReturnsReservationWithoutTouchingProvider() {
+        var r=walletRequestFixture("PAYHERE");service.reserveRequestBooking(25L,100L);
+        r.setPaymentStatus("RESERVED");r.setStatus("CANCELLED");job.setJobStatus("CANCELLED");
+        var op=service.refundCancelledRequestBooking(25L,100L,new BigDecimal("20"),BigDecimal.ZERO,BigDecimal.ZERO,42L);
+        assertThat(op.type()).isEqualTo("WALLET_BOOKING_CANCEL");
+        assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("100");
+        assertThat(balances.get(25L).getReservedBalance()).isEqualByComparingTo("0");
+        assertThat(balances).doesNotContainKey(42L);assertThat(job.getPaymentStatus()).isEqualTo("REFUNDED");
+    }
+    @Test void cancellationRefundRequiresCancelledUnsettledBookingAndExactSplit() {
+        var r=cardFixture();r.setStatus("CONFIRMED");job.setJobStatus("CONFIRMED");balances.get(25L).setFundingMode("PAYHERE");
+        assertThatThrownBy(() -> service.refundCancelledRequestBooking(25L,100L,new BigDecimal("20"),BigDecimal.ZERO,BigDecimal.ZERO,25L))
+                .hasMessageContaining("cancelled");
+        r.setStatus("CANCELLED");job.setJobStatus("CANCELLED");
+        assertThatThrownBy(() -> service.refundCancelledRequestBooking(25L,100L,new BigDecimal("15"),BigDecimal.ZERO,BigDecimal.ZERO,25L))
+                .hasMessageContaining("add up");
+        when(paymentNotices.findByPaymentIdAndStatusCode("receipt-1","2")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.refundCancelledRequestBooking(25L,100L,new BigDecimal("20"),BigDecimal.ZERO,BigDecimal.ZERO,25L))
+                .hasMessageContaining("Verified");
+        verify(ledger,never()).save(any());
+    }
     @Test void requestWalletReservationAndCompletionSettleNetOnceWithoutCardProof() {
         var r=walletRequestFixture("PAYHERE");var reservation=service.reserveRequestBooking(25L,100L);
         assertThat(balances.get(25L).getAvailableBalance()).isEqualByComparingTo("80");
