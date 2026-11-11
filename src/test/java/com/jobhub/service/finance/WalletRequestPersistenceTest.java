@@ -137,6 +137,48 @@ class WalletRequestPersistenceTest {
             }
         }
     }
+    /** Request #85 path: wallet confirmation fails, customer switches to CARD, then confirms with a mock card. */
+    @Test void mockCardConfirmationAfterFailedWalletAttemptAndSwitchToCard() {
+        var config=new Configuration().setPhysicalNamingStrategy(new CamelCaseToUnderscoresNamingStrategy())
+            .setProperty("hibernate.connection.driver_class","org.h2.Driver")
+            .setProperty("hibernate.connection.url","jdbc:h2:mem:"+UUID.randomUUID()+";LOCK_TIMEOUT=10000")
+            .setProperty("hibernate.hbm2ddl.auto","create-drop");
+        for(var type:List.of(BookingRequest.class,BookingOffer.class,BookingDispatchEvent.class,BookingPaymentNotice.class,
+                Job.class,JobProviderAssignment.class,Wallet.class,WalletOperation.class,WalletLedgerEntry.class,PaymentInstrument.class))config.addAnnotatedClass(type);
+        try(var factory=config.buildSessionFactory()) {
+            var ids=tx(factory,em -> {
+                var j=new Job();j.setMarketId(1L);j.setCustomerId(7L);j.setAssignedServiceProviderId(15L);j.setCurrencyCode("LKR");
+                j.setExpectedAmount(new BigDecimal("20"));j.setTotalAmount(new BigDecimal("20"));j.setPlatformFeePercentage(new BigDecimal("10"));
+                j.setPlatformFee(new BigDecimal("2"));j.setProviderEarnings(new BigDecimal("18"));j.setJobStatus("AWAITING_PAYMENT");
+                j.setPaymentMethod("WALLET");j.setPaymentStatus("PENDING");j.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC).plusHours(2));
+                j.setExpectedEndDatetime(j.getStartDatetime().plusHours(1));em.persist(j);
+                var r=new BookingRequest();r.setUserId(25L);r.setJobId(j.getJobId());r.setOptionId(3L);r.setIdempotencyKey("switch-test");
+                r.setStatus("AWAITING_CUSTOMER_CONFIRMATION");r.setConfirmationExpiresAt(Instant.now().plusSeconds(120));
+                r.setPayloadJson("{\"marketId\":1,\"booking\":{\"optionId\":3,\"paymentMethod\":\"WALLET\"}}");
+                r.setPaymentStatus("NOT_STARTED");r.setCurrencyCode("LKR");r.setQuotedAmount(j.getTotalAmount());
+                r.setPlatformFeePercentage(j.getPlatformFeePercentage());r.setPlatformFee(j.getPlatformFee());r.setProviderEarnings(j.getProviderEarnings());em.persist(r);
+                var wallet=new Wallet();wallet.setUserId(25L);wallet.setCurrencyCode("LKR");wallet.setStatus("ACTIVE");wallet.setFundingMode("MOCK");
+                wallet.setAvailableBalance(new BigDecimal("5"));wallet.setReservedBalance(BigDecimal.ZERO);wallet.setPendingBalance(BigDecimal.ZERO);em.persist(wallet);
+                var card=new PaymentInstrument();card.setUserId(25L);card.setProvider("MOCK");card.setType("CARD");card.setStatus("VERIFIED_MOCK");em.persist(card);
+                return List.of(r.getRequestId(),j.getJobId(),card.getMethodId());
+            });
+            Long rid=ids.get(0),jid=ids.get(1),mid=ids.get(2);
+            var option=new com.jobhub.entity.provider.ServiceOption();option.setAllowedPaymentMethods(new LinkedHashSet<>(Set.of("CARD","WALLET")));
+            var options=mock(com.jobhub.repository.provider.ServiceOptionRepository.class);when(options.findLockedById(3L)).thenReturn(Optional.of(option));
+            Function<EntityManager,BookingRequestService> svc=em -> {
+                var s=service(em,mock(AuditService.class),true,true);
+                org.springframework.test.util.ReflectionTestUtils.setField(s,"options",options);return s;
+            };
+            assertThatThrownBy(() -> tx(factory,em -> svc.apply(em).confirmWallet(25L,rid)))
+                .isInstanceOf(com.jobhub.exception.InsufficientWalletFundsException.class);
+            assertThat(tx(factory,em -> svc.apply(em).changePaymentMethod(25L,rid,"CARD")).paymentStatus()).isEqualTo("NOT_STARTED");
+            assertThat(tx(factory,em -> svc.apply(em).confirmMockCard(25L,rid,mid)).status()).isEqualTo("CONFIRMED");
+            try(var em=factory.createEntityManager()) {
+                assertThat(em.find(Job.class,jid).getPaymentStatus()).isEqualTo("PAID");
+                assertThat(em.createQuery("select count(o) from WalletOperation o",Long.class).getSingleResult()).isZero();
+            }
+        }
+    }
     private void assertBalances(SessionFactory factory,String available,String reserved,int earnings) {
         try(var em=factory.createEntityManager()) {
             var payer=em.createQuery("select w from Wallet w where w.userId=25",Wallet.class).getSingleResult();

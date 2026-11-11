@@ -746,8 +746,9 @@ public class BookingRequestService {
         Long offeringId=marketOfferings==null || job.getServiceProviderTypeId()==null ? null
                 : marketOfferings.findByMarketIdAndServiceProviderTypeId(job.getMarketId(),job.getServiceProviderTypeId())
                         .map(com.jobhub.entity.market.MarketServiceOffering::getOfferingId).orElse(null);
-        try { return refundPolicies.resolve(job.getMarketId(),offeringId).policyId(); }
-        catch(ResourceNotFoundException none) { return null; }
+        // Must not use resolve(): its "not found" exception would mark this booking transaction rollback-only
+        // even when caught here, turning every confirmation without a policy into a 500 at commit.
+        return refundPolicies.effectivePolicyId(job.getMarketId(),offeringId).orElse(null);
     }
     /** Cancels a confirmed booking: offers, job status and customer/provider events. Money is handled by the caller. */
     void cancelConfirmed(BookingRequest r,Long providerUserId,String providerEvent) {

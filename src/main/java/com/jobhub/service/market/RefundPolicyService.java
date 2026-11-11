@@ -20,6 +20,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -141,6 +142,20 @@ public class RefundPolicyService {
         if (offeringId != null) {
             requireOfferingInMarket(marketId, offeringId);
         }
+        return response(effective(marketId, offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("No active refund policy was found")));
+    }
+
+    /**
+     * Policy to snapshot when a booking is confirmed; empty when none applies. Never throws for "no policy":
+     * an exception leaving this proxied method would mark the caller's booking transaction rollback-only.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> effectivePolicyId(Long marketId, Long offeringId) {
+        return effective(marketId, offeringId).map(RefundPolicy::getPolicyId);
+    }
+
+    private Optional<RefundPolicy> effective(Long marketId, Long offeringId) {
         Instant now = Instant.now();
         List<RefundPolicy> effective = policyRepository
                 .findAllByMarketIdAndStatus(marketId, "ACTIVE").stream()
@@ -151,14 +166,10 @@ public class RefundPolicyService {
         if (offeringId != null) {
             RefundPolicy override = latest(effective.stream()
                     .filter(item -> offeringId.equals(item.getOfferingId())).toList());
-            if (override != null) return response(override);
+            if (override != null) return Optional.of(override);
         }
-        RefundPolicy marketDefault = latest(effective.stream()
-                .filter(item -> item.getOfferingId() == null).toList());
-        if (marketDefault == null) {
-            throw new ResourceNotFoundException("No active refund policy was found");
-        }
-        return response(marketDefault);
+        return Optional.ofNullable(latest(effective.stream()
+                .filter(item -> item.getOfferingId() == null).toList()));
     }
 
     private RefundPolicy latest(List<RefundPolicy> policies) {
