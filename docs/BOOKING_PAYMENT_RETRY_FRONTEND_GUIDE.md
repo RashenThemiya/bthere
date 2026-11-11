@@ -1,7 +1,7 @@
 # Accepted booking payment: deadlines, retry and recovery (frontend guide)
 
 Answers the frontend questions about the confirm/pay/retry flow after a provider
-accepts. Updated for the 2-min + 15-min retry window (8 November 2026).
+accepts. Updated for the 2-min + 1-hour retry window (11 November 2026).
 It is implemented locally; **deployment to the environment you are using is not
 verified** — confirm with backend before relying on it there.
 
@@ -10,15 +10,15 @@ Build the UI only from backend fields (`confirmationExpiresAt`, `status`,
 
 ## 0. Short answer: which rule is real?
 
-The backend now implements "2 minutes to confirm, then one fresh 15 minutes to retry after a failure":
+The backend now implements "2 minutes to confirm, then one fresh hour to retry after a failure":
 
 - **Initial window:** `confirmationTimeoutSeconds` from the option policy, now **120 s (2 min)**
   by default (admin can still set 30–900 s). Starts when the provider accepts.
 - **First failed attempt** (PayHere decline/cancel callback, or wallet `INSUFFICIENT_WALLET_FUNDS`)
-  opens **one retry window**: `confirmationExpiresAt` becomes `failure time + 15 min`
+  opens **one retry window**: `confirmationExpiresAt` becomes `failure time + 1 hour`
   (never earlier than the current deadline, never later than service start).
   `paymentRetryStartedAt` is set at that moment.
-- **Later failures do not reset it.** The 15-minute deadline stays the same.
+- **Later failures do not reset it.** The 1-hour deadline stays the same.
 - **No attempt at all:** the request expires at the end of the initial 2 minutes.
 - A PayHere checkout started inside the 2 minutes still gets the retry window if its failure
   callback arrives after the 2 minutes ran out.
@@ -31,7 +31,7 @@ The frontend does not compute any of this. Always count down to `confirmationExp
 | Question | Current behaviour |
 |---|---|
 | Initial window after acceptance | `now + confirmationTimeoutSeconds` (default 2 min) → `confirmationExpiresAt` |
-| New 15 min after a failure? | Yes, once: `confirmationExpiresAt` = failure time + 15 min (capped at service start) |
+| New 1 hour after a failure? | Yes, once: `confirmationExpiresAt` = failure time + 1 hour (capped at service start) |
 | Reset on repeated failures? | No. The retry deadline is fixed after the first failure |
 | No payment attempt | Expires at the initial deadline |
 | Maximum possible time | `paymentDeadlineLimit` (provider extension limit; raised to the retry deadline if that is later) |
@@ -41,8 +41,8 @@ Rules per failure type:
 
 | Failure | What the backend does | Deadline |
 |---|---|---|
-| Wallet insufficient balance | `409 INSUFFICIENT_WALLET_FUNDS`, nothing reserved, `paymentStatus: FAILED` | First time: +15 min retry window and `PAYMENT_FAILED` event. Later: unchanged |
-| PayHere card declined / customer cancelled on PayHere page (signed callback `-1`/`-2`) | Request → `AWAITING_CUSTOMER_CONFIRMATION`, `paymentStatus: FAILED`, job still reserved, `PAYMENT_FAILED` event to both | First time: +15 min retry window. Later: unchanged; if it already passed → `EXPIRED` |
+| Wallet insufficient balance | `409 INSUFFICIENT_WALLET_FUNDS`, nothing reserved, `paymentStatus: FAILED` | First time: +1 hour retry window and `PAYMENT_FAILED` event. Later: unchanged |
+| PayHere card declined / customer cancelled on PayHere page (signed callback `-1`/`-2`) | Request → `AWAITING_CUSTOMER_CONFIRMATION`, `paymentStatus: FAILED`, job still reserved, `PAYMENT_FAILED` event to both | First time: +1 hour retry window. Later: unchanged; if it already passed → `EXPIRED` |
 | Browser returns to cancel/return URL, app closed, network timeout | **Nothing changes.** Request stays `PAYMENT_PENDING` until PayHere sends a signed callback | Not applied while pending |
 | No callback for 15 min after checkout started | Request → `PAYMENT_RECONCILIATION`, capacity kept, `PAYMENT_REVIEW_REQUIRED` event | Not applied; support resolves |
 | MOCK card | Always succeeds (test only); no failure path | — |
@@ -101,7 +101,7 @@ Accepted, not paid yet:
  "canPay":true,"canCancel":true,"canExtend":false}
 ```
 
-Card failed at 04:01, retry window opened (15 min from the failure):
+Card failed at 04:01, retry window opened (1 hour from the failure):
 ```json
 {"requestId":501,"status":"AWAITING_CUSTOMER_CONFIRMATION","paymentStatus":"FAILED",
  "confirmationExpiresAt":"2026-11-08T04:16:00Z","paymentDeadlineLimit":"2026-11-08T04:17:00Z","paymentRetryStartedAt":"2026-11-08T04:01:00Z",
@@ -157,7 +157,7 @@ The View does **not** include `paymentDeadlineLimit` or the action flags; read
 }
 ```
 
-The first time, this opens the 15-minute retry window (re-read `/payment-window` for the
+The first time, this opens the 1-hour retry window (re-read `/payment-window` for the
 new `confirmationExpiresAt`); later times it does not change. Show the shortfall and a top-up option, then
 let the customer call `confirm-wallet` again before `confirmationExpiresAt`.
 
@@ -273,13 +273,13 @@ Push may repeat. Deduplicate by `eventId`, then re-read the request. Do not take
 ### Test: card failure → retry → success (PayHere sandbox)
 1. Create request with `paymentMethod: CARD`; provider accepts → `AWAITING_CUSTOMER_CONFIRMATION`, `canPay: true`.
 2. `/confirm` → `PAYMENT_PENDING`. Pay with a sandbox card that declines.
-3. After callback: `AWAITING_CUSTOMER_CONFIRMATION`, `paymentStatus: FAILED`, `confirmationExpiresAt` ≈ now + 15 min, `paymentRetryStartedAt` set, event `PAYMENT_FAILED`.
+3. After callback: `AWAITING_CUSTOMER_CONFIRMATION`, `paymentStatus: FAILED`, `confirmationExpiresAt` ≈ now + 1 hour, `paymentRetryStartedAt` set, event `PAYMENT_FAILED`.
    A second failure leaves `confirmationExpiresAt` unchanged.
 4. `/confirm` again → new checkout. Pay with a success card → `CONFIRMED`, `paymentStatus: PAID`, event `BOOKING_CONFIRMED`.
 
 ### Test: wallet shortfall → top-up → success
 1. WALLET request accepted. Wallet balance below amount.
-2. `/confirm-wallet` → 409 `INSUFFICIENT_WALLET_FUNDS`; deadline becomes now + 15 min (first time only).
+2. `/confirm-wallet` → 409 `INSUFFICIENT_WALLET_FUNDS`; deadline becomes now + 1 hour (first time only).
 3. Top up, `/confirm-wallet` again → `CONFIRMED`, `paymentStatus: RESERVED`.
 
 ### Test: pending → reconciliation

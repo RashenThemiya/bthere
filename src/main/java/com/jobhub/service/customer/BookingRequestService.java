@@ -46,7 +46,7 @@ public class BookingRequestService {
     private final com.jobhub.repository.finance.PaymentInstrumentRepository instruments;
     private final LiveTrackingService tracking;
     /** After the first failed payment attempt the customer gets one fresh retry window; later failures never reset it. */
-    static final Duration PAYMENT_RETRY_WINDOW=Duration.ofMinutes(15);
+    static final Duration PAYMENT_RETRY_WINDOW=Duration.ofHours(1);
     // Optional collaborators (field-injected so existing constructors and tests stay unchanged).
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.jobhub.service.market.RefundPolicyService refundPolicies;
@@ -497,7 +497,7 @@ public class BookingRequestService {
     }
     /**
      * Opens the single retry window after the first failed payment attempt: deadline becomes
-     * max(current deadline, now + 15 min), capped at service start. Returns false if it was already opened.
+     * max(current deadline, now + 1 hour), capped at service start. Returns false if it was already opened.
      */
     private boolean startRetryWindow(BookingRequest r,Job job) {
         if(r.getPaymentRetryStartedAt()!=null) return false;

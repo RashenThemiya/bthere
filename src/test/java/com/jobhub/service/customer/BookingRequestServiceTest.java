@@ -259,7 +259,7 @@ class BookingRequestServiceTest {
         assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(InsufficientWalletFundsException.class);
         assertThat(request.getStatus()).isEqualTo("AWAITING_CUSTOMER_CONFIRMATION");assertThat(request.getPaymentStatus()).isEqualTo("FAILED");
         var retryDeadline=request.getConfirmationExpiresAt();
-        assertThat(retryDeadline).isAfter(Instant.now().plusSeconds(890));assertThat(request.getPaymentRetryStartedAt()).isNotNull();
+        assertThat(retryDeadline).isAfter(Instant.now().plusSeconds(3590));assertThat(request.getPaymentRetryStartedAt()).isNotNull();
         assertThat(request.getStartCode()).isNull();assertThat(job.getPaymentStatus()).isEqualTo("PENDING");
         assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(InsufficientWalletFundsException.class);
         assertThat(request.getConfirmationExpiresAt()).isEqualTo(retryDeadline);

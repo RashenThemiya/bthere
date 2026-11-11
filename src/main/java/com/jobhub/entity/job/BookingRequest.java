@@ -35,7 +35,7 @@ public class BookingRequest extends AuditedEntity {
     private Instant expiresAt;
     private Instant confirmationExpiresAt;
     private Instant paymentDeadlineLimit;
-    /** Set once, on the first failed payment attempt; starts the single 15-minute retry window. */
+    /** Set once, on the first failed payment attempt; starts the single 1-hour retry window. */
     private Instant paymentRetryStartedAt;
     private Instant paymentStartedAt;
     @Column(length = 100) private String paymentOrderId;

@@ -17,6 +17,25 @@ import java.util.*;
 /** FCM HTTP v1 with short-lived OAuth service-account credentials. */
 @Component
 public class BookingPushGateway {
+    /**
+     * Event types shown as a visible notification (title, body); every other type is a silent data message the
+     * app handles in the background (for example OFFER_CANCELLED revoking an offer).
+     */
+    static final Map<String,String[]> VISIBLE=Map.ofEntries(
+            Map.entry("BOOKING_OFFER",new String[]{"New booking request","Open the app to accept before the offer expires."}),
+            Map.entry("PROVIDER_ACCEPTED",new String[]{"Provider found","Confirm and pay to secure your booking."}),
+            Map.entry("BOOKING_CONFIRMED",new String[]{"Booking confirmed","Your booking is confirmed. Open the app for the details."}),
+            Map.entry("PROVIDER_EN_ROUTE",new String[]{"Provider on the way","Track your provider live in the app."}),
+            Map.entry("PROVIDER_ARRIVED",new String[]{"Provider has arrived","Share your start code to begin the service."}),
+            Map.entry("BOOKING_STARTED",new String[]{"Service started","Your booking is now in progress."}),
+            Map.entry("COMPLETION_REQUESTED",new String[]{"Confirm completion","Your provider marked the service as complete. Please confirm."}),
+            Map.entry("BOOKING_COMPLETED",new String[]{"Booking completed","Thank you. You can rate your provider in the app."}),
+            Map.entry("PAYMENT_FAILED",new String[]{"Payment failed","Retry the payment or choose another method before the time runs out."}),
+            Map.entry("PAYMENT_DEADLINE_EXTENDED",new String[]{"More time to pay","Your payment window was extended. Open the app to pay."}),
+            Map.entry("BOOKING_CANCELLED",new String[]{"Booking cancelled","Your booking was cancelled. Open the app to see the details and any refund to your wallet."}),
+            Map.entry("BOOKING_UNMATCHED",new String[]{"No provider available","We could not find a provider for your request. Try again or choose another time."}),
+            Map.entry("BOOKING_EXPIRED",new String[]{"Booking expired","Your booking request expired. Open the app to book again."}),
+            Map.entry("BOOKING_CANCELLED_BY_CUSTOMER",new String[]{"Booking cancelled by customer","The customer cancelled this booking. Your slot is free again."}));
     private final ObjectMapper mapper;
     private final String credentialsPath;
     private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -37,9 +56,9 @@ public class BookingPushGateway {
         if(event.getExpiresAt()!=null)data.put("expiresAt",event.getExpiresAt().toString());
         boolean incoming="BOOKING_OFFER".equals(event.getEventType());
         // Offer notifications ring through the app-created channel. Revocations are data updates.
-        if(incoming || Set.of("PROVIDER_ACCEPTED","BOOKING_CONFIRMED","COMPLETION_REQUESTED","BOOKING_COMPLETED","PAYMENT_FAILED","PAYMENT_DEADLINE_EXTENDED","PROVIDER_EN_ROUTE","PROVIDER_ARRIVED").contains(event.getEventType())) {
-            var notification=message.putObject("notification");notification.put("title",incoming?"New booking request":"Booking update");
-            notification.put("body",incoming?"Open the app to accept before the offer expires.":"Open the app to view your booking.");
+        String[] visible=VISIBLE.get(event.getEventType());
+        if(visible!=null) {
+            var notification=message.putObject("notification");notification.put("title",visible[0]);notification.put("body",visible[1]);
         }
         long ttl=event.getExpiresAt()==null?300:Math.max(0,Duration.between(Instant.now(),event.getExpiresAt()).toSeconds());
         var android=message.putObject("android");android.put("priority","HIGH");android.put("ttl",ttl+"s");
