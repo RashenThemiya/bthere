@@ -8,6 +8,10 @@ PayHere customer-confirmed bookings now support automatic provider earnings cred
 See [card booking settlement](CARD_BOOKING_SETTLEMENT_API.md) for the completion hook,
 payment references, earnings history and environment separation.
 
+Booking Details can show the assigned provider(s) (name, photo, rating, call permission) for
+single-provider and team bookings, including history. See
+[assigned providers](CUSTOMER_BOOKING_PROVIDERS_API.md) (2026-11-17, local; not deployed).
+
 ## Accepted booking payment actions
 
 Use GET `/api/v1/customers/me/booking-requests/{id}/payment-window` to show Pay now,
@@ -358,6 +362,7 @@ Search uses offset-aware ISO timestamps. Booking uses market-local timestamps wi
 | Search available providers | POST /api/v1/customers/me/provider-search | 200 Results |
 | Final booking handoff | POST /api/v1/customers/me/bookings | 201 BookingResponse |
 | Own booking history | GET /api/v1/customers/me/bookings | 200 BookingResponse[] |
+| Booking Details: assigned providers | GET /api/v1/customers/me/bookings/{jobId}/providers | 200 BookingProviders ([contract](CUSTOMER_BOOKING_PROVIDERS_API.md)) |
 
 Register/login → GET profile (404 means complete it) → choose market/location → services → options → context/access check → complete requirements/review if needed → select delivery/time/matching preferences → provider search → booking answers → final booking. Keep selected service/option in navigation when opening requirements, so the customer can return to the same flow.
 

@@ -21,6 +21,13 @@ import java.util.List;
 public class CustomerBookingController {
 
     private final CustomerBookingService service;
+    private final com.jobhub.service.customer.BookingProviderService bookingProviders;
+
+    @GetMapping("/{jobId}/providers")
+    public ResponseEntity<com.jobhub.dto.job.BookingProviderApi.BookingProviders> providers(
+            @AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long jobId) {
+        return ResponseEntity.ok(bookingProviders.providers(user.id(), jobId));
+    }
 
     @PostMapping
     public ResponseEntity<BookingResponse> create(
