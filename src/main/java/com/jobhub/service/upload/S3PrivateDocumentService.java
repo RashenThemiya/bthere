@@ -87,6 +87,34 @@ public class S3PrivateDocumentService {
         return signedViewUrl(normalizedKey);
     }
 
+    /**
+     * No-show complaint photo: must be the provider's own private image (POST /uploads/documents). Returns the
+     * storage upload time, which the server trusts instead of the phone's clock.
+     */
+    public java.time.Instant providerPhotoUploadedAt(Long userId, String key) {
+        if (userId == null || key == null
+                || !key.matches("providers/" + userId + "/documents/[A-Za-z0-9_-]+\\.(?:jpg|png|webp)")) {
+            throw new IllegalArgumentException("Photo must be a JPG, PNG or WebP you uploaded with POST /api/v1/uploads/documents");
+        }
+        try {
+            var head = s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(requireBucket()).key(key).build());
+            if (!java.util.Set.of("image/jpeg", "image/png", "image/webp").contains(
+                    head.contentType() == null ? "" : head.contentType().toLowerCase(java.util.Locale.ROOT))) {
+                throw new IllegalArgumentException("Photo must be a JPG, PNG or WebP image");
+            }
+            return head.lastModified();
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception exception) {
+            if (exception.statusCode() == 404) throw new IllegalArgumentException("Uploaded photo does not exist");
+            throw exception;
+        }
+    }
+
+    /** Admin review of complaint evidence: a 10-minute link to a provider's private file. */
+    public PresignedUrlResponse adminViewUrl(String key) {
+        return signedViewUrl(normalizeKey(key));
+    }
+
     /** Only call after resolving an approved, explicitly customer-visible image answer. */
     public PresignedUrlResponse createPublishedProviderImageUrl(Long userId, String key) {
         if (userId == null || key == null

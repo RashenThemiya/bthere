@@ -54,4 +54,13 @@ public final class ProfileOverviewApi {
                               BigDecimal amount, String currencyCode, String paymentStatus) {}
 
     public record RecentList<T>(List<T> items, int limit, boolean hasMore, int totalCount) {}
+
+    /** One booking request for the "View all" list. jobId is set once a provider accepted and a booking exists. */
+    public record RequestItem(Long requestId, Long jobId, String status, String paymentStatus, String paymentFundingMode,
+                              Long serviceTypeId, String serviceName, Long optionId, String optionName,
+                              LocalDateTime startAt, LocalDateTime endAt, BigDecimal amount, String currencyCode,
+                              LocalDateTime createdAt) {}
+
+    /** page is zero-based. */
+    public record PageOf<T>(List<T> items, int page, int size, long totalCount, boolean hasMore) {}
 }

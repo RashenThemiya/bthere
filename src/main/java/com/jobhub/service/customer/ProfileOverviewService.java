@@ -93,6 +93,42 @@ public class ProfileOverviewService {
                 new RecentList<>(historyItems, recentLimit, history.size() > recentLimit, history.size()));
     }
 
+    /** Every status a booking request can have (BookingRequestService). Unknown filter values are rejected. */
+    public static final Set<String> REQUEST_STATUSES = Set.of("MATCHING", "AWAITING_CUSTOMER_CONFIRMATION",
+            "PAYMENT_PENDING", "PAYMENT_RECONCILIATION", "PAYMENT_REVIEW", "CONFIRMED", "NO_SHOW_REVIEW", "IN_PROGRESS",
+            "AWAITING_COMPLETION_CONFIRMATION", "COMPLETED", "CANCELLED", "UNMATCHED", "EXPIRED", "PAYMENT_FAILED");
+    public static final int MAX_PAGE_SIZE = 50;
+
+    /** The signed-in customer's own booking requests, newest first, optionally filtered by status. */
+    public PageOf<RequestItem> bookingRequests(Long userId, List<String> statuses, int page, int size) {
+        if (page < 0) throw new IllegalArgumentException("page must be 0 or greater");
+        if (size < 1 || size > MAX_PAGE_SIZE) throw new IllegalArgumentException("size must be between 1 and " + MAX_PAGE_SIZE);
+        Set<String> filter = new LinkedHashSet<>();
+        if (statuses != null) for (String s : statuses) {
+            if (s == null || s.isBlank()) continue;
+            String v = s.trim().toUpperCase(Locale.ROOT);
+            if (!REQUEST_STATUSES.contains(v)) throw new IllegalArgumentException("Unknown status: " + s.trim());
+            filter.add(v);
+        }
+        var pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "requestId"));
+        var result = filter.isEmpty() ? requests.findAllByUserId(userId, pageable)
+                : requests.findAllByUserIdAndStatusIn(userId, filter, pageable);
+        var names = new Names();
+        List<RequestItem> items = result.getContent().stream().map(r -> requestItem(r, names)).toList();
+        return new PageOf<>(items, page, size, result.getTotalElements(), result.hasNext());
+    }
+
+    private RequestItem requestItem(BookingRequest r, Names names) {
+        JsonNode booking = bookingPayload(r);
+        Long serviceTypeId = names.serviceTypeOf(r.getOptionId());
+        LocalDateTime start = dateTime(booking, "startDatetime");
+        if (start == null) start = dateTime(booking, "requestedPickupTime");
+        return new RequestItem(r.getRequestId(), r.getJobId(), r.getStatus(), r.getPaymentStatus(), r.getPaymentFundingMode(),
+                serviceTypeId, names.service(serviceTypeId), r.getOptionId(), names.option(r.getOptionId()), start,
+                dateTime(booking, "expectedEndDatetime"), r.getQuotedAmount(), r.getCurrencyCode(), r.getCreatedAt());
+    }
+
     /** Set.of(...).contains(null) throws; stored statuses/funding modes can be null. */
     private static boolean in(Set<String> set, String value) { return value != null && set.contains(value); }
 

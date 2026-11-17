@@ -39,6 +39,36 @@ public final class RefundCalculator {
                 policy.getPolicyId(), policy.getVersion(), tier == null ? null : tier.getName());
     }
 
+    /**
+     * Approved customer no-show: refundPercentage of the refundable base goes back to the customer (platform fee
+     * excluded unless the policy refunds it); providerSharePercentage of the kept amount goes to the provider, or the
+     * booking's normal provider/platform ratio when null. policy may be null when the admin supplied the percentage.
+     */
+    public static Quote customerNoShow(RefundPolicy policy, Job job, BigDecimal refundPercentage,
+                                       BigDecimal providerSharePercentage, long minutesBeforeStart) {
+        BigDecimal paid = money(job.getExpectedAmount());
+        BigDecimal platformFee = job.getPlatformFee() == null ? BigDecimal.ZERO : money(job.getPlatformFee()).min(paid);
+        boolean feeRefundable = policy != null && policy.isPlatformFeeRefundable();
+        BigDecimal base = feeRefundable ? paid : paid.subtract(platformFee);
+        BigDecimal refund = percent(base, refundPercentage).max(BigDecimal.ZERO).min(paid);
+        BigDecimal retained = paid.subtract(refund);
+        BigDecimal provider = providerSharePercentage != null ? percent(retained, providerSharePercentage)
+                : providerRatio(job, paid, retained);
+        provider = provider.min(retained);
+        return new Quote(job.getJobId(), "CUSTOMER_NO_SHOW", job.getCurrencyCode(), paid, refund, refundPercentage,
+                BigDecimal.ZERO.setScale(2), retained, provider, retained.subtract(provider), feeRefundable, WALLET,
+                minutesBeforeStart, policy == null ? null : policy.getPolicyId(), policy == null ? null : policy.getVersion(), null);
+    }
+
+    /** Rejected no-show complaint: the customer gets everything back; provider and platform keep nothing. */
+    public static Quote noShowRejected(RefundPolicy policy, Job job, long minutesBeforeStart) {
+        BigDecimal paid = money(job.getExpectedAmount());
+        BigDecimal zero = BigDecimal.ZERO.setScale(2);
+        return new Quote(job.getJobId(), "NO_SHOW_REJECTED", job.getCurrencyCode(), paid, paid, HUNDRED.setScale(2),
+                zero, zero, zero, zero, true, WALLET, minutesBeforeStart,
+                policy == null ? null : policy.getPolicyId(), policy == null ? null : policy.getVersion(), null);
+    }
+
     /** Provider cancellation always refunds the customer in full; the provider and platform keep nothing. */
     public static Quote provider(RefundPolicy policy, Job job, long minutesBeforeStart) {
         return provider(policy, job, minutesBeforeStart, Long.MAX_VALUE);

@@ -309,9 +309,10 @@ public class CustomerRequirementsService {
                 var required = all.get(code);
                 String status = required == null ? "MISSING" : effectiveStatus(
                         answers.get(required.getRequirementId()), required, answers, all);
-                if (!Set.of("PROVIDED", "APPROVED").contains(status)) {
-                    var reason = new Reason(status, code, code + ": " + status);
-                    if (!reasons.contains(reason)) reasons.add(reason);
+                // A rule may name a requirement that already blocks booking on its own: report it once.
+                boolean reported = reasons.stream().anyMatch(x -> code.equals(x.requirementCode()) && status.equals(x.code()));
+                if (!Set.of("PROVIDED", "APPROVED").contains(status) && !reported) {
+                    reasons.add(new Reason(status, code, (required == null ? code : required.getLabel()) + ": " + status));
                 }
             }
             if (rule.getMinimumAge() == null) continue;

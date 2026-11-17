@@ -65,6 +65,17 @@ public class ServiceOption extends AuditedEntity {
     private Integer liveTrackingAutoStartMinutes = 30;
     /** Customers must book a start at least this many minutes ahead; 0 allows "now" bookings. Null means 120. */
     private Integer minimumNoticeMinutes = 120;
+    /**
+     * Customer no-show complaint (TIME_BASED only): minutes after the booked start before the provider may complain
+     * that the customer did not give the start code / could not be reached. Null turns complaints off.
+     */
+    private Integer noShowClaimAfterMinutes;
+    /** Hours after the booked end during which a complaint may still be filed. Null means 24. */
+    private Integer noShowClaimDeadlineHours;
+    /** A complaint located farther than this from the booking address is flagged for admin. Null means 500. */
+    private Integer noShowMaxDistanceMeters;
+    /** The complaint photo must have been uploaded within this many minutes. Null means 15. */
+    private Integer noShowPhotoMaxAgeMinutes;
 
     @ElementCollection
     @CollectionTable(name = "service_option_payment_method",

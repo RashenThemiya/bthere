@@ -159,7 +159,7 @@ public class BookingCancellationService {
      * Counts the provider's cancellations (waived ones excluded) within the policy's window, this one included, and
      * suspends the provider at the limit. A suspended provider gets no new offers and cannot accept any.
      */
-    private boolean suspendIfOverLimit(ServiceProvider provider, RefundPolicy policy, Long userId) {
+    boolean suspendIfOverLimit(ServiceProvider provider, RefundPolicy policy, Long userId) {
         if (policy == null || policy.getProviderCancellationLimit() == null || policy.getProviderCancellationWindowDays() == null)
             return false;
         long count = cancellations.countProviderCancellationsSince(userId,
@@ -173,7 +173,7 @@ public class BookingCancellationService {
         return true;
     }
 
-    private JobCancellation settle(BookingRequest request, Job job, Quote quote, Long actorUserId, Cancel input) {
+    JobCancellation settle(BookingRequest request, Job job, Quote quote, Long actorUserId, Cancel input) {
         var operation = wallets.refundCancelledRequestBooking(request.getUserId(), job.getJobId(), quote.refundAmount(),
                 quote.providerAmount(), quote.platformAmount(), actorUserId);
         var row = new JobCancellation();

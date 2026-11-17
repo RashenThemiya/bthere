@@ -10,6 +10,10 @@ public interface BookingRequestRepository extends JpaRepository<BookingRequest, 
     List<BookingRequest> findAllByJobIdIn(Collection<Long> jobIds);
     /** Customer profile overview: requests still looking for a provider (no job yet). */
     List<BookingRequest> findAllByUserIdAndStatusOrderByCreatedAtDesc(Long userId, String status);
+    /** Customer booking-request list ("View all"); sort comes from the Pageable. */
+    org.springframework.data.domain.Page<BookingRequest> findAllByUserId(Long userId, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<BookingRequest> findAllByUserIdAndStatusIn(Long userId, Collection<String> statuses,
+            org.springframework.data.domain.Pageable pageable);
     @Query("select r.status, count(r) from BookingRequest r group by r.status")
     List<Object[]> monitorStatusCounts();
     @Query("select r.paymentStatus, count(r) from BookingRequest r group by r.paymentStatus")

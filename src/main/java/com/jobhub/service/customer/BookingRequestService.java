@@ -396,7 +396,7 @@ public class BookingRequestService {
         var job=jobs.lockPaymentJob(r.getJobId()).orElseThrow();
         if(!"WALLET".equals(job.getPaymentMethod()))
             throw new ConflictException("This request does not use WALLET");
-        if(Set.of("CONFIRMED","IN_PROGRESS","AWAITING_COMPLETION_CONFIRMATION","COMPLETED").contains(r.getStatus())
+        if(Set.of("CONFIRMED","NO_SHOW_REVIEW","IN_PROGRESS","AWAITING_COMPLETION_CONFIRMATION","COMPLETED").contains(r.getStatus())
                 && Set.of("RESERVED","SETTLED").contains(r.getPaymentStatus()))return view(r);
         if(!"AWAITING_CUSTOMER_CONFIRMATION".equals(r.getStatus()) || r.getConfirmationExpiresAt()==null
                 || !Instant.now().isBefore(r.getConfirmationExpiresAt()))
@@ -751,6 +751,11 @@ public class BookingRequestService {
         return refundPolicies.effectivePolicyId(job.getMarketId(),offeringId).orElse(null);
     }
     /** Cancels a confirmed booking: offers, job status and customer/provider events. Money is handled by the caller. */
+    /** No-show complaint filed: the paid, unstarted booking waits for admin review (start code and cancellation blocked). */
+    void markNoShowReview(BookingRequest r,Job job) {
+        r.setStatus("NO_SHOW_REVIEW");job.setJobStatus("NO_SHOW_REVIEW");r.setStartCode(null);
+    }
+    void notifyUser(BookingRequest r,Long userId,String type) {event(r,userId,null,type,null);}
     void cancelConfirmed(BookingRequest r,Long providerUserId,String providerEvent) {
         stop(r,"CANCELLED");
         if(providerUserId!=null) event(r,providerUserId,null,providerEvent,null);

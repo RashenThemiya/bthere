@@ -214,4 +214,50 @@ class ProfileOverviewServiceTest {
         assertThatThrownBy(() -> service.overview(40L, 0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.overview(40L, 21)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ---------- booking-request list ----------
+
+    private BookingRequest listed(long id, String status, String payload) {
+        BookingRequest r = new BookingRequest(); r.setRequestId(id); r.setUserId(40L); r.setOptionId(1L); r.setStatus(status);
+        r.setPayloadJson(payload); r.setQuotedAmount(new BigDecimal("7000.00")); r.setCurrencyCode("LKR");
+        r.setPaymentFundingMode("MOCK"); r.setPaymentStatus("NOT_STARTED");
+        return r;
+    }
+
+    @Test void bookingRequestListMapsItemsAndPages() {
+        var r = listed(9L, "CONFIRMED", "{\"booking\":{\"startDatetime\":\"2026-11-20T09:00:00\",\"expectedEndDatetime\":[2026,11,20,11,0]}}");
+        r.setJobId(55L);
+        var route = listed(8L, "MATCHING", "{\"booking\":{\"requestedPickupTime\":\"2026-11-21T07:30:00\"}}");
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 2);
+        when(requests.findAllByUserId(org.mockito.ArgumentMatchers.eq(40L), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(r, route), pageable, 3));
+
+        var page = service.bookingRequests(40L, null, 0, 2);
+        assertThat(page.totalCount()).isEqualTo(3);
+        assertThat(page.hasMore()).isTrue();
+        var first = page.items().get(0);
+        assertThat(first.jobId()).isEqualTo(55L);
+        assertThat(first.serviceName()).isEqualTo("Caregiver");
+        assertThat(first.optionName()).isEqualTo("Hospital Care");
+        assertThat(first.startAt()).isEqualTo(LocalDateTime.of(2026, 11, 20, 9, 0));
+        assertThat(first.endAt()).isEqualTo(LocalDateTime.of(2026, 11, 20, 11, 0));
+        assertThat(first.amount()).isEqualByComparingTo("7000");
+        assertThat(page.items().get(1).startAt()).isEqualTo(LocalDateTime.of(2026, 11, 21, 7, 30));
+        assertThat(page.items().get(1).jobId()).isNull();
+    }
+
+    @Test void bookingRequestStatusFilterIsNormalizedAndValidated() {
+        when(requests.findAllByUserIdAndStatusIn(org.mockito.ArgumentMatchers.eq(40L), any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        service.bookingRequests(40L, List.of(" matching", "CONFIRMED", ""), 0, 20);
+        @SuppressWarnings("unchecked")
+        var statuses = org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        org.mockito.Mockito.verify(requests).findAllByUserIdAndStatusIn(org.mockito.ArgumentMatchers.eq(40L), statuses.capture(), any());
+        assertThat(statuses.getValue()).containsExactly("MATCHING", "CONFIRMED");
+
+        assertThatThrownBy(() -> service.bookingRequests(40L, List.of("DONE"), 0, 20))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Unknown status: DONE");
+        assertThatThrownBy(() -> service.bookingRequests(40L, null, -1, 20)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.bookingRequests(40L, null, 0, 51)).isInstanceOf(IllegalArgumentException.class);
+    }
 }

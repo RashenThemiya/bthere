@@ -364,6 +364,9 @@ Search uses offset-aware ISO timestamps. Booking uses market-local timestamps wi
 | Own booking history | GET /api/v1/customers/me/bookings | 200 BookingResponse[] |
 | Booking Details: assigned providers | GET /api/v1/customers/me/bookings/{jobId}/providers | 200 BookingProviders ([contract](CUSTOMER_BOOKING_PROVIDERS_API.md)) |
 | Profile page overview | GET /api/v1/customers/me/profile-overview?recentLimit=5 | 200 Overview ([contract](CUSTOMER_PROFILE_OVERVIEW_API.md)) |
+| List own booking requests (paged) | GET /api/v1/customers/me/booking-requests?status=&page=0&size=20 | 200 PageOf<RequestItem> ([contract](CUSTOMER_PROFILE_OVERVIEW_API.md#5-view-all-booking-request-list)) |
+| Change/verify email or phone | POST /api/v1/customers/me/contacts/{email,phone}/otp, then /verify | 200 CodeSent, then 200 Contacts ([contract](CUSTOMER_PROFILE_OVERVIEW_API.md#7-change-or-verify-email-and-phone)) |
+| No-show complaint on my booking | GET /api/v1/customers/me/bookings/{jobId}/no-show-claim, POST …/no-show-claim/response | 200 Claim ([contract](CUSTOMER_NO_SHOW_API.md#3-customer-see-it-and-respond)) |
 
 Register/login → GET profile (404 means complete it) → choose market/location → services → options → context/access check → complete requirements/review if needed → select delivery/time/matching preferences → provider search → booking answers → final booking. Keep selected service/option in navigation when opening requirements, so the customer can return to the same flow.
 

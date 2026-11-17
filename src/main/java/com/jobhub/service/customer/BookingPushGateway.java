@@ -35,6 +35,9 @@ public class BookingPushGateway {
             Map.entry("BOOKING_CANCELLED",new String[]{"Booking cancelled","Your booking was cancelled. Open the app to see the details and any refund to your wallet."}),
             Map.entry("BOOKING_UNMATCHED",new String[]{"No provider available","We could not find a provider for your request. Try again or choose another time."}),
             Map.entry("BOOKING_EXPIRED",new String[]{"Booking expired","Your booking request expired. Open the app to book again."}),
+            Map.entry("NO_SHOW_REPORTED",new String[]{"Provider could not reach you","Your provider reported that the booking could not start. Open the app to respond."}),
+            Map.entry("NO_SHOW_CLAIM_APPROVED",new String[]{"Complaint approved","Your no-show complaint was approved. Your share was added to your wallet."}),
+            Map.entry("NO_SHOW_CLAIM_REJECTED",new String[]{"Complaint rejected","Your no-show complaint was rejected. Open the app for the details."}),
             Map.entry("BOOKING_CANCELLED_BY_CUSTOMER",new String[]{"Booking cancelled by customer","The customer cancelled this booking. Your slot is free again."}));
     private final ObjectMapper mapper;
     private final String credentialsPath;

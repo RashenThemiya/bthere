@@ -13,4 +13,6 @@ public interface UserAuthProviderRepository extends JpaRepository<UserAuthProvid
             String provider,
             String providerUserId
     );
+
+    java.util.List<UserAuthProvider> findAllByUserId(Long userId);
 }

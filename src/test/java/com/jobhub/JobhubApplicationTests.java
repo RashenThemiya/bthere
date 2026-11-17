@@ -71,6 +71,7 @@ class JobhubApplicationTests {
     @MockitoBean private com.jobhub.repository.job.RatingRepository ratingRepository;
     @MockitoBean private com.jobhub.repository.job.JobCancellationRepository jobCancellationRepository;
     @MockitoBean private com.jobhub.repository.job.ProviderPenaltyRepository providerPenaltyRepository;
+    @MockitoBean private com.jobhub.repository.job.NoShowClaimRepository noShowClaimRepository;
     @Autowired private com.jobhub.controller.provider.ProviderPenaltyController providerPenaltyController;
     @Autowired private com.jobhub.controller.admin.AdminProviderPenaltyController adminProviderPenaltyController;
     @MockitoBean private com.jobhub.repository.auth.UserDeviceRepository bookingDevices;

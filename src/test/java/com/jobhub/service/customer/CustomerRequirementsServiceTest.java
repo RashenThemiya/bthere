@@ -113,6 +113,26 @@ class CustomerRequirementsServiceTest {
         assertThat(service.eligibility(25L, 3L, 12L).reasons()).extracting(Reason::code).contains("MISSING");
     }
 
+    /** Live Home Care setup: an option-scoped blocking document that the option's rule also lists. */
+    @Test void optionDocumentAlsoRequiredByRuleBlocksUntilApprovedAndIsReportedOnce() throws Exception {
+        var r = field(1, "CUSTOMER_HOME_CARE_GN", "DOCUMENT_UPLOAD", "DOCUMENT_REVIEW", true, new Target("OPTION", 3L, 12L));
+        r.setLabel("Home Care customer Grama Niladhari certificate");
+        var rule = new CustomerEligibilityRule(); rule.setScope("OPTION"); rule.setServiceTypeId(3L); rule.setOptionId(12L);
+        rule.setEnabled(true); rule.setRequiredCodesJson("[\"CUSTOMER_HOME_CARE_GN\"]"); ageRules.add(rule);
+
+        assertThat(service.eligibility(25L, 3L, 12L).reasons()).singleElement()
+                .satisfies(x -> assertThat(x.message()).isEqualTo("Home Care customer Grama Niladhari certificate: MISSING"));
+        var s = answer(r, "{}", "PENDING");
+        assertThat(service.eligibility(25L, 3L, 12L).reasons()).extracting(Reason::code).containsExactly("PENDING");
+        s.setStatus("REJECTED");
+        assertThat(service.eligibility(25L, 3L, 12L).reasons()).extracting(Reason::code).containsExactly("REJECTED");
+        s.setStatus("APPROVED");
+        assertThat(service.eligibility(25L, 3L, 12L).eligible()).isTrue();
+        // Other services are not affected by the Home Care document.
+        s.setStatus("PENDING");
+        assertThat(service.eligibility(25L, 3L, null).eligible()).isTrue();
+    }
+
     @Test void noneReviewSubmissionIsProvidedAndUntouchedAnswersRemain() throws Exception {
         field(1, "NOTES", "TEXT", "NONE", true, global());
         var second = field(2, "OTHER", "TEXT", "NONE", false, global());
