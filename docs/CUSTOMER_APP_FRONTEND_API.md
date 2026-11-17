@@ -363,6 +363,7 @@ Search uses offset-aware ISO timestamps. Booking uses market-local timestamps wi
 | Final booking handoff | POST /api/v1/customers/me/bookings | 201 BookingResponse |
 | Own booking history | GET /api/v1/customers/me/bookings | 200 BookingResponse[] |
 | Booking Details: assigned providers | GET /api/v1/customers/me/bookings/{jobId}/providers | 200 BookingProviders ([contract](CUSTOMER_BOOKING_PROVIDERS_API.md)) |
+| Profile page overview | GET /api/v1/customers/me/profile-overview?recentLimit=5 | 200 Overview ([contract](CUSTOMER_PROFILE_OVERVIEW_API.md)) |
 
 Register/login → GET profile (404 means complete it) → choose market/location → services → options → context/access check → complete requirements/review if needed → select delivery/time/matching preferences → provider search → booking answers → final booking. Keep selected service/option in navigation when opening requirements, so the customer can return to the same flow.
 

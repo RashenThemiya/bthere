@@ -69,6 +69,8 @@ public class BookingProviderService {
 
     private Contact contact(Job job, ServiceProvider p) {
         String status = job.getJobStatus();
+        // List.of/Set.of contains(null) throws, so a missing status is treated as not confirmed.
+        if (status == null) return new Contact(false, null, BOOKING_NOT_CONFIRMED);
         if (!CONTACT_ALLOWED_STATUSES.contains(status)) {
             return new Contact(false, null, NOT_CONFIRMED_STATUSES.contains(status) ? BOOKING_NOT_CONFIRMED : BOOKING_ENDED);
         }

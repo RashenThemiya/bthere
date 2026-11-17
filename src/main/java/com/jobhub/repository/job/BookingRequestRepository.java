@@ -8,6 +8,8 @@ import java.util.*;
 
 public interface BookingRequestRepository extends JpaRepository<BookingRequest, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<BookingRequest> {
     List<BookingRequest> findAllByJobIdIn(Collection<Long> jobIds);
+    /** Customer profile overview: requests still looking for a provider (no job yet). */
+    List<BookingRequest> findAllByUserIdAndStatusOrderByCreatedAtDesc(Long userId, String status);
     @Query("select r.status, count(r) from BookingRequest r group by r.status")
     List<Object[]> monitorStatusCounts();
     @Query("select r.paymentStatus, count(r) from BookingRequest r group by r.paymentStatus")

@@ -155,6 +155,24 @@ public class CustomerRequirementsService {
                 submissionResponse(answers.get(r.getRequirementId()), r, answers, all))).toList();
     }
 
+    static final Set<String> DOCUMENT_FIELD_TYPES = Set.of("IMAGE_UPLOAD", "DOCUMENT_UPLOAD", "FILE_UPLOAD");
+
+    /**
+     * Profile page documents: active upload requirements the customer has submitted, plus GLOBAL upload
+     * requirements not yet submitted (submission null = MISSING). Statuses use the same effective-status rules.
+     */
+    public List<FormItem> profileDocuments(Long userId) {
+        var customer = customer(userId);
+        var all = activeDefinitions();
+        var answers = answers(customer.getCustomerId());
+        return all.values().stream()
+                .filter(r -> DOCUMENT_FIELD_TYPES.contains(r.getFieldType()))
+                .filter(r -> answers.containsKey(r.getRequirementId())
+                        || targets(r).stream().anyMatch(t -> "GLOBAL".equals(t.scope())))
+                .map(r -> new FormItem(response(r), submissionResponse(answers.get(r.getRequirementId()), r, answers, all)))
+                .toList();
+    }
+
     @Transactional
     public List<Submission> submit(Long userId, Submit request) {
         var customer = customer(userId);

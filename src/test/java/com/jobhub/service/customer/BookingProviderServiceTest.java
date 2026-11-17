@@ -107,6 +107,13 @@ class BookingProviderServiceTest {
         assertThat(contact.unavailableReason()).isEqualTo("BOOKING_NOT_CONFIRMED");
     }
 
+    @Test void nullJobStatusHidesPhoneWithoutFailing() {
+        job.setJobStatus(null);
+        var contact = service.providers(40L, 70L).providers().get(0).contact();
+        assertThat(contact.callAllowed()).isFalse();
+        assertThat(contact.unavailableReason()).isEqualTo("BOOKING_NOT_CONFIRMED");
+    }
+
     @Test void inProgressWithoutPhoneReportsPhoneNotAvailable() {
         job.setJobStatus("IN_PROGRESS");
         provider(18L, 180L, "Kumari", "Perera", null);
