@@ -48,6 +48,8 @@ public class ProfileOverviewService {
     static final Set<String> TEST_FUNDING = Set.of("MOCK", "PAYHERE_SANDBOX");
 
     private final UserRepository users;
+
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
     private final CustomerRepository customers;
     private final JobRepository jobs;
     private final BookingRequestRepository requests;
@@ -132,10 +134,10 @@ public class ProfileOverviewService {
     /** Set.of(...).contains(null) throws; stored statuses/funding modes can be null. */
     private static boolean in(Set<String> set, String value) { return value != null && set.contains(value); }
 
-    private static Profile profile(Customer c) {
+    private Profile profile(Customer c) {
         String name = (Objects.toString(c.getFirstName(), "") + " " + Objects.toString(c.getLastName(), "")).trim();
         return new Profile(c.getCustomerId(), c.getFirstName(), c.getLastName(), name.isEmpty() ? null : name,
-                c.getProfilePhoto(), c.getStatus(), true);
+                photoUrls.publicUrl(c.getProfilePhoto()), c.getStatus(), true);
     }
 
     // ---------- statistics ----------

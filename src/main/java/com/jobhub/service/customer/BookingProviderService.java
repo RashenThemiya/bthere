@@ -38,6 +38,8 @@ public class BookingProviderService {
     static final String PHONE_NOT_AVAILABLE = "PHONE_NOT_AVAILABLE";
 
     private final JobRepository jobs;
+
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
     private final CustomerRepository customers;
     private final JobProviderAssignmentRepository jobAssignments;
     private final ServiceProviderRepository providers;
@@ -63,7 +65,7 @@ public class BookingProviderService {
         String role = p.getServiceProviderId().equals(job.getAssignedServiceProviderId()) ? "PRIMARY" : "TEAM_MEMBER";
         String name = (Objects.toString(p.getFirstName(), "") + " " + Objects.toString(p.getLastName(), "")).trim();
         boolean rated = ratings.findByJobIdAndServiceProviderId(job.getJobId(), p.getServiceProviderId()).isPresent();
-        return new BookingProvider(p.getServiceProviderId(), role, name, p.getProfilePhoto(),
+        return new BookingProvider(p.getServiceProviderId(), role, name, photoUrls.publicUrl(p.getProfilePhoto()),
                 p.getAverageRating(), p.getTotalRatings(), rated, contact(job, p));
     }
 

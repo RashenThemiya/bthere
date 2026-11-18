@@ -1,5 +1,26 @@
 # Public image URL access and 403 diagnosis
 
+## Profile photos (fixed 2026-11-18)
+
+Customer and provider profile photos are uploaded to the **private** prefix
+`providers/<userId>/images/`, which also holds provider service images that are only
+shown through 10-minute signed links after approval. A direct S3 URL for a profile
+photo therefore returns 403 without credentials, and that prefix must stay private.
+
+Every `profilePhoto` in API responses is now rewritten to
+`<APP_PUBLIC_BASE_URL>/api/v1/public/profile-photos/<userId>/<file>`. That GET needs
+no Authorization header and returns the image (`image/jpeg|png|webp`, `Cache-Control:
+public, max-age=86400`) only when the file is the **current** profile photo of the
+customer or provider with that user id; anything else is 404. Old values stored as
+a direct S3 URL, a bare key or a proxy URL are all recognised, so photos saved before
+this change work without a database migration. External URLs (for example Google
+photos) and `service-icons/` URLs (public in S3) are returned unchanged.
+
+Set `APP_PUBLIC_BASE_URL` (for example `https://jobhub.pentarixlabs.com`) in the
+deployment environment; when empty, the origin is derived from the incoming request.
+Clients keep sending the upload `url` (or key) in `profilePhoto`, then display the
+`profilePhoto` returned by the profile APIs.
+
 `POST /api/v1/uploads/images` authenticates the upload, writes an S3 object, and
 returns a stable image URL. That URL must be readable without the application
 Bearer token. `PutObject` permission does not grant anonymous `GetObject` access.

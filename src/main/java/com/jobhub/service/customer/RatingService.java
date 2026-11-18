@@ -36,6 +36,8 @@ public class RatingService {
     static final int MAX_PAGE_SIZE = 50;
 
     private final RatingRepository ratings;
+
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
     private final JobRepository jobs;
     private final JobProviderAssignmentRepository jobAssignments;
     private final CustomerRepository customers;
@@ -86,7 +88,7 @@ public class RatingService {
             var provider = providers.findById(providerId).orElse(null);
             Rating r = byProvider.get(providerId);
             lines.add(new JobProviderRating(providerId, provider == null ? null : name(provider),
-                    provider == null ? null : provider.getProfilePhoto(), r != null, r == null ? null : view(r)));
+                    provider == null ? null : photoUrls.publicUrl(provider.getProfilePhoto()), r != null, r == null ? null : view(r)));
         }
         boolean completed = "COMPLETED".equals(job.getJobStatus());
         return new JobRatings(jobId, job.getServiceOptionId(), job.getJobStatus(),

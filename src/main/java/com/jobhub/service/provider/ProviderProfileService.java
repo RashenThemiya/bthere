@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 public class ProviderProfileService {
 
     private final ServiceProviderRepository serviceProviderRepository;
+
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
     private final ServiceProviderMarketRepository providerMarketRepository;
     private final MarketRepository marketRepository;
     private final ProviderServiceApprovalService approvalService;
@@ -92,7 +94,7 @@ public class ProviderProfileService {
                 provider.getPassportNumber(),
                 provider.getDateOfBirth(),
                 provider.getGender(),
-                provider.getProfilePhoto(),
+                photoUrls.publicUrl(provider.getProfilePhoto()),
                 provider.getBio(),
                 provider.getVerificationStatus(),
                 provider.getAvailabilityStatus(),

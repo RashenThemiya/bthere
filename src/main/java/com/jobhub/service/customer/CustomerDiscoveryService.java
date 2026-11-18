@@ -35,6 +35,7 @@ public class CustomerDiscoveryService {
     private final MapMarkerResolver mapMarkerResolver;
     private final com.jobhub.service.market.ServicePricingService pricing;
     private final RatingService ratings;
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
 
     public List<ServiceCard> services(Long userId, Long marketId) {
         profiles.get(userId); availability.market(marketId);
@@ -218,7 +219,7 @@ public class CustomerDiscoveryService {
                                 Point pin, Double distance, int remaining, List<String> spoken,
                                 Map<Long, com.fasterxml.jackson.databind.JsonNode> attributes, MapMarker mapMarker) {
         return new Candidate(p.getServiceProviderId(), a.getAssignmentId(), o.getOptionId(), location,
-                p.getFirstName() + " " + p.getLastName(), p.getProfilePhoto(), p.getAverageRating(), p.getTotalRatings(),
+                p.getFirstName() + " " + p.getLastName(), photoUrls.publicUrl(p.getProfilePhoto()), p.getAverageRating(), p.getTotalRatings(),
                 pin == null ? "ONLINE" : location != null ? "PUBLIC_SERVICE_LOCATION" : "APPROXIMATE_SERVICE_AREA",
                 pin, distance, remaining, spoken, attributes, mapMarker);
     }

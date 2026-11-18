@@ -15,6 +15,8 @@ public class CustomerProfileService {
 
     private final CustomerRepository customerRepository;
 
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
+
     @Transactional(readOnly = true)
     public CustomerProfileResponse get(Long userId) {
         Customer customer = customerRepository.findByUserId(userId)
@@ -55,7 +57,7 @@ public class CustomerProfileService {
                 customer.getUserId(),
                 customer.getFirstName(),
                 customer.getLastName(),
-                customer.getProfilePhoto(),
+                photoUrls.publicUrl(customer.getProfilePhoto()),
                 customer.getAddressLine1(),
                 customer.getAddressLine2(),
                 customer.getCity(),

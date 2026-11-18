@@ -46,7 +46,8 @@ class CustomerCatalogTransactionTest {
                 mock(ServiceProviderServiceAreaRepository.class), mock(ProviderServiceLanguageRepository.class),
                 mock(ProviderServiceSkillRepository.class), mock(ServiceTypeSkillRepository.class),
                 mock(ProviderSearchFields.class), mock(MapMarkerResolver.class),
-                mock(com.jobhub.service.market.ServicePricingService.class), mock(RatingService.class)), transactions);
+                mock(com.jobhub.service.market.ServicePricingService.class), mock(RatingService.class),
+                new com.jobhub.service.upload.ProfilePhotoUrls("bucket", "eu-north-1", "", "https://api.test")), transactions);
         var market = new Market(); market.setMarketId(1L); market.setStatus("ACTIVE");
         lenient().when(markets.findById(1L)).thenReturn(Optional.of(market));
     }

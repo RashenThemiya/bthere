@@ -51,6 +51,8 @@ class ProfileOverviewServiceTest {
     @Mock ServiceOptionRepository options;
     @Mock CustomerRequirementsService requirements;
     @Spy ObjectMapper mapper = new ObjectMapper();
+    @org.mockito.Spy com.jobhub.service.upload.ProfilePhotoUrls photoUrls =
+            new com.jobhub.service.upload.ProfilePhotoUrls("jobhube", "eu-north-1", "https://jobhube.s3.eu-north-1.amazonaws.com", "https://api.test");
     @InjectMocks ProfileOverviewService service;
 
     List<Job> jobList = new ArrayList<>();

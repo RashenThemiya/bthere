@@ -42,6 +42,8 @@ public class LiveTrackingService {
             MAX_CLOCK_SKEW = Duration.ofSeconds(30), LOCATION_RETENTION = Duration.ofDays(1);
 
     private final JobRepository jobs;
+
+    private final com.jobhub.service.upload.ProfilePhotoUrls photoUrls;
     private final JobProviderTrackingRepository trackings;
     private final ProviderLiveLocationRepository locations;
     private final JobProviderAssignmentRepository jobAssignments;
@@ -243,7 +245,7 @@ public class LiveTrackingService {
                     .map(a -> searchFields.attributes(a, publicFields)).orElse(Map.of());
             tracked.add(new TrackedProvider(providerId,
                     (Objects.toString(provider.getFirstName(), "") + " " + Objects.toString(provider.getLastName(), "")).trim(),
-                    provider.getProfilePhoto(), provider.getAverageRating(), provider.getTotalRatings(), attributes, marker,
+                    photoUrls.publicUrl(provider.getProfilePhoto()), provider.getAverageRating(), provider.getTotalRatings(), attributes, marker,
                     status, tracking == null ? null : tracking.getStartMode(),
                     tracking == null ? null : tracking.getJourneyStartedAt(),
                     tracking == null ? null : tracking.getArrivedAt(), location, stale, distance, eta));

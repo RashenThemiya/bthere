@@ -39,6 +39,8 @@ class RatingServiceTest {
     @Mock ServiceProviderRepository providers;
     @Mock ServiceOptionRepository options;
     @Mock AuditService audit;
+    @org.mockito.Spy com.jobhub.service.upload.ProfilePhotoUrls photoUrls =
+            new com.jobhub.service.upload.ProfilePhotoUrls("jobhube", "eu-north-1", "https://jobhube.s3.eu-north-1.amazonaws.com", "https://api.test");
     @InjectMocks RatingService service;
 
     Customer customer;

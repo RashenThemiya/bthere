@@ -34,6 +34,8 @@ class ProviderProfileServiceTest {
     private MarketRepository marketRepository;
     @Mock private ProviderServiceApprovalService approvalService;
 
+    @org.mockito.Spy com.jobhub.service.upload.ProfilePhotoUrls photoUrls =
+            new com.jobhub.service.upload.ProfilePhotoUrls("jobhube", "eu-north-1", "https://jobhube.s3.eu-north-1.amazonaws.com", "https://api.test");
     @InjectMocks
     private ProviderProfileService providerProfileService;
 
