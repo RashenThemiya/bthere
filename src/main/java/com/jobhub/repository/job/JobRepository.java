@@ -40,6 +40,23 @@ public interface JobRepository extends JpaRepository<Job, Long>, org.springframe
             @Param("excluded") Collection<String> excluded);
     long countByJobStatus(String status);
     List<Job> findAllByCustomerIdOrderByCreatedAtDesc(Long customerId);
+    List<Job> findTop50ByCustomerIdAndJobStatusInOrderByUpdatedAtDesc(Long customerId, Collection<String> statuses);
+
+    /** Bookings where the provider is the primary provider or an active team member. */
+    @Query("""
+            select j from Job j
+            where j.jobStatus in :statuses
+              and (j.assignedServiceProviderId = :providerId
+                   or exists (select a.jobProviderAssignmentId from JobProviderAssignment a
+                              where a.jobId = j.jobId and a.serviceProviderId = :providerId
+                                and (a.status is null or a.status not in :inactiveAssignments)))
+            order by j.updatedAt desc
+            """)
+    List<Job> findChatJobsForProvider(@Param("providerId") Long providerId,
+                                      @Param("statuses") Collection<String> statuses,
+                                      @Param("inactiveAssignments") Collection<String> inactiveAssignments,
+                                      org.springframework.data.domain.Pageable pageable);
+
     long countBySchedulingModel(String schedulingModel);
     long countByFulfillmentModel(String fulfillmentModel);
 

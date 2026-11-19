@@ -12,6 +12,10 @@ Booking Details can show the assigned provider(s) (name, photo, rating, call per
 single-provider and team bookings, including history. See
 [assigned providers](CUSTOMER_BOOKING_PROVIDERS_API.md) (2026-11-17, local; not deployed).
 
+Booking Details can show a service elapsed timer from `actualStartedAt`, `actualFinishedAt` and
+`completionConfirmedAt` (UTC ISO-8601, null until each happens). See [service timer](SERVICE_TIMER_API.md)
+(2026-11-19, local; not deployed).
+
 ## Accepted booking payment actions
 
 Use GET `/api/v1/customers/me/booking-requests/{id}/payment-window` to show Pay now,

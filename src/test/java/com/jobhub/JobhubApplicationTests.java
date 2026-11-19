@@ -65,6 +65,8 @@ class JobhubApplicationTests {
     @MockitoBean private com.jobhub.repository.job.BookingOfferRepository bookingOffers;
     @MockitoBean private com.jobhub.repository.job.BookingRequestPolicyRepository bookingRequestPolicies;
     @MockitoBean private com.jobhub.repository.job.BookingDispatchEventRepository bookingEvents;
+    @MockitoBean private com.jobhub.repository.chat.ChatMessageRepository chatMessages;
+    @MockitoBean private com.jobhub.repository.chat.ChatReadStateRepository chatReadStates;
     @MockitoBean private com.jobhub.repository.job.BookingPaymentNoticeRepository bookingPaymentNotices;
     @MockitoBean private com.jobhub.repository.job.JobProviderTrackingRepository jobProviderTrackings;
     @MockitoBean private com.jobhub.repository.job.ProviderLiveLocationRepository providerLiveLocations;
@@ -149,6 +151,26 @@ class JobhubApplicationTests {
                 java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role)));
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
         try { action.run(); } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
+
+    @Autowired private com.jobhub.controller.customer.CustomerChatController customerChatController;
+    @Autowired private com.jobhub.controller.provider.ProviderChatController providerChatController;
+    @Autowired private com.jobhub.controller.admin.AdminChatController adminChatController;
+
+    @Test void chatEndpointsAreRoleScoped() {
+        var denied = org.springframework.security.access.AccessDeniedException.class;
+        for(String role:java.util.List.of("SERVICE_PROVIDER","SUPER_ADMIN")) as(role, () -> {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerChatController.messages(null,70L,null,null)).isInstanceOf(denied);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerChatController.send(null,70L,null)).isInstanceOf(denied);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> customerChatController.conversations(null)).isInstanceOf(denied);
+        });
+        for(String role:java.util.List.of("CUSTOMER","SUPER_ADMIN")) as(role, () -> {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> providerChatController.messages(null,70L,null,null)).isInstanceOf(denied);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> providerChatController.send(null,70L,null)).isInstanceOf(denied);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> providerChatController.read(null,70L,null)).isInstanceOf(denied);
+        });
+        for(String role:java.util.List.of("CUSTOMER","SERVICE_PROVIDER","ADMIN","SUPPORT_ADMIN")) as(role, () ->
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> adminChatController.messages(null,70L,null)).isInstanceOf(denied));
     }
 
     @Test void cancellationAndBookingNoticeEndpointsAreRoleScoped() {

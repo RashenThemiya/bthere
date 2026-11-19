@@ -500,8 +500,17 @@ class BookingRequestServiceTest {
         assertThat(service.requestCompletion(9L,70L).status()).isEqualTo("AWAITING_COMPLETION_CONFIRMATION");
         var endedAt=job.getActualEndDatetime();assertThat(endedAt).isNotNull();
         service.requestCompletion(9L,70L);assertThat(job.getActualEndDatetime()).isEqualTo(endedAt);
+        var finished=service.get(5L,request.getRequestId());
+        assertThat(finished.actualStartedAt()).isNotNull();
+        assertThat(finished.actualFinishedAt()).isAfterOrEqualTo(finished.actualStartedAt());
+        assertThat(finished.completionConfirmedAt()).isNull();
         assertThat(service.confirmCompletion(5L,70L).status()).isEqualTo("COMPLETED");
+        var confirmedAt=job.getCompletionConfirmedAt();assertThat(confirmedAt).isNotNull();
         assertThat(service.confirmCompletion(5L,70L).successful()).isTrue();
+        assertThat(job.getCompletionConfirmedAt()).isEqualTo(confirmedAt);
+        var completed=service.get(5L,request.getRequestId());
+        assertThat(completed.completionConfirmedAt()).isEqualTo(confirmedAt);
+        assertThat(completed.actualFinishedAt()).isEqualTo(finished.actualFinishedAt());
         assertThat(service.requestCompletion(9L,70L).status()).isEqualTo("COMPLETED");
         assertThat(job.getActualEndDatetime()).isEqualTo(endedAt);
         assertThat(job.getPaymentStatus()).isEqualTo("SETTLED");

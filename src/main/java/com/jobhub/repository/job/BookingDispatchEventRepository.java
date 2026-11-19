@@ -8,4 +8,5 @@ public interface BookingDispatchEventRepository extends JpaRepository<BookingDis
     @org.springframework.data.jpa.repository.Query("select e from BookingDispatchEvent e where e.eventId=:id")
     java.util.Optional<BookingDispatchEvent> lockById(@org.springframework.data.repository.query.Param("id") Long id);
     List<BookingDispatchEvent> findTop10ByDeliveryStatusAndNextDeliveryAtBeforeOrderByEventIdAsc(String status,java.time.Instant now);
+    boolean existsByUserIdAndJobIdAndEventTypeAndCreatedAtAfter(Long userId,Long jobId,String eventType,java.time.Instant since);
 }

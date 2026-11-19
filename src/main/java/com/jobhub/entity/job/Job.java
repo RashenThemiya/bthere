@@ -68,5 +68,7 @@ public class Job extends AuditedEntity {
     private String pricingSelectionsJson;
     @Column(columnDefinition = "TEXT")
     private String pricingSnapshotJson;
+    /** When the customer confirmed completion (separate from actualEndDatetime, when the provider finished). */
+    private java.time.Instant completionConfirmedAt;
 }
 

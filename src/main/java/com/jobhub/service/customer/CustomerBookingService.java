@@ -612,6 +612,7 @@ public class CustomerBookingService {
         if (providerIds.isEmpty() && job.getAssignedServiceProviderId() != null) {
             providerIds = List.of(job.getAssignedServiceProviderId());
         }
+        var times = ServiceTimes.of(job, id -> marketRepository.findById(id));
         return new BookingResponse(job.getJobId(), job.getServiceProviderTypeId(),
                 job.getServiceOptionId(), job.getAssignedServiceProviderId(), providerIds,
                 job.getDeliveryMode(), job.getSchedulingModel(),
@@ -625,7 +626,8 @@ public class CustomerBookingService {
                 job.getExpectedAmount(), job.getPaymentMethod(), job.getPaymentStatus(),
                 job.getJobStatus(), answers,
                 read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()),
-                job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings());
+                job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings(),
+                times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt());
     }
 
     static String resolvePaymentMethod(ServiceOption option, String requestedMethod) {

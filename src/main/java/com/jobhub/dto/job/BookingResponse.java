@@ -38,5 +38,11 @@ public record BookingResponse(
         JsonNode pricingSnapshot,
         BigDecimal platformFeePercentage,
         BigDecimal platformFee,
-        BigDecimal providerEarnings
+        BigDecimal providerEarnings,
+        /** UTC; null until the provider verifies the START code. */
+        java.time.Instant actualStartedAt,
+        /** UTC; null until the provider finishes the service. */
+        java.time.Instant actualFinishedAt,
+        /** UTC; null until the customer confirms completion. */
+        java.time.Instant completionConfirmedAt
 ) {}

@@ -23,5 +23,7 @@ public final class BookingProviderApi {
 
     /** contactAllowedStatuses lists the jobStatus values in which a phone can be shown at all. */
     public record BookingProviders(Long jobId, String jobStatus, String fulfillmentModel,
-                                   List<String> contactAllowedStatuses, List<BookingProvider> providers) {}
+                                   List<String> contactAllowedStatuses, List<BookingProvider> providers,
+                                   java.time.Instant actualStartedAt, java.time.Instant actualFinishedAt,
+                                   java.time.Instant completionConfirmedAt) {}
 }

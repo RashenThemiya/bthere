@@ -678,7 +678,7 @@ public class BookingRequestService {
         if(!"AWAITING_COMPLETION_CONFIRMATION".equals(r.getStatus())
                 || !"AWAITING_COMPLETION_CONFIRMATION".equals(job.getJobStatus()) || !paymentReady(job))
             throw new ConflictException("The provider must request completion before the customer confirms");
-        r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");
+        r.setStatus("COMPLETED");job.setJobStatus("COMPLETED");job.setCompletionConfirmedAt(Instant.now());
         settleRequest(userId,job);
         event(r,r.getUserId(),null,"BOOKING_COMPLETED",null);
         event(r,providers.findById(job.getAssignedServiceProviderId()).orElseThrow().getUserId(),null,"BOOKING_COMPLETED",null);
@@ -781,11 +781,13 @@ public class BookingRequestService {
     private View view(BookingRequest r) {
         var active=offers.findAllByRequestIdOrderByOfferIdAsc(r.getRequestId()).stream()
                 .filter(o -> Set.of("PENDING","ACCEPTED").contains(o.getStatus())).findFirst().orElse(null);
+        var times=ServiceTimes.of(r.getJobId()==null?null:jobs.findById(r.getJobId()).orElse(null),id -> markets.findById(id));
         return new View(r.getRequestId(),r.getStatus(),r.getSelectionMode(),active==null?null:active.getOfferId(),
                 active==null?null:active.getProviderId(),active==null?null:active.getExpiresAt(),r.getConfirmationExpiresAt(),
                 r.getJobId(),r.getPaymentStatus(),r.getQuotedAmount(),r.getCurrencyCode(),
                 r.getPlatformFeePercentage(),r.getPlatformFee(),r.getProviderEarnings(),
-                r.getSettlementStatus(),r.getSettlementOperationId(),r.getPaymentFundingMode(),requestMethod(r));
+                r.getSettlementStatus(),r.getSettlementOperationId(),r.getPaymentFundingMode(),requestMethod(r),
+                times.actualStartedAt(),times.actualFinishedAt(),times.completionConfirmedAt());
     }
     private BigDecimal zero(BigDecimal value){return value==null?new BigDecimal("0.00"):value;}
     private BigDecimal net(BigDecimal gross,BigDecimal fee,BigDecimal saved){return saved==null?gross.subtract(zero(fee)):saved;}

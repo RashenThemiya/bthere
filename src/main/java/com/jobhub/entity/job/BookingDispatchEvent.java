@@ -11,6 +11,8 @@ public class BookingDispatchEvent {
     private Long userId;
     private Long requestId;
     private Long offerId;
+    /** Set for chat events so the app can open the right booking chat. */
+    private Long jobId;
     private String eventType;
     private Instant createdAt;
     private Instant expiresAt;

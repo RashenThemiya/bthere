@@ -38,6 +38,9 @@ public class BookingPushGateway {
             Map.entry("NO_SHOW_REPORTED",new String[]{"Provider could not reach you","Your provider reported that the booking could not start. Open the app to respond."}),
             Map.entry("NO_SHOW_CLAIM_APPROVED",new String[]{"Complaint approved","Your no-show complaint was approved. Your share was added to your wallet."}),
             Map.entry("NO_SHOW_CLAIM_REJECTED",new String[]{"Complaint rejected","Your no-show complaint was rejected. Open the app for the details."}),
+            // Chat pushes never include the message text, so nothing private shows on a lock screen.
+            Map.entry("CHAT_MESSAGE_FROM_PROVIDER",new String[]{"New message from your provider","Open the app to read it."}),
+            Map.entry("CHAT_MESSAGE_FROM_CUSTOMER",new String[]{"New message from your customer","Open the app to read it."}),
             Map.entry("BOOKING_CANCELLED_BY_CUSTOMER",new String[]{"Booking cancelled by customer","The customer cancelled this booking. Your slot is free again."}));
     private final ObjectMapper mapper;
     private final String credentialsPath;
@@ -56,6 +59,7 @@ public class BookingPushGateway {
         data.put("eventId",event.getEventId().toString());data.put("requestId",event.getRequestId().toString());
         data.put("type",event.getEventType());
         if(event.getOfferId()!=null)data.put("offerId",event.getOfferId().toString());
+        if(event.getJobId()!=null)data.put("jobId",event.getJobId().toString());
         if(event.getExpiresAt()!=null)data.put("expiresAt",event.getExpiresAt().toString());
         boolean incoming="BOOKING_OFFER".equals(event.getEventType());
         // Offer notifications ring through the app-created channel. Revocations are data updates.
@@ -65,9 +69,10 @@ public class BookingPushGateway {
         }
         long ttl=event.getExpiresAt()==null?300:Math.max(0,Duration.between(Instant.now(),event.getExpiresAt()).toSeconds());
         var android=message.putObject("android");android.put("priority","HIGH");android.put("ttl",ttl+"s");
-        android.put("collapse_key","booking-"+event.getRequestId());
+        String tag=(event.getEventType()!=null && event.getEventType().startsWith("CHAT_")?"chat-":"booking-")+event.getRequestId();
+        android.put("collapse_key",tag);
         if(message.has("notification")){
-            var n=android.putObject("notification");n.put("channel_id",incoming?"booking_calls":"booking_updates");n.put("sound","default");n.put("tag","booking-"+event.getRequestId());
+            var n=android.putObject("notification");n.put("channel_id",incoming?"booking_calls":"booking_updates");n.put("sound","default");n.put("tag",tag);
         }
         var apns=message.putObject("apns");var headers=apns.putObject("headers");headers.put("apns-expiration",Long.toString(Instant.now().getEpochSecond()+ttl));
         headers.put("apns-priority",message.has("notification")?"10":"5");
