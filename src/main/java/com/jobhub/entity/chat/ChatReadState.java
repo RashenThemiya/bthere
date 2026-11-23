@@ -7,7 +7,10 @@ import lombok.Setter;
 
 import java.time.Instant;
 
-/** The newest message a participant has read in a booking chat. */
+/**
+ * A participant's position in a booking chat: the newest message their app has received (delivered) and the newest
+ * they have read. Both only move forward; reading also counts as receiving.
+ */
 @Entity
 @Table(name = "chat_read_state",
         uniqueConstraints = @UniqueConstraint(name = "uk_chat_read_state", columnNames = {"job_id", "user_id"}))
@@ -24,6 +27,8 @@ public class ChatReadState {
     private Long userId;
     @Column(nullable = false)
     private Long lastReadMessageId = 0L;
+    /** Null for rows created before delivery tracking; treat as 0. */
+    private Long lastDeliveredMessageId;
     @Column(nullable = false)
     private Instant updatedAt;
 }

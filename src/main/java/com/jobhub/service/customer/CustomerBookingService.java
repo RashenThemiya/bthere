@@ -613,6 +613,7 @@ public class CustomerBookingService {
             providerIds = List.of(job.getAssignedServiceProviderId());
         }
         var times = ServiceTimes.of(job, id -> marketRepository.findById(id));
+        var market = MarketTime.of(job, id -> marketRepository.findById(id));
         return new BookingResponse(job.getJobId(), job.getServiceProviderTypeId(),
                 job.getServiceOptionId(), job.getAssignedServiceProviderId(), providerIds,
                 job.getDeliveryMode(), job.getSchedulingModel(),
@@ -627,7 +628,8 @@ public class CustomerBookingService {
                 job.getJobStatus(), answers,
                 read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()),
                 job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings(),
-                times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt());
+                times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt(),
+                market.marketId(), market.marketTimezone(), market.startUtc(), market.endUtc());
     }
 
     static String resolvePaymentMethod(ServiceOption option, String requestedMethod) {

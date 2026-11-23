@@ -230,6 +230,7 @@ class BookingRequestServiceTest {
             b.deliveryMode(),b.startDatetime(),b.expectedEndDatetime(),b.requestedPickupTime(),b.pickup(),b.destination(),b.providerLocationId(),
             b.meetingPoint(),b.customerNote(),b.answers(),"WALLET",b.pricingSelections()),null,null,null,null,null);
         job.setPaymentMethod("WALLET");
+        lenient().when(bookings.estimate(any())).thenReturn(new BookingQuoteResponse(1L,"LKR",new BigDecimal("1000"),null,null,null,null,null));
         lenient().when(wallets.reserveRequestBooking(5L,70L)).thenAnswer(i -> {
             job.setPaymentStatus("RESERVED");return new com.jobhub.dto.customer.WalletApi.Operation(50L,"BOOKING_RESERVE",70L,"LKR",
                 job.getExpectedAmount(),"POSTED",null,null,null,"PAYHERE",null);
@@ -275,6 +276,27 @@ class BookingRequestServiceTest {
         request.setConfirmationExpiresAt(Instant.now().minusSeconds(1));
         assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(ConflictException.class);
         verify(wallets,never()).reserveRequestBooking(any(),any());
+    }
+    @Test void lowWalletBalanceRejectsTheRequestBeforeAnyProviderIsContacted() {
+        walletInput();
+        doThrow(new InsufficientWalletFundsException("LKR",new BigDecimal("1000"),new BigDecimal("200")))
+            .when(wallets).requireAvailable(5L,"LKR",new BigDecimal("1000"));
+        var error=catchThrowableOfType(this::create,InsufficientWalletFundsException.class);
+        assertThat(error.getShortfall()).isEqualByComparingTo("800");
+        verify(requests,never()).saveAndFlush(any());verifyNoInteractions(offers,discovery);
+        verify(wallets,never()).reserveRequestBooking(any(),any());
+    }
+    @Test void walletBalanceIsCheckedAgainstTheProviderlessEstimateWithoutReserving() {
+        option.setProviderSelectionMode("DIRECT_REQUEST");walletInput();var b=input.booking();
+        input=new Create(1L,new CreateBookingRequest(3L,12L,15L,null,"ONLINE",b.startDatetime(),b.expectedEndDatetime(),null,null,null,null,null,null,List.of(),"WALLET",null),null,null,null,null,null);
+        create();
+        var estimate=ArgumentCaptor.forClass(Estimate.class);verify(bookings).estimate(estimate.capture());
+        assertThat(estimate.getValue().booking().providerId()).isNull();assertThat(estimate.getValue().marketId()).isEqualTo(1L);
+        verify(wallets).requireAvailable(5L,"LKR",new BigDecimal("1000"));verify(wallets,never()).reserveRequestBooking(any(),any());
+        assertThat(stored).hasSize(1);
+    }
+    @Test void cardRequestsSkipTheWalletBalanceCheck() {
+        create();verify(wallets,never()).requireAvailable(any(),any(),any());verify(bookings,never()).estimate(any());
     }
     @Test void cardRequestCannotBeConfirmedWithWalletAndUnacceptedWalletCannotConfirm() {
         accepted();assertThatThrownBy(() -> service.confirmWallet(5L,1L)).isInstanceOf(ConflictException.class);
@@ -504,6 +526,12 @@ class BookingRequestServiceTest {
         assertThat(finished.actualStartedAt()).isNotNull();
         assertThat(finished.actualFinishedAt()).isAfterOrEqualTo(finished.actualStartedAt());
         assertThat(finished.completionConfirmedAt()).isNull();
+        assertThat(finished.marketId()).isEqualTo(1L);
+        assertThat(finished.marketTimezone()).isEqualTo("UTC");
+        assertThat(finished.startDatetime()).isEqualTo(job.getStartDatetime());
+        assertThat(finished.expectedEndDatetime()).isEqualTo(job.getExpectedEndDatetime());
+        assertThat(finished.startDatetimeUtc()).isEqualTo(job.getStartDatetime().toInstant(ZoneOffset.UTC));
+        assertThat(finished.expectedEndDatetimeUtc()).isEqualTo(job.getExpectedEndDatetime().toInstant(ZoneOffset.UTC));
         assertThat(service.confirmCompletion(5L,70L).status()).isEqualTo("COMPLETED");
         var confirmedAt=job.getCompletionConfirmedAt();assertThat(confirmedAt).isNotNull();
         assertThat(service.confirmCompletion(5L,70L).successful()).isTrue();

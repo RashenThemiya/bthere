@@ -8,7 +8,7 @@ import lombok.Setter;
 import java.time.Instant;
 
 /**
- * One text message in a booking's chat. The text is stored only as AES-GCM ciphertext bound to its job and sender;
+ * One message in a booking's chat (text, attachments or both; file-only messages store an empty text). The text is stored only as AES-GCM ciphertext bound to its job and sender;
  * phone numbers and emails are masked before encryption, so they are not stored in readable form either.
  */
 @Entity
@@ -39,6 +39,8 @@ public class ChatMessage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String bodyCiphertext;
     private boolean contactInfoHidden;
+    /** True for messages sent after delivery receipts existed; null on older rows, whose delivery is unknown. */
+    private Boolean deliveryTracked;
     @Column(nullable = false)
     private Instant createdAt;
 }

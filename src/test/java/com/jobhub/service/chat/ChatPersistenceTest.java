@@ -28,7 +28,7 @@ class ChatPersistenceTest {
     @Test
     void chatQueriesWorkAgainstTheRealSchema() {
         try (var factory = new Configuration()
-                .addAnnotatedClass(ChatMessage.class).addAnnotatedClass(ChatReadState.class)
+                .addAnnotatedClass(ChatMessage.class).addAnnotatedClass(ChatReadState.class).addAnnotatedClass(com.jobhub.entity.chat.ChatAttachment.class)
                 .addAnnotatedClass(Job.class).addAnnotatedClass(JobProviderAssignment.class)
                 .addAnnotatedClass(BookingDispatchEvent.class)
                 .setPhysicalNamingStrategy(new CamelCaseToUnderscoresNamingStrategy())

@@ -51,6 +51,23 @@ AWAITING_PAYMENT job and an AWAITING_CUSTOMER_CONFIRMATION request. The customer
 must explicitly confirm before confirmationExpiresAt; available balance can change
 before then. The selected method is retained through quote and acceptance.
 
+### Balance check before the request goes out
+
+For `paymentMethod: WALLET`, create (and retry) first price the booking with the same
+provider-less estimate as `POST /api/v1/customers/me/bookings/estimate` and compare it
+with the customer's AVAILABLE wallet balance (reserved money does not count). If the
+balance is short, the call fails with `409 INSUFFICIENT_WALLET_FUNDS` (same body as in
+"Insufficient balance" below, with `instance` set to the create URL). No request is saved
+and no provider is contacted, so the customer can top up and send the same request again.
+
+This is only a pre-check. Nothing is reserved at creation; `confirm-wallet` still locks the
+wallet and checks again against the accepted booking price, because the balance can drop
+(for example another booking) before the provider accepts.
+
+To show the check in the app before the customer taps "Book", read
+`GET /api/v1/me/wallets/LKR` (`available`) and the price from `POST /api/v1/customers/me/bookings/estimate`
+(`expectedAmount`), and disable or warn when `available < expectedAmount`.
+
 Request View adds `paymentMethod` (CARD or WALLET) to its existing fields, including
 paymentStatus, paymentFundingMode and settlement metadata. The payment method is
 fixed for the request. To change it before funding, cancel the still-unfunded

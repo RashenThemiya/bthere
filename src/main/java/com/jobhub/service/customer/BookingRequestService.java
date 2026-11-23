@@ -135,6 +135,7 @@ public class BookingRequestService {
         bookings.validateRequestFields(userId,b);
         var market=markets.findById(input.marketId()).orElseThrow(() -> new ResourceNotFoundException("Market not found"));
         ZoneId zone=ZoneId.of(market.getTimezone());
+        if("WALLET".equals(b.paymentMethod()))requireWalletCovers(userId,input,b);
         boolean route="ROUTE_BASED".equals(option.getSchedulingModel());
         LocalDateTime start=route?b.requestedPickupTime():b.startDatetime();
         Instant starts=start.atZone(zone).toInstant();
@@ -176,6 +177,16 @@ public class BookingRequestService {
         requests.saveAndFlush(request);
         dispatch(request,policy);
         return view(request);
+    }
+    /** Fail fast with INSUFFICIENT_WALLET_FUNDS before any provider is contacted. Uses the provider-less
+     *  estimate (ADMIN pricing); confirm-wallet still reserves against the accepted booking price. */
+    private void requireWalletCovers(Long userId,Create input,CreateBookingRequest b) {
+        var quote=bookings.estimate(new com.jobhub.dto.job.BookingRequestsApi.Estimate(input.marketId(),
+                new CreateBookingRequest(b.serviceTypeId(),b.optionId(),null,null,b.deliveryMode(),b.startDatetime(),
+                        b.expectedEndDatetime(),b.requestedPickupTime(),b.pickup(),b.destination(),b.providerLocationId(),
+                        b.meetingPoint(),b.customerNote(),b.answers(),b.paymentMethod(),b.pricingSelections()),
+                input.searchLocation()));
+        wallets.requireAvailable(userId,quote.currencyCode(),quote.expectedAmount());
     }
     private void requireSupported(ServiceOption option) {
         if(!Set.of("DIRECT_REQUEST","OPEN_REQUEST").contains(option.getProviderSelectionMode())
@@ -237,13 +248,17 @@ public class BookingRequestService {
     public List<Offer> providerOffers(Long userId) {
         Long providerId=providerId(userId);
         var result=new ArrayList<Offer>();
+        var marketLookup=MarketTime.cached(id -> markets.findById(id));
         for(var offer:offers.findAllByProviderIdAndStatusOrderByOfferIdAsc(providerId,"PENDING")) {
             var r=locked(offer.getRequestId()); tick(r);
             if(!"MATCHING".equals(r.getStatus()) || !"PENDING".equals(offer.getStatus()) || !Instant.now().isBefore(offer.getExpiresAt())) continue;
             var b=read(r.getPayloadJson(),Create.class).booking();
+            var market=MarketTime.of(r.getMarketId(),b.startDatetime(),b.expectedEndDatetime(),marketLookup);
+            var pickup=MarketTime.of(r.getMarketId(),b.requestedPickupTime(),null,marketLookup).startUtc();
             result.add(new Offer(offer.getOfferId(),r.getRequestId(),offer.getStatus(),offer.getExpiresAt(),b.serviceTypeId(),b.optionId(),
                     b.deliveryMode(),b.startDatetime(),b.expectedEndDatetime(),b.requestedPickupTime(),offer.getProviderLocationId(),offeredAmount(offer,r),offeredCurrency(offer,r),
-                    b.pickup(),b.destination(),b.meetingPoint(),offeredPercentage(offer,r),offeredFee(offer,r),offeredNet(offer,r)));
+                    b.pickup(),b.destination(),b.meetingPoint(),offeredPercentage(offer,r),offeredFee(offer,r),offeredNet(offer,r),
+                    market.marketId(),market.marketTimezone(),market.startUtc(),market.endUtc(),pickup));
         }
         return result;
     }
@@ -781,13 +796,27 @@ public class BookingRequestService {
     private View view(BookingRequest r) {
         var active=offers.findAllByRequestIdOrderByOfferIdAsc(r.getRequestId()).stream()
                 .filter(o -> Set.of("PENDING","ACCEPTED").contains(o.getStatus())).findFirst().orElse(null);
-        var times=ServiceTimes.of(r.getJobId()==null?null:jobs.findById(r.getJobId()).orElse(null),id -> markets.findById(id));
+        var job=r.getJobId()==null?null:jobs.findById(r.getJobId()).orElse(null);
+        var times=ServiceTimes.of(job,id -> markets.findById(id));
+        LocalDateTime start,end; Long marketId;
+        if(job!=null){start=job.getStartDatetime();end=job.getExpectedEndDatetime();marketId=job.getMarketId();}
+        else{
+            var b=payloadBooking(r);
+            start=b==null?null:b.startDatetime()!=null?b.startDatetime():b.requestedPickupTime();
+            end=b==null?null:b.expectedEndDatetime();marketId=r.getMarketId();
+        }
+        var market=MarketTime.of(marketId,start,end,id -> markets.findById(id));
         return new View(r.getRequestId(),r.getStatus(),r.getSelectionMode(),active==null?null:active.getOfferId(),
                 active==null?null:active.getProviderId(),active==null?null:active.getExpiresAt(),r.getConfirmationExpiresAt(),
                 r.getJobId(),r.getPaymentStatus(),r.getQuotedAmount(),r.getCurrencyCode(),
                 r.getPlatformFeePercentage(),r.getPlatformFee(),r.getProviderEarnings(),
                 r.getSettlementStatus(),r.getSettlementOperationId(),r.getPaymentFundingMode(),requestMethod(r),
-                times.actualStartedAt(),times.actualFinishedAt(),times.completionConfirmedAt());
+                times.actualStartedAt(),times.actualFinishedAt(),times.completionConfirmedAt(),
+                market.marketId(),market.marketTimezone(),start,end,market.startUtc(),market.endUtc());
+    }
+    private CreateBookingRequest payloadBooking(BookingRequest r) {
+        if(r.getPayloadJson()==null)return null;
+        try{return read(r.getPayloadJson(),Create.class).booking();}catch(IllegalStateException e){return null;}
     }
     private BigDecimal zero(BigDecimal value){return value==null?new BigDecimal("0.00"):value;}
     private BigDecimal net(BigDecimal gross,BigDecimal fee,BigDecimal saved){return saved==null?gross.subtract(zero(fee)):saved;}

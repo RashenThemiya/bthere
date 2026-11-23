@@ -15,6 +15,7 @@ import com.jobhub.repository.customer.CustomerRepository;
 import com.jobhub.repository.job.BookingRequestRepository;
 import com.jobhub.repository.job.JobCancellationRepository;
 import com.jobhub.repository.job.JobRepository;
+import com.jobhub.repository.market.MarketRepository;
 import com.jobhub.repository.provider.ServiceOptionRepository;
 import com.jobhub.repository.provider.ServiceProviderTypeRepository;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class ProfileOverviewService {
     private final ServiceOptionRepository options;
     private final CustomerRequirementsService requirements;
     private final ObjectMapper mapper;
+    private final MarketRepository markets;
 
     public Overview overview(Long userId, int recentLimit) {
         if (recentLimit < 1 || recentLimit > MAX_RECENT_LIMIT)
@@ -126,9 +128,12 @@ public class ProfileOverviewService {
         Long serviceTypeId = names.serviceTypeOf(r.getOptionId());
         LocalDateTime start = dateTime(booking, "startDatetime");
         if (start == null) start = dateTime(booking, "requestedPickupTime");
+        LocalDateTime end = dateTime(booking, "expectedEndDatetime");
+        var time = names.time(r.getMarketId(), start, end);
         return new RequestItem(r.getRequestId(), r.getJobId(), r.getStatus(), r.getPaymentStatus(), r.getPaymentFundingMode(),
                 serviceTypeId, names.service(serviceTypeId), r.getOptionId(), names.option(r.getOptionId()), start,
-                dateTime(booking, "expectedEndDatetime"), r.getQuotedAmount(), r.getCurrencyCode(), r.getCreatedAt());
+                end, r.getQuotedAmount(), r.getCurrencyCode(), r.getCreatedAt(),
+                time.marketId(), time.marketTimezone(), time.startUtc(), time.endUtc());
     }
 
     /** Set.of(...).contains(null) throws; stored statuses/funding modes can be null. */
@@ -206,22 +211,29 @@ public class ProfileOverviewService {
         Long serviceTypeId = names.serviceTypeOf(optionId);
         LocalDateTime start = dateTime(booking, "startDatetime");
         if (start == null) start = dateTime(booking, "requestedPickupTime");
+        LocalDateTime end = dateTime(booking, "expectedEndDatetime");
+        var time = names.time(r.getMarketId(), start, end);
         return new PendingService("REQUEST", r.getRequestId(), null, serviceTypeId, names.service(serviceTypeId),
-                optionId, names.option(optionId), start, dateTime(booking, "expectedEndDatetime"),
-                r.getStatus(), r.getPaymentStatus(), r.getCreatedAt());
+                optionId, names.option(optionId), start, end,
+                r.getStatus(), r.getPaymentStatus(), r.getCreatedAt(),
+                time.marketId(), time.marketTimezone(), time.startUtc(), time.endUtc());
     }
 
     private PendingService pendingJob(Job j, BookingRequest r, Names names) {
+        var time = names.time(j.getMarketId(), j.getStartDatetime(), j.getExpectedEndDatetime());
         return new PendingService("BOOKING", r == null ? null : r.getRequestId(), j.getJobId(), j.getServiceProviderTypeId(),
                 names.service(j.getServiceProviderTypeId()), j.getServiceOptionId(), names.option(j.getServiceOptionId()),
-                j.getStartDatetime(), j.getExpectedEndDatetime(), j.getJobStatus(), j.getPaymentStatus(), j.getCreatedAt());
+                j.getStartDatetime(), j.getExpectedEndDatetime(), j.getJobStatus(), j.getPaymentStatus(), j.getCreatedAt(),
+                time.marketId(), time.marketTimezone(), time.startUtc(), time.endUtc());
     }
 
     private HistoryItem historyItem(Job j, BookingRequest r, Names names) {
         LocalDateTime end = j.getActualEndDatetime() != null ? j.getActualEndDatetime() : j.getExpectedEndDatetime();
+        var time = names.time(j.getMarketId(), j.getStartDatetime(), end);
         return new HistoryItem(j.getJobId(), r == null ? null : r.getRequestId(), j.getServiceProviderTypeId(),
                 names.service(j.getServiceProviderTypeId()), j.getServiceOptionId(), names.option(j.getServiceOptionId()),
-                j.getStartDatetime(), end, j.getJobStatus(), j.getExpectedAmount(), j.getCurrencyCode(), j.getPaymentStatus());
+                j.getStartDatetime(), end, j.getJobStatus(), j.getExpectedAmount(), j.getCurrencyCode(), j.getPaymentStatus(),
+                time.marketId(), time.marketTimezone(), time.startUtc(), time.endUtc());
     }
 
     private JsonNode bookingPayload(BookingRequest r) {
@@ -256,6 +268,11 @@ public class ProfileOverviewService {
         String option(Long id) { return id == null ? null : optionRow(id).map(ServiceOption::getName).orElse(null); }
         Long serviceTypeOf(Long optionId) {
             return optionId == null ? null : optionRow(optionId).map(ServiceOption::getServiceProviderTypeId).orElse(null);
+        }
+        private final java.util.function.Function<Long, Optional<com.jobhub.entity.market.Market>> marketRows =
+                MarketTime.cached(id -> markets.findById(id));
+        MarketTime time(Long marketId, LocalDateTime start, LocalDateTime end) {
+            return MarketTime.of(marketId, start, end, marketRows);
         }
     }
 }

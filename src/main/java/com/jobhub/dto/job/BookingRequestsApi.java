@@ -34,7 +34,11 @@ public final class BookingRequestsApi {
                        Long jobId, String paymentStatus, BigDecimal expectedAmount, String currencyCode,
                        BigDecimal platformFeePercentage,BigDecimal platformFee,BigDecimal providerEarnings,
                        String settlementStatus,Long settlementOperationId,String paymentFundingMode,String paymentMethod,
-                       Instant actualStartedAt,Instant actualFinishedAt,Instant completionConfirmedAt) {}
+                       Instant actualStartedAt,Instant actualFinishedAt,Instant completionConfirmedAt,
+                       /* startDatetime/expectedEndDatetime: market-local booked times (requested pickup time for
+                          rides without a start); *Utc: the same as UTC instants; marketTimezone: IANA zone. */
+                       Long marketId,String marketTimezone,LocalDateTime startDatetime,LocalDateTime expectedEndDatetime,
+                       Instant startDatetimeUtc,Instant expectedEndDatetimeUtc) {}
     public record Offer(Long offerId, Long requestId, String status, Instant expiresAt,
                         Long serviceTypeId, Long optionId, String deliveryMode,
                         LocalDateTime startDatetime, LocalDateTime expectedEndDatetime,
@@ -42,7 +46,9 @@ public final class BookingRequestsApi {
                         BigDecimal expectedAmount, String currencyCode,
                         CreateBookingRequest.RoutePoint pickup, CreateBookingRequest.RoutePoint destination,
                         CreateBookingRequest.MeetingPoint meetingPoint,
-                        BigDecimal platformFeePercentage,BigDecimal platformFee,BigDecimal providerEarnings) {}
+                        BigDecimal platformFeePercentage,BigDecimal platformFee,BigDecimal providerEarnings,
+                        Long marketId,String marketTimezone,Instant startDatetimeUtc,Instant expectedEndDatetimeUtc,
+                        Instant requestedPickupTimeUtc) {}
     public record Confirm(@NotBlank @Pattern(regexp="VISA|MASTER") String cardMethod,
                           @NotBlank @Size(max=100) String firstName,
                           @NotBlank @Size(max=100) String lastName,

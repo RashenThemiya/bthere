@@ -49,6 +49,7 @@ class ProfileOverviewServiceTest {
     @Mock JobCancellationRepository cancellations;
     @Mock ServiceProviderTypeRepository serviceTypes;
     @Mock ServiceOptionRepository options;
+    @Mock com.jobhub.repository.market.MarketRepository markets;
     @Mock CustomerRequirementsService requirements;
     @Spy ObjectMapper mapper = new ObjectMapper();
     @org.mockito.Spy com.jobhub.service.upload.ProfilePhotoUrls photoUrls =
@@ -234,7 +235,18 @@ class ProfileOverviewServiceTest {
         when(requests.findAllByUserId(org.mockito.ArgumentMatchers.eq(40L), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(r, route), pageable, 3));
 
+        r.setMarketId(1L); route.setMarketId(1L);
+        var colombo = new com.jobhub.entity.market.Market(); colombo.setMarketId(1L); colombo.setTimezone("Asia/Colombo");
+        when(markets.findById(1L)).thenReturn(java.util.Optional.of(colombo));
+
         var page = service.bookingRequests(40L, null, 0, 2);
+        org.mockito.Mockito.verify(markets, org.mockito.Mockito.times(1)).findById(1L);
+        assertThat(page.items().get(0).marketId()).isEqualTo(1L);
+        assertThat(page.items().get(0).marketTimezone()).isEqualTo("Asia/Colombo");
+        assertThat(page.items().get(0).startAtUtc()).isEqualTo(java.time.Instant.parse("2026-11-20T03:30:00Z"));
+        assertThat(page.items().get(0).endAtUtc()).isEqualTo(java.time.Instant.parse("2026-11-20T05:30:00Z"));
+        assertThat(page.items().get(1).startAtUtc()).isEqualTo(java.time.Instant.parse("2026-11-21T02:00:00Z"));
+        assertThat(page.items().get(1).endAtUtc()).isNull();
         assertThat(page.totalCount()).isEqualTo(3);
         assertThat(page.hasMore()).isTrue();
         var first = page.items().get(0);

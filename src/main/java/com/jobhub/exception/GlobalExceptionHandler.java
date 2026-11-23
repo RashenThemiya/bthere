@@ -46,6 +46,7 @@ public class GlobalExceptionHandler {
                 exception.getMessage()
         );
         problem.setTitle("Resource not found");
+        code(problem, exception.getCode());
         return problem;
     }
 
@@ -57,6 +58,7 @@ public class GlobalExceptionHandler {
         );
         problem.setTitle("Too many requests");
         problem.setProperty("retryAfterSeconds", exception.getRetryAfterSeconds());
+        code(problem, exception.getCode());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER,
                         Long.toString(exception.getRetryAfterSeconds()))
@@ -70,6 +72,7 @@ public class GlobalExceptionHandler {
                 exception.getMessage()
         );
         problem.setTitle("Invalid request value");
+        if (exception instanceof InvalidInputException coded) code(problem, coded.getCode());
         return problem;
     }
 
@@ -89,6 +92,7 @@ public class GlobalExceptionHandler {
                 exception.getMessage()
         );
         problem.setTitle("Resource conflict");
+        code(problem, exception.getCode());
         return problem;
     }
 
@@ -121,9 +125,22 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleMaxUploadSize(MaxUploadSizeExceededException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.PAYLOAD_TOO_LARGE,
-                "Image must not exceed 10 MB"
+                "File must not exceed 10 MB"
         );
         problem.setTitle("Uploaded file is too large");
+        problem.setProperty("code", "FILE_TOO_LARGE");
         return problem;
+    }
+
+    @ExceptionHandler(ApiException.class)
+    public ProblemDetail handleApi(ApiException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(exception.getStatus(), exception.getMessage());
+        problem.setTitle(exception.getStatus().getReasonPhrase());
+        code(problem, exception.getCode());
+        return problem;
+    }
+
+    private static void code(ProblemDetail problem, String code) {
+        if (code != null) problem.setProperty("code", code);
     }
 }

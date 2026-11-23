@@ -42,6 +42,7 @@ class BookingProviderServiceTest {
     @Mock ServiceProviderRepository providers;
     @Mock UserRepository users;
     @Mock RatingRepository ratings;
+    @Mock com.jobhub.repository.market.MarketRepository markets;
     @org.mockito.Spy com.jobhub.service.upload.ProfilePhotoUrls photoUrls =
             new com.jobhub.service.upload.ProfilePhotoUrls("jobhube", "eu-north-1", "https://jobhube.s3.eu-north-1.amazonaws.com", "https://api.test");
     @InjectMocks BookingProviderService service;
@@ -107,6 +108,22 @@ class BookingProviderServiceTest {
         assertThat(contact.callAllowed()).isFalse();
         assertThat(contact.phoneNumber()).isNull();
         assertThat(contact.unavailableReason()).isEqualTo("BOOKING_NOT_CONFIRMED");
+    }
+
+    @Test void bookingDetailsCarryTheMarketZoneAndUtcTimesForCountdowns() {
+        job.setMarketId(1L);
+        job.setStartDatetime(java.time.LocalDateTime.of(2026, 11, 25, 10, 0));
+        job.setExpectedEndDatetime(java.time.LocalDateTime.of(2026, 11, 25, 12, 0));
+        var colombo = new com.jobhub.entity.market.Market(); colombo.setMarketId(1L); colombo.setTimezone("Asia/Colombo");
+        when(markets.findById(1L)).thenReturn(Optional.of(colombo));
+
+        var view = service.providers(40L, 70L);
+
+        assertThat(view.marketId()).isEqualTo(1L);
+        assertThat(view.marketTimezone()).isEqualTo("Asia/Colombo");
+        assertThat(view.startDatetime()).isEqualTo(java.time.LocalDateTime.of(2026, 11, 25, 10, 0));
+        assertThat(view.startDatetimeUtc()).isEqualTo(java.time.Instant.parse("2026-11-25T04:30:00Z"));
+        assertThat(view.expectedEndDatetimeUtc()).isEqualTo(java.time.Instant.parse("2026-11-25T06:30:00Z"));
     }
 
     @Test void nullJobStatusHidesPhoneWithoutFailing() {

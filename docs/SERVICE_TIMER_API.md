@@ -14,6 +14,9 @@ Three timestamps on the customer booking responses let the app show how long the
 - `completionConfirmedAt` is new (2026-11-19). Bookings completed before this change have `null` there, but
   their `actualStartedAt` and `actualFinishedAt` are filled.
 
+For the booked start and end as UTC and the market time zone (countdowns, "provider is late"), see
+[BOOKING_TIME_ZONE.md](BOOKING_TIME_ZONE.md).
+
 ## Where the fields appear
 
 All three responses carry the same three fields with the same values.

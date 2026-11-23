@@ -3,6 +3,8 @@
 Text chat between a booking's customer and its provider(s). A team booking has one shared chat containing the
 customer and every active provider on the booking. Version 1 is text only: no images, voice or calls.
 
+Frontend integration guide (availability, retries, polling, errors, test scenarios): [CHAT_INTEGRATION.md](CHAT_INTEGRATION.md).
+
 All endpoints need `Authorization: Bearer <accessToken>`. Times are ISO-8601 UTC instants.
 
 ## When chat is available

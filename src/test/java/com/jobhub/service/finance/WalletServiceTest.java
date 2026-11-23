@@ -242,6 +242,17 @@ class WalletServiceTest {
         assertThat(error.getRequiredAmount()).isEqualByComparingTo("20");assertThat(error.getAvailableAmount()).isEqualByComparingTo("5");
         assertThat(error.getShortfall()).isEqualByComparingTo("15");verify(ledger,never()).save(any());verify(operations,never()).save(any());
     }
+    @Test void availabilityPreCheckComparesAvailableOnlyAndTreatsMissingWalletAsZero() {
+        var w=new Wallet();w.setCurrencyCode("LKR");w.setAvailableBalance(new BigDecimal("500"));w.setReservedBalance(new BigDecimal("9000"));
+        when(wallets.findByUserIdAndCurrencyCode(25L,"LKR")).thenReturn(Optional.of(w));
+        service.requireAvailable(25L,"LKR",new BigDecimal("500"));
+        var error=catchThrowableOfType(() -> service.requireAvailable(25L,"LKR",new BigDecimal("1200")),InsufficientWalletFundsException.class);
+        assertThat(error.getAvailableAmount()).isEqualByComparingTo("500");assertThat(error.getShortfall()).isEqualByComparingTo("700");
+        when(wallets.findByUserIdAndCurrencyCode(26L,"LKR")).thenReturn(Optional.empty());
+        assertThat(catchThrowableOfType(() -> service.requireAvailable(26L,"LKR",BigDecimal.TEN),InsufficientWalletFundsException.class)
+            .getAvailableAmount()).isEqualByComparingTo("0");
+        verify(wallets,never()).lockOwned(any(),any());verify(wallets,never()).save(any());verifyNoInteractions(ledger,operations);
+    }
     @Test void requestWalletCannotUseLegacyReservationOrFinanceApprovalEndpoints() {
         walletRequestFixture("PAYHERE");
         for(Runnable action:List.<Runnable>of(() -> service.reserveBooking(25L,100L),() -> service.requestSettlement(98L,100L),

@@ -1,6 +1,7 @@
 package com.jobhub.dto.customer;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,15 +44,18 @@ public final class ProfileOverviewApi {
     /**
      * kind REQUEST: still looking for a provider (requestId set, jobId null).
      * kind BOOKING: a booking with a job (jobId set; requestId set when it came from a booking request).
-     * startAt/endAt are market-local date-times, like other booking fields.
+     * startAt/endAt are market-local date-times, like other booking fields; startAtUtc/endAtUtc are the same as UTC
+     * instants and marketTimezone is the IANA zone (same on RequestItem and HistoryItem).
      */
     public record PendingService(String kind, Long requestId, Long jobId, Long serviceTypeId, String serviceName,
                                  Long optionId, String optionName, LocalDateTime startAt, LocalDateTime endAt,
-                                 String status, String paymentStatus, LocalDateTime createdAt) {}
+                                 String status, String paymentStatus, LocalDateTime createdAt,
+                                 Long marketId, String marketTimezone, Instant startAtUtc, Instant endAtUtc) {}
 
     public record HistoryItem(Long jobId, Long requestId, Long serviceTypeId, String serviceName, Long optionId,
                               String optionName, LocalDateTime startAt, LocalDateTime endAt, String status,
-                              BigDecimal amount, String currencyCode, String paymentStatus) {}
+                              BigDecimal amount, String currencyCode, String paymentStatus,
+                              Long marketId, String marketTimezone, Instant startAtUtc, Instant endAtUtc) {}
 
     public record RecentList<T>(List<T> items, int limit, boolean hasMore, int totalCount) {}
 
@@ -59,7 +63,8 @@ public final class ProfileOverviewApi {
     public record RequestItem(Long requestId, Long jobId, String status, String paymentStatus, String paymentFundingMode,
                               Long serviceTypeId, String serviceName, Long optionId, String optionName,
                               LocalDateTime startAt, LocalDateTime endAt, BigDecimal amount, String currencyCode,
-                              LocalDateTime createdAt) {}
+                              LocalDateTime createdAt,
+                              Long marketId, String marketTimezone, Instant startAtUtc, Instant endAtUtc) {}
 
     /** page is zero-based. */
     public record PageOf<T>(List<T> items, int page, int size, long totalCount, boolean hasMore) {}

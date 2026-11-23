@@ -44,5 +44,13 @@ public record BookingResponse(
         /** UTC; null until the provider finishes the service. */
         java.time.Instant actualFinishedAt,
         /** UTC; null until the customer confirms completion. */
-        java.time.Instant completionConfirmedAt
+        java.time.Instant completionConfirmedAt,
+        /** Market the booking belongs to; startDatetime and expectedEndDatetime are local times in its zone. */
+        Long marketId,
+        /** IANA zone of the market, e.g. Asia/Colombo. */
+        String marketTimezone,
+        /** startDatetime as a UTC instant. */
+        java.time.Instant startDatetimeUtc,
+        /** expectedEndDatetime as a UTC instant. */
+        java.time.Instant expectedEndDatetimeUtc
 ) {}

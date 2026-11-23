@@ -59,9 +59,12 @@ public class BookingProviderService {
                 .filter(Objects::nonNull)
                 .toList();
         var times = ServiceTimes.of(job, id -> markets.findById(id));
+        var market = MarketTime.of(job, id -> markets.findById(id));
         return new BookingProviders(job.getJobId(), job.getJobStatus(), job.getFulfillmentModel(),
                 CONTACT_ALLOWED_STATUSES, result,
-                times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt());
+                times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt(),
+                market.marketId(), market.marketTimezone(), job.getStartDatetime(), job.getExpectedEndDatetime(),
+                market.startUtc(), market.endUtc());
     }
 
     private BookingProvider view(Job job, ServiceProvider p) {

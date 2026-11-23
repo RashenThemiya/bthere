@@ -25,5 +25,10 @@ public final class BookingProviderApi {
     public record BookingProviders(Long jobId, String jobStatus, String fulfillmentModel,
                                    List<String> contactAllowedStatuses, List<BookingProvider> providers,
                                    java.time.Instant actualStartedAt, java.time.Instant actualFinishedAt,
-                                   java.time.Instant completionConfirmedAt) {}
+                                   java.time.Instant completionConfirmedAt,
+                                   /* startDatetime/expectedEndDatetime: market-local booked times;
+                                      *Utc: the same as UTC instants; marketTimezone: IANA zone. */
+                                   Long marketId, String marketTimezone,
+                                   java.time.LocalDateTime startDatetime, java.time.LocalDateTime expectedEndDatetime,
+                                   java.time.Instant startDatetimeUtc, java.time.Instant expectedEndDatetimeUtc) {}
 }

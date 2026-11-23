@@ -45,6 +45,17 @@ public class WalletService {
     }
     public Balance get(Long userId, String currency) { return balance(owned(userId, currency(currency))); }
 
+    /** Read-only pre-check before a WALLET booking request is sent to providers. Nothing is reserved;
+     *  confirm-wallet locks the wallet and checks again against the accepted price. */
+    @Transactional(readOnly = true)
+    public void requireAvailable(Long userId, String currencyCode, BigDecimal amount) {
+        String currency = currency(currencyCode);
+        BigDecimal required = money(amount, currency);
+        BigDecimal available = wallets.findByUserIdAndCurrencyCode(userId, currency)
+                .map(w -> bucket(w, "AVAILABLE")).orElse(BigDecimal.ZERO);
+        if (available.compareTo(required) < 0) throw new InsufficientWalletFundsException(currency, required, available);
+    }
+
     @Transactional
     public Balance open(Long userId, String currency) {
         String selectedCurrency = currency(currency);

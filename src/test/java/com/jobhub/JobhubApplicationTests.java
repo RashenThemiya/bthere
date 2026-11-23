@@ -67,6 +67,7 @@ class JobhubApplicationTests {
     @MockitoBean private com.jobhub.repository.job.BookingDispatchEventRepository bookingEvents;
     @MockitoBean private com.jobhub.repository.chat.ChatMessageRepository chatMessages;
     @MockitoBean private com.jobhub.repository.chat.ChatReadStateRepository chatReadStates;
+    @MockitoBean private com.jobhub.repository.chat.ChatAttachmentRepository chatAttachments;
     @MockitoBean private com.jobhub.repository.job.BookingPaymentNoticeRepository bookingPaymentNotices;
     @MockitoBean private com.jobhub.repository.job.JobProviderTrackingRepository jobProviderTrackings;
     @MockitoBean private com.jobhub.repository.job.ProviderLiveLocationRepository providerLiveLocations;
