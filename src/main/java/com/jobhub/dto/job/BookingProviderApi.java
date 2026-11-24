@@ -30,5 +30,8 @@ public final class BookingProviderApi {
                                       *Utc: the same as UTC instants; marketTimezone: IANA zone. */
                                    Long marketId, String marketTimezone,
                                    java.time.LocalDateTime startDatetime, java.time.LocalDateTime expectedEndDatetime,
-                                   java.time.Instant startDatetimeUtc, java.time.Instant expectedEndDatetimeUtc) {}
+                                   java.time.Instant startDatetimeUtc, java.time.Instant expectedEndDatetimeUtc,
+                                   /* See BookingRequestsApi.View. */
+                                   java.time.Instant autoCancelAt, String autoCancelHold,
+                                   CancellationApi.CancellationSummary cancellation) {}
 }

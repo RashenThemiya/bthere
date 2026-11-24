@@ -52,5 +52,11 @@ public record BookingResponse(
         /** startDatetime as a UTC instant. */
         java.time.Instant startDatetimeUtc,
         /** expectedEndDatetime as a UTC instant. */
-        java.time.Instant expectedEndDatetimeUtc
+        java.time.Instant expectedEndDatetimeUtc,
+        /** UTC time this CONFIRMED, unstarted booking will be cancelled automatically; null otherwise. */
+        java.time.Instant autoCancelAt,
+        /** Null, PROVIDER_ARRIVED or START_CODE_TRIED: auto-cancel waits for the end of the service window. */
+        String autoCancelHold,
+        /** Who cancelled, why and the refund; null unless the booking is CANCELLED. */
+        CancellationApi.CancellationSummary cancellation
 ) {}

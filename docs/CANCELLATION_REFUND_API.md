@@ -10,6 +10,9 @@ Implemented locally; not deployed.
 - Unpaid requests keep using the existing `POST /booking-requests/{id}/cancel`.
 - After the start code (`IN_PROGRESS`) a booking cannot be cancelled.
 
+Bookings the provider never starts are cancelled by the server with a full refund: see
+[BOOKING_AUTO_CANCEL.md](BOOKING_AUTO_CANCEL.md) (`cancelledBy: SYSTEM`).
+
 ## Endpoints
 
 | # | Method | Path | Role |

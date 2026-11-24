@@ -33,10 +33,27 @@ public final class ProfileOverviewApi {
     public record Spending(String currencyCode, BigDecimal paidAmount, BigDecimal refundedAmount,
                            BigDecimal totalSpent, BigDecimal reservedAmount, int paidBookingCount) {}
 
-    /** status is the effective status (APPROVED, PENDING, REJECTED, EXPIRED, ...) or MISSING when never submitted. */
+    /**
+     * One per requirement, reused by every service/option in services. status is the effective status (APPROVED,
+     * PENDING, PROVIDED, REJECTED, EXPIRED, or MISSING when never submitted or when the definition changed since).
+     * statusReason: NOT_SUBMITTED, DEFINITION_CHANGED, IN_REVIEW, SUPPORTING_EVIDENCE_CHANGED, REJECTED, EXPIRED,
+     * or null. actionRequired: the customer must upload (MISSING, REJECTED, EXPIRED). fileKeys: keys of the
+     * current submission's files (open them with GET /uploads/view-url). definitionVersion and
+     * submittedDefinitionVersion differ when the admin changed the requirement after this submission.
+     */
     public record Document(Long requirementId, String code, String name, String fieldType, boolean required,
                            boolean blocksBooking, List<DocumentService> services, String status, Long submissionId,
-                           LocalDateTime reviewedAt, LocalDate expiresOn, String rejectionReason) {}
+                           LocalDateTime reviewedAt, LocalDate expiresOn, String rejectionReason,
+                           String description, String verificationMode, String statusReason, boolean actionRequired,
+                           UploadRules upload, List<String> fileKeys, int definitionVersion,
+                           Integer submittedDefinitionVersion, Integer answerVersion) {}
+
+    /**
+     * What the upload form accepts. maximumFileSizeMb is the smaller of the requirement's limit and the server's
+     * upload limit. Upload every file with uploadEndpoint (POST /api/v1/uploads/documents, also for IMAGE_UPLOAD).
+     */
+    public record UploadRules(int minimumFiles, int maximumFiles, int maximumFileSizeMb, List<String> allowedFileTypes,
+                              List<String> allowedContentTypes, String uploadEndpoint) {}
 
     /** scope GLOBAL means every service (ids/names null); SERVICE or OPTION name the service/option it applies to. */
     public record DocumentService(String scope, Long serviceTypeId, String serviceName, Long optionId, String optionName) {}

@@ -4,6 +4,8 @@ Implemented locally on 2026-10-16. Deployment is not verified. All endpoints use
 `Authorization: Bearer <access-token>`. These requirements are separate from
 `BOOKING_FIELD`: answers are saved per customer, rather than per booking.
 
+Profile "My documents" without choosing a service: [CUSTOMER_DOCUMENTS_API.md](CUSTOMER_DOCUMENTS_API.md).
+
 ## Model
 
 Each requirement has one globally unique, immutable `code`, a dynamic field

@@ -206,9 +206,11 @@ with a code; they are never guessed.
 
 ### Documents
 
-Listed: active upload requirements (`IMAGE_UPLOAD`, `DOCUMENT_UPLOAD`, `FILE_UPLOAD`) the customer has submitted,
-plus `GLOBAL` upload requirements not submitted yet. Service-specific requirements never submitted are not
-listed; the booking flow shows them (`GET /requirements?serviceTypeId=&optionId=`).
+Listed: every active upload requirement (`IMAGE_UPLOAD`, `DOCUMENT_UPLOAD`, `FILE_UPLOAD`) that applies to at
+least one active service or option (`GLOBAL` included), plus any the customer has already submitted. One item per
+requirement, `MISSING` until uploaded. Items also carry `statusReason`, `actionRequired`, `upload` rules and
+`fileKeys`; see [CUSTOMER_DOCUMENTS_API.md](CUSTOMER_DOCUMENTS_API.md), which also has
+`GET /customers/me/documents` and `GET /customers/me/documents/{requirementId}`.
 
 | `status` | Meaning | Suggested action |
 |---|---|---|
@@ -443,8 +445,8 @@ Use the document's `requirementId` from `documents[]` (works for `MISSING`, `REJ
    Content-Type: multipart/form-data   (part name: file)
    ```
 
-   `200 OK` → `{"key": "customers/40/documents/<uuid>.jpg", ...}`. For `IMAGE_UPLOAD` requirements use
-   `POST /api/v1/uploads/images` instead.
+   `200 OK` → `{"key": "customers/40/documents/<uuid>.jpg", ...}`. Use this endpoint for `IMAGE_UPLOAD`
+   requirements too: a key from `POST /api/v1/uploads/images` is refused when submitted.
 
 2. Submit it:
 

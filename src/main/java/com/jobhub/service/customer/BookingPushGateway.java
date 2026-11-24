@@ -33,6 +33,8 @@ public class BookingPushGateway {
             Map.entry("PAYMENT_FAILED",new String[]{"Payment failed","Retry the payment or choose another method before the time runs out."}),
             Map.entry("PAYMENT_DEADLINE_EXTENDED",new String[]{"More time to pay","Your payment window was extended. Open the app to pay."}),
             Map.entry("BOOKING_CANCELLED",new String[]{"Booking cancelled","Your booking was cancelled. Open the app to see the details and any refund to your wallet."}),
+            Map.entry("BOOKING_AUTO_CANCELLED",new String[]{"Booking cancelled","Your provider did not start the service in time. The full amount was refunded to your wallet."}),
+            Map.entry("PROVIDER_BOOKING_AUTO_CANCELLED",new String[]{"Booking cancelled automatically","You did not start this booking in time, so it was cancelled and the customer was refunded."}),
             Map.entry("BOOKING_UNMATCHED",new String[]{"No provider available","We could not find a provider for your request. Try again or choose another time."}),
             Map.entry("BOOKING_EXPIRED",new String[]{"Booking expired","Your booking request expired. Open the app to book again."}),
             Map.entry("NO_SHOW_REPORTED",new String[]{"Provider could not reach you","Your provider reported that the booking could not start. Open the app to respond."}),

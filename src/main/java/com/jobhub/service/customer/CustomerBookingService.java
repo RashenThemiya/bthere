@@ -56,6 +56,9 @@ public class CustomerBookingService {
     private final com.jobhub.service.upload.S3PrivateDocumentService privateDocuments;
     private final com.jobhub.service.finance.WalletService walletService;
     private final com.jobhub.repository.job.BookingRequestPolicyRepository requestPolicies;
+    // Optional (field-injected so existing constructors and tests stay unchanged).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AutoCancelRules autoCancel;
 
     @Transactional
     public BookingResponse create(Long userId, CreateBookingRequest request) {
@@ -614,6 +617,7 @@ public class CustomerBookingService {
         }
         var times = ServiceTimes.of(job, id -> marketRepository.findById(id));
         var market = MarketTime.of(job, id -> marketRepository.findById(id));
+        var auto = autoCancel == null ? AutoCancelRules.Info.NONE : autoCancel.info(job);
         return new BookingResponse(job.getJobId(), job.getServiceProviderTypeId(),
                 job.getServiceOptionId(), job.getAssignedServiceProviderId(), providerIds,
                 job.getDeliveryMode(), job.getSchedulingModel(),
@@ -629,7 +633,8 @@ public class CustomerBookingService {
                 read(job.getPricingSelectionsJson()), read(job.getPricingSnapshotJson()),
                 job.getPlatformFeePercentage(),job.getPlatformFee(),job.getProviderEarnings(),
                 times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt(),
-                market.marketId(), market.marketTimezone(), market.startUtc(), market.endUtc());
+                market.marketId(), market.marketTimezone(), market.startUtc(), market.endUtc(),
+                auto.autoCancelAt(), auto.autoCancelHold(), auto.cancellation());
     }
 
     static String resolvePaymentMethod(ServiceOption option, String requestedMethod) {

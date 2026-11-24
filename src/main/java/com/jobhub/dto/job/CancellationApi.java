@@ -64,6 +64,25 @@ public final class CancellationApi {
     public record PenaltySummary(String currencyCode, BigDecimal outstandingTotal, String providerStatus,
                                  java.util.List<Penalty> penalties) {}
 
+    /**
+     * How a cancelled booking ended, inside booking responses. cancelledBy: CUSTOMER, PROVIDER, SYSTEM (auto-cancel),
+     * CUSTOMER_NO_SHOW or NO_SHOW_REJECTED. automatic is true for SYSTEM. refundDestination: WALLET.
+     */
+    public record CancellationSummary(String cancelledBy, String reason, boolean automatic, String currencyCode,
+                                      BigDecimal paidAmount, BigDecimal refundAmount, BigDecimal cancellationFee,
+                                      String refundDestination, java.time.Instant cancelledAt) {}
+
+    /**
+     * Auto-cancel of unstarted paid bookings, per service option. autoCancelAfterMinutes null uses defaultMinutes;
+     * effectiveMinutes is what applies. enabled is the server-wide switch (booking.auto-cancel.enabled).
+     */
+    public record AutoCancelSettings(Long optionId, boolean enabled, Integer autoCancelAfterMinutes,
+                                     int defaultMinutes, int effectiveMinutes) {}
+
+    /** PUT body; null autoCancelAfterMinutes goes back to the default. */
+    public record AutoCancelUpdate(@jakarta.validation.constraints.Min(5) @jakarta.validation.constraints.Max(1440)
+                                   Integer autoCancelAfterMinutes) {}
+
     public record Waive(@NotBlank @Size(max = 500) String reason) {}
 
     public record Reactivate(@Size(max = 500) String note) {}

@@ -60,6 +60,12 @@ public class ProfileOverviewService {
     private final CustomerRequirementsService requirements;
     private final ObjectMapper mapper;
     private final MarketRepository markets;
+    /** Largest file the server accepts in one upload (multipart limit); null in unit tests means 10 MB. */
+    @org.springframework.beans.factory.annotation.Value("${spring.servlet.multipart.max-file-size:10MB}")
+    private org.springframework.util.unit.DataSize uploadLimit;
+    static final Map<String, String> CONTENT_TYPES = Map.of("PDF", "application/pdf", "JPG", "image/jpeg",
+            "PNG", "image/png", "WEBP", "image/webp");
+    static final String UPLOAD_ENDPOINT = "POST /api/v1/uploads/documents";
 
     public Overview overview(Long userId, int recentLimit) {
         if (recentLimit < 1 || recentLimit > MAX_RECENT_LIMIT)
@@ -192,15 +198,47 @@ public class ProfileOverviewService {
         return requirements.profileDocuments(userId).stream().map(item -> document(item, names)).toList();
     }
 
+    /** The Profile documents list on its own (same items as profile-overview documents[]). */
+    public List<Document> documents(Long userId) {
+        return documents(userId, new Names());
+    }
+
+    /** One requirement by id, with its upload rules and the current submission; no service needed. */
+    public Document document(Long userId, Long requirementId) {
+        return document(requirements.requirementItem(userId, requirementId), new Names());
+    }
+
     private Document document(FormItem item, Names names) {
         var r = item.requirement();
         var d = r.definition();
         var s = item.submission();
-        List<DocumentService> services = d.targets().stream().map(t -> new DocumentService(t.scope(),
-                t.serviceTypeId(), names.service(t.serviceTypeId()), t.optionId(), names.option(t.optionId()))).toList();
+        List<DocumentService> services = d.targets().stream().filter(requirements::activeTarget)
+                .map(t -> new DocumentService(t.scope(), t.serviceTypeId(), names.service(t.serviceTypeId()),
+                        t.optionId(), names.option(t.optionId()))).toList();
         return new Document(r.requirementId(), d.code(), d.label(), d.fieldType(), d.required(), d.blocksBooking(),
-                services, s == null ? "MISSING" : s.status(), s == null ? null : s.submissionId(),
-                s == null ? null : s.reviewedAt(), s == null ? null : s.expiresOn(), s == null ? null : s.rejectionReason());
+                services, item.status(), s == null ? null : s.submissionId(),
+                s == null ? null : s.reviewedAt(), s == null ? null : s.expiresOn(), s == null ? null : s.rejectionReason(),
+                d.description(), d.verificationMode(), item.statusReason(), item.actionRequired(),
+                uploadRules(d), fileKeys(s), r.version(), s == null ? null : s.definitionVersion(),
+                s == null ? null : s.answerVersion());
+    }
+
+    private UploadRules uploadRules(com.jobhub.dto.customer.CustomerRequirementsApi.Definition d) {
+        if (!CustomerRequirementsService.DOCUMENT_FIELD_TYPES.contains(d.fieldType())) return null;
+        List<String> types = d.allowedFileTypes() == null || d.allowedFileTypes().isEmpty()
+                ? List.of("PDF", "JPG", "PNG", "WEBP") : d.allowedFileTypes();
+        if ("IMAGE_UPLOAD".equals(d.fieldType())) types = types.stream().filter(t -> !"PDF".equals(t)).toList();
+        int serverMb = uploadLimit == null ? 10 : (int) Math.max(1, uploadLimit.toMegabytes());
+        int definitionMb = d.maximumFileSizeMb() == null ? 100 : d.maximumFileSizeMb();
+        return new UploadRules(d.minimumFiles() == null ? 1 : d.minimumFiles(), d.maximumFiles() == null ? 1 : d.maximumFiles(),
+                Math.min(serverMb, definitionMb), types, types.stream().map(CONTENT_TYPES::get).toList(), UPLOAD_ENDPOINT);
+    }
+
+    private static List<String> fileKeys(com.jobhub.dto.customer.CustomerRequirementsApi.Submission s) {
+        if (s == null || s.value() == null || !s.value().path("files").isArray()) return List.of();
+        List<String> keys = new ArrayList<>();
+        s.value().get("files").forEach(f -> { if (f.path("key").isTextual()) keys.add(f.get("key").asText()); });
+        return keys;
     }
 
     // ---------- lists ----------

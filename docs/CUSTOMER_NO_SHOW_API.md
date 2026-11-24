@@ -18,6 +18,9 @@ NO_SHOW_REVIEW   money held · start code disabled · no cancellations · no pro
    └── admin REJECT  ──► CANCELLED: customer refunded 100% to wallet, optional penalty on the provider
 ```
 
+Auto-cancel ([BOOKING_AUTO_CANCEL.md](BOOKING_AUTO_CANCEL.md)) never touches `NO_SHOW_REVIEW`. A provider who marked
+ARRIVED or tried a start code holds the booking until the complaint window closes, so they can still file.
+
 | Who | Endpoint |
 |---|---|
 | Provider | `GET /api/v1/providers/me/bookings/{jobId}/no-show-claim/eligibility` |

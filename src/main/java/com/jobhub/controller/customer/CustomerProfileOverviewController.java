@@ -29,6 +29,19 @@ public class CustomerProfileOverviewController {
         return service.overview(user.id(), recentLimit);
     }
 
+    /** Profile "My documents": every active document requirement, one item each, no service needed. */
+    @GetMapping("/documents")
+    public List<com.jobhub.dto.customer.ProfileOverviewApi.Document> documents(@AuthenticationPrincipal AuthenticatedUser user) {
+        return service.documents(user.id());
+    }
+
+    /** One requirement's upload form definition and current submission, by requirementId. */
+    @GetMapping("/documents/{requirementId}")
+    public com.jobhub.dto.customer.ProfileOverviewApi.Document document(@AuthenticationPrincipal AuthenticatedUser user,
+            @org.springframework.web.bind.annotation.PathVariable Long requirementId) {
+        return service.document(user.id(), requirementId);
+    }
+
     /** "View all": the customer's booking requests, newest first. status is optional and may repeat or be comma-separated. */
     @GetMapping("/booking-requests")
     public PageOf<RequestItem> bookingRequests(@AuthenticationPrincipal AuthenticatedUser user,

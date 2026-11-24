@@ -190,8 +190,17 @@ class ProfileOverviewServiceTest {
         when(requirements.profileDocuments(40L)).thenReturn(List.of(
                 new FormItem(new Requirement(7L, 1, "ACTIVE", def), sub),
                 new FormItem(new Requirement(8L, 1, "ACTIVE", missingDef), null)));
+        when(requirements.activeTarget(any())).thenReturn(true);
 
         var docs = service.overview(40L, 5).documents();
+        assertThat(docs.get(0).actionRequired()).isTrue();
+        assertThat(docs.get(0).upload().maximumFiles()).isEqualTo(2);
+        assertThat(docs.get(0).upload().maximumFileSizeMb()).isEqualTo(5);
+        assertThat(docs.get(0).upload().allowedContentTypes()).containsExactly("application/pdf");
+        assertThat(docs.get(0).upload().uploadEndpoint()).isEqualTo("POST /api/v1/uploads/documents");
+        assertThat(docs.get(1).statusReason()).isEqualTo("NOT_SUBMITTED");
+        assertThat(docs.get(1).fileKeys()).isEmpty();
+        assertThat(service.documents(40L)).hasSize(2);
         assertThat(docs.get(0).name()).isEqualTo("National identity card");
         assertThat(docs.get(0).status()).isEqualTo("REJECTED");
         assertThat(docs.get(0).rejectionReason()).isEqualTo("Photo is blurry");

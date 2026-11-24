@@ -33,7 +33,20 @@ public final class CustomerRequirementsApi {
                              JsonNode value, String status, String storedStatus, LocalDate expiresOn,
                              Long reviewedBy, LocalDateTime reviewedAt, String rejectionReason,
                              int answerVersion, int definitionVersion) {}
-    public record FormItem(Requirement requirement, Submission submission) {}
+    /**
+     * status is the effective status (MISSING when never submitted or when the definition changed since).
+     * statusReason explains it: NOT_SUBMITTED, DEFINITION_CHANGED, IN_REVIEW, SUPPORTING_EVIDENCE_CHANGED, REJECTED,
+     * EXPIRED, or null for APPROVED / PROVIDED. actionRequired is true when the customer must (re)submit:
+     * MISSING, REJECTED or EXPIRED.
+     */
+    public record FormItem(Requirement requirement, Submission submission, String status, String statusReason,
+                           boolean actionRequired) {
+        public FormItem(Requirement requirement, Submission submission) {
+            this(requirement, submission, submission == null ? "MISSING" : submission.status(),
+                    submission == null ? "NOT_SUBMITTED" : null,
+                    submission == null || java.util.Set.of("MISSING", "REJECTED", "EXPIRED").contains(submission.status()));
+        }
+    }
     public record Review(@NotBlank String status, @Size(max = 1000) String rejectionReason,
                          @NotNull @Min(1) Integer answerVersion) {}
     public record Status(@NotBlank String status) {}

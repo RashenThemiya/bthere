@@ -504,6 +504,23 @@ class BookingRequestServiceTest {
         assertThat(request.getStartAttempts()).isEqualTo(5);assertThat(service.verifyStartCode(9L,70L,codes.decrypt(request.getStartCode())).status()).isEqualTo("CODE_LOCKED");
         assertThat(request.getStatus()).isEqualTo("CONFIRMED");
     }
+    @Test void startCodeAfterAutoCancelGetsAMachineReadable409AndAutoCancelNotifiesBothSides(){
+        paying();service.notification(notification("2","pay-1"));job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));
+        String startCode=service.customerCodes(5L,70L).code();
+        var rules=mock(AutoCancelRules.class);when(rules.autoCancelled(70L)).thenReturn(true);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"autoCancel",rules);
+        clearInvocations(events);
+        service.autoCancelConfirmed(request,99L);
+        assertThat(request.getStatus()).isEqualTo("CANCELLED");assertThat(job.getJobStatus()).isEqualTo("CANCELLED");
+        assertThat(request.getStartCode()).isNull();
+        var saved=org.mockito.ArgumentCaptor.forClass(com.jobhub.entity.job.BookingDispatchEvent.class);
+        verify(events,atLeast(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(e -> e.getUserId()+":"+e.getEventType())
+                .contains("5:BOOKING_AUTO_CANCELLED","99:PROVIDER_BOOKING_AUTO_CANCELLED").doesNotContain("5:BOOKING_CANCELLED");
+        assertThatThrownBy(() -> service.verifyStartCode(9L,70L,startCode)).isInstanceOf(ConflictException.class)
+                .hasMessageContaining("cancelled automatically").extracting("code").isEqualTo("BOOKING_AUTO_CANCELLED");
+        assertThat(job.getActualStartDatetime()).isNull();
+    }
     @Test void legacyCodeRefreshKeepsFailedAttemptsAndExpiry() {
         paying();service.notification(notification("2","pay-1"));job.setStartDatetime(LocalDateTime.now(ZoneOffset.UTC));
         request.setStartCode(codes.encrypt("012345"));request.setStartAttempts(3);var expiry=request.getCodeExpiresAt();

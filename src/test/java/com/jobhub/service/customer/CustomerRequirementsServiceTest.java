@@ -290,4 +290,46 @@ class CustomerRequirementsServiceTest {
                 List.of(global()), List.of("NOTES"))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Evidence must reference");
     }
+
+    @Test void profileListsEveryActiveDocumentOnceWithoutChoosingAServiceAndExplainsResubmission() throws Exception {
+        var option = new Target("OPTION", 3L, 12L);
+        var gn = field(1, "GN_CERT", "DOCUMENT_UPLOAD", "DOCUMENT_REVIEW", true, option, new Target("SERVICE", 3L, null));
+        var nic = field(2, "NIC", "IMAGE_UPLOAD", "DOCUMENT_REVIEW", true, global());
+        var old = field(3, "OLD_SERVICE_DOC", "FILE_UPLOAD", "DOCUMENT_REVIEW", true, new Target("SERVICE", 9L, null));
+        field(4, "PHONE_NOTE", "TEXT", "NONE", false, global());
+        when(services.findById(9L)).thenReturn(Optional.empty());
+
+        var items = service.profileDocuments(25L);
+        // Option-only documents show up as MISSING before any upload; inactive-service-only and non-upload fields do not.
+        assertThat(items).extracting(x -> x.requirement().definition().code()).containsExactly("GN_CERT", "NIC");
+        assertThat(items.get(0).status()).isEqualTo("MISSING");
+        assertThat(items.get(0).statusReason()).isEqualTo("NOT_SUBMITTED");
+        assertThat(items.get(0).actionRequired()).isTrue();
+
+        var approved = answer(gn, "{\"files\":[{\"key\":\"customers/25/documents/a.pdf\"}]}", "APPROVED");
+        answer(old, "{\"files\":[{\"key\":\"customers/25/documents/b.pdf\"}]}", "PENDING");
+        items = service.profileDocuments(25L);
+        assertThat(items).extracting(x -> x.requirement().definition().code()).containsExactly("GN_CERT", "NIC", "OLD_SERVICE_DOC");
+        assertThat(items.get(0).status()).isEqualTo("APPROVED");
+        assertThat(items.get(0).statusReason()).isNull();
+        assertThat(items.get(0).actionRequired()).isFalse();
+        assertThat(items.get(2).statusReason()).isEqualTo("IN_REVIEW");
+
+        gn.setDefinitionVersion(2);
+        var changed = service.requirementItem(25L, 1L);
+        assertThat(changed.status()).isEqualTo("MISSING");
+        assertThat(changed.statusReason()).isEqualTo("DEFINITION_CHANGED");
+        assertThat(changed.submission().submissionId()).isEqualTo(approved.getSubmissionId());
+
+        gn.setDefinitionVersion(1); approved.setExpiresOn(LocalDate.now(ZoneId.of("Asia/Colombo")).minusDays(1));
+        assertThat(service.requirementItem(25L, 1L).statusReason()).isEqualTo("EXPIRED");
+        approved.setExpiresOn(null); approved.setStatus("REJECTED"); approved.setRejectionReason("Blurry");
+        var rejected = service.requirementItem(25L, 1L);
+        assertThat(rejected.statusReason()).isEqualTo("REJECTED");
+        assertThat(rejected.actionRequired()).isTrue();
+
+        nic.setStatus("INACTIVE");
+        assertThatThrownBy(() -> service.requirementItem(25L, 2L)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.requirementItem(25L, 99L)).isInstanceOf(ResourceNotFoundException.class);
+    }
 }

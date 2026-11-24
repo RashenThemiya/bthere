@@ -30,6 +30,7 @@ class ChatPersistenceTest {
         try (var factory = new Configuration()
                 .addAnnotatedClass(ChatMessage.class).addAnnotatedClass(ChatReadState.class).addAnnotatedClass(com.jobhub.entity.chat.ChatAttachment.class)
                 .addAnnotatedClass(Job.class).addAnnotatedClass(JobProviderAssignment.class)
+                .addAnnotatedClass(com.jobhub.entity.job.BookingRequest.class)
                 .addAnnotatedClass(BookingDispatchEvent.class)
                 .setPhysicalNamingStrategy(new CamelCaseToUnderscoresNamingStrategy())
                 .setProperty("hibernate.connection.driver_class", "org.h2.Driver")

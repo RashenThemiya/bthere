@@ -46,6 +46,8 @@ public class BookingProviderService {
     private final UserRepository users;
     private final RatingRepository ratings;
     private final com.jobhub.repository.market.MarketRepository markets;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AutoCancelRules autoCancel;
 
     @Transactional(readOnly = true)
     public BookingProviders providers(Long userId, Long jobId) {
@@ -60,11 +62,12 @@ public class BookingProviderService {
                 .toList();
         var times = ServiceTimes.of(job, id -> markets.findById(id));
         var market = MarketTime.of(job, id -> markets.findById(id));
+        var auto = autoCancel == null ? AutoCancelRules.Info.NONE : autoCancel.info(job);
         return new BookingProviders(job.getJobId(), job.getJobStatus(), job.getFulfillmentModel(),
                 CONTACT_ALLOWED_STATUSES, result,
                 times.actualStartedAt(), times.actualFinishedAt(), times.completionConfirmedAt(),
                 market.marketId(), market.marketTimezone(), job.getStartDatetime(), job.getExpectedEndDatetime(),
-                market.startUtc(), market.endUtc());
+                market.startUtc(), market.endUtc(), auto.autoCancelAt(), auto.autoCancelHold(), auto.cancellation());
     }
 
     private BookingProvider view(Job job, ServiceProvider p) {

@@ -151,15 +151,16 @@ public class CustomerRequirementsService {
         var definitions = applicable(serviceId, optionId);
         var answers = answers(customer.getCustomerId());
         var all = activeDefinitions();
-        return definitions.stream().map(r -> new FormItem(response(r),
-                submissionResponse(answers.get(r.getRequirementId()), r, answers, all))).toList();
+        return definitions.stream().map(r -> item(r, answers, all)).toList();
     }
 
     static final Set<String> DOCUMENT_FIELD_TYPES = Set.of("IMAGE_UPLOAD", "DOCUMENT_UPLOAD", "FILE_UPLOAD");
 
     /**
-     * Profile page documents: active upload requirements the customer has submitted, plus GLOBAL upload
-     * requirements not yet submitted (submission null = MISSING). Statuses use the same effective-status rules.
+     * Profile page documents, without choosing a service: every active upload requirement that applies to at least
+     * one active service/option (GLOBAL included), plus any the customer has already submitted. One item per
+     * requirement, however many services/options it targets; its single submission is reused by all of them.
+     * Requirements are platform-wide (they have no market), so the list is the same in every market.
      */
     public List<FormItem> profileDocuments(Long userId) {
         var customer = customer(userId);
@@ -167,10 +168,43 @@ public class CustomerRequirementsService {
         var answers = answers(customer.getCustomerId());
         return all.values().stream()
                 .filter(r -> DOCUMENT_FIELD_TYPES.contains(r.getFieldType()))
-                .filter(r -> answers.containsKey(r.getRequirementId())
-                        || targets(r).stream().anyMatch(t -> "GLOBAL".equals(t.scope())))
-                .map(r -> new FormItem(response(r), submissionResponse(answers.get(r.getRequirementId()), r, answers, all)))
+                .filter(r -> answers.containsKey(r.getRequirementId()) || targets(r).stream().anyMatch(this::activeTarget))
+                .map(r -> item(r, answers, all))
                 .toList();
+    }
+
+    /** One active requirement (any field type) with the customer's current submission; 404 when not active. */
+    public FormItem requirementItem(Long userId, Long requirementId) {
+        var customer = customer(userId);
+        var all = activeDefinitions();
+        var r = all.values().stream().filter(x -> x.getRequirementId().equals(requirementId)).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Active customer requirement not found"));
+        return item(r, answers(customer.getCustomerId()), all);
+    }
+
+    /** True for GLOBAL, or a SERVICE/OPTION target whose service (and option) is active. */
+    public boolean activeTarget(Target t) {
+        if ("GLOBAL".equals(t.scope())) return true;
+        if (t.serviceTypeId() == null || services.findById(t.serviceTypeId()).filter(s -> "ACTIVE".equals(s.getStatus())).isEmpty())
+            return false;
+        return !"OPTION".equals(t.scope()) || t.optionId() != null && options
+                .findByOptionIdAndServiceProviderTypeId(t.optionId(), t.serviceTypeId())
+                .filter(o -> o.activeForService(t.serviceTypeId())).isPresent();
+    }
+
+    private FormItem item(CustomerRequirement r, Map<Long, CustomerRequirementSubmission> answers,
+                          Map<String, CustomerRequirement> all) {
+        var s = answers.get(r.getRequirementId());
+        String status = s == null ? "MISSING" : effectiveStatus(s, r, answers, all);
+        String reason;
+        if (s == null) reason = "NOT_SUBMITTED";
+        else if (!Objects.equals(s.getDefinitionVersion(), r.getDefinitionVersion())) reason = "DEFINITION_CHANGED";
+        else if (expired(s)) reason = "EXPIRED";
+        else if ("REJECTED".equals(status)) reason = "REJECTED";
+        else if ("PENDING".equals(status)) reason = "APPROVED".equals(s.getStatus()) ? "SUPPORTING_EVIDENCE_CHANGED" : "IN_REVIEW";
+        else reason = null;
+        return new FormItem(response(r), submissionResponse(s, r, answers, all), status, reason,
+                Set.of("MISSING", "REJECTED", "EXPIRED").contains(status));
     }
 
     @Transactional

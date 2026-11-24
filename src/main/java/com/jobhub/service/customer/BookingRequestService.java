@@ -52,6 +52,8 @@ public class BookingRequestService {
     private com.jobhub.service.market.RefundPolicyService refundPolicies;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.jobhub.repository.market.MarketServiceOfferingRepository marketOfferings;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private AutoCancelRules autoCancel;
 
     private void requireCardReady() {
         if(paymentGateway.isMock()) paymentGateway.requireEnabled();
@@ -653,6 +655,9 @@ public class BookingRequestService {
         String expected="CONFIRMED", next="IN_PROGRESS";
         // Repeated successful transitions are idempotent; no second code can trigger another transition.
         if(next.equals(r.getStatus())) return new Transition(true,next);
+        // Auto-cancel and START lock the same rows in the same order, so only one of them can win.
+        if("CANCELLED".equals(r.getStatus()) && autoCancel!=null && autoCancel.autoCancelled(jobId))
+            throw new ConflictException("This booking was cancelled automatically because it was not started in time","BOOKING_AUTO_CANCELLED");
         if(!expected.equals(r.getStatus()) || !paymentReady(job)) throw new ConflictException("Booking cannot transition in its current state");
         requireCodeWindow(r,job);
         int attempts=r.getStartAttempts();
@@ -775,7 +780,13 @@ public class BookingRequestService {
         stop(r,"CANCELLED");
         if(providerUserId!=null) event(r,providerUserId,null,providerEvent,null);
     }
-    private void stop(BookingRequest r,String status) {
+    /** Auto-cancel: same as cancelConfirmed, but the customer gets BOOKING_AUTO_CANCELLED instead of BOOKING_CANCELLED. */
+    void autoCancelConfirmed(BookingRequest r,Long providerUserId) {
+        stop(r,"CANCELLED","BOOKING_AUTO_CANCELLED");r.setStartCode(null);
+        if(providerUserId!=null) event(r,providerUserId,null,"PROVIDER_BOOKING_AUTO_CANCELLED",null);
+    }
+    private void stop(BookingRequest r,String status) {stop(r,status,"BOOKING_"+status);}
+    private void stop(BookingRequest r,String status,String customerEvent) {
         r.setStatus(status);
         for(var offer:offers.findAllByRequestIdOrderByOfferIdAsc(r.getRequestId())) {
             if(Set.of("PENDING","ACCEPTED").contains(offer.getStatus())) {
@@ -784,7 +795,7 @@ public class BookingRequestService {
             }
         }
         if(r.getJobId()!=null) jobs.lockPaymentJob(r.getJobId()).ifPresent(j -> j.setJobStatus("CANCELLED"));
-        event(r,r.getUserId(),null,"BOOKING_"+status,null);
+        event(r,r.getUserId(),null,customerEvent,null);
     }
     private void event(BookingRequest r,Long userId,Long offerId,String type,Instant expiry) {
         var e=new BookingDispatchEvent();e.setUserId(userId);e.setRequestId(r.getRequestId());e.setOfferId(offerId);
@@ -806,13 +817,15 @@ public class BookingRequestService {
             end=b==null?null:b.expectedEndDatetime();marketId=r.getMarketId();
         }
         var market=MarketTime.of(marketId,start,end,id -> markets.findById(id));
+        var auto=autoCancel==null?AutoCancelRules.Info.NONE:autoCancel.info(job);
         return new View(r.getRequestId(),r.getStatus(),r.getSelectionMode(),active==null?null:active.getOfferId(),
                 active==null?null:active.getProviderId(),active==null?null:active.getExpiresAt(),r.getConfirmationExpiresAt(),
                 r.getJobId(),r.getPaymentStatus(),r.getQuotedAmount(),r.getCurrencyCode(),
                 r.getPlatformFeePercentage(),r.getPlatformFee(),r.getProviderEarnings(),
                 r.getSettlementStatus(),r.getSettlementOperationId(),r.getPaymentFundingMode(),requestMethod(r),
                 times.actualStartedAt(),times.actualFinishedAt(),times.completionConfirmedAt(),
-                market.marketId(),market.marketTimezone(),start,end,market.startUtc(),market.endUtc());
+                market.marketId(),market.marketTimezone(),start,end,market.startUtc(),market.endUtc(),
+                auto.autoCancelAt(),auto.autoCancelHold(),auto.cancellation());
     }
     private CreateBookingRequest payloadBooking(BookingRequest r) {
         if(r.getPayloadJson()==null)return null;

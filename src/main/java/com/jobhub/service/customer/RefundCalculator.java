@@ -69,6 +69,18 @@ public final class RefundCalculator {
                 policy == null ? null : policy.getPolicyId(), policy == null ? null : policy.getVersion(), null);
     }
 
+    /**
+     * Auto-cancel because the provider never started: the customer gets everything back (no cancellation fee,
+     * platform fee included); provider and platform keep nothing. cancelledBy is SYSTEM.
+     */
+    public static Quote autoCancelled(RefundPolicy policy, Job job, long minutesBeforeStart) {
+        BigDecimal paid = money(job.getExpectedAmount());
+        BigDecimal zero = BigDecimal.ZERO.setScale(2);
+        return new Quote(job.getJobId(), AutoCancelRules.SYSTEM, job.getCurrencyCode(), paid, paid, HUNDRED.setScale(2),
+                zero, zero, zero, zero, true, WALLET, minutesBeforeStart,
+                policy == null ? null : policy.getPolicyId(), policy == null ? null : policy.getVersion(), null);
+    }
+
     /** Provider cancellation always refunds the customer in full; the provider and platform keep nothing. */
     public static Quote provider(RefundPolicy policy, Job job, long minutesBeforeStart) {
         return provider(policy, job, minutesBeforeStart, Long.MAX_VALUE);

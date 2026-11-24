@@ -38,7 +38,11 @@ public final class BookingRequestsApi {
                        /* startDatetime/expectedEndDatetime: market-local booked times (requested pickup time for
                           rides without a start); *Utc: the same as UTC instants; marketTimezone: IANA zone. */
                        Long marketId,String marketTimezone,LocalDateTime startDatetime,LocalDateTime expectedEndDatetime,
-                       Instant startDatetimeUtc,Instant expectedEndDatetimeUtc) {}
+                       Instant startDatetimeUtc,Instant expectedEndDatetimeUtc,
+                       /* autoCancelAt: UTC time a CONFIRMED, unstarted booking will be cancelled automatically (null
+                          otherwise); autoCancelHold: null, PROVIDER_ARRIVED or START_CODE_TRIED; cancellation: set
+                          once CANCELLED. */
+                       Instant autoCancelAt,String autoCancelHold,CancellationApi.CancellationSummary cancellation) {}
     public record Offer(Long offerId, Long requestId, String status, Instant expiresAt,
                         Long serviceTypeId, Long optionId, String deliveryMode,
                         LocalDateTime startDatetime, LocalDateTime expectedEndDatetime,

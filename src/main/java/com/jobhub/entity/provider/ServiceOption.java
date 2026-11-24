@@ -76,6 +76,11 @@ public class ServiceOption extends AuditedEntity {
     private Integer noShowMaxDistanceMeters;
     /** The complaint photo must have been uploaded within this many minutes. Null means 15. */
     private Integer noShowPhotoMaxAgeMinutes;
+    /**
+     * Paid bookings the provider has not started are cancelled automatically (full refund) this many minutes after
+     * the booked start. Null uses booking.auto-cancel.default-grace-minutes.
+     */
+    private Integer autoCancelAfterMinutes;
 
     @ElementCollection
     @CollectionTable(name = "service_option_payment_method",

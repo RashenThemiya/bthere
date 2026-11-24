@@ -15,6 +15,17 @@ public interface JobRepository extends JpaRepository<Job, Long>, org.springframe
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select j from Job j where j.jobId = :id")
     java.util.Optional<Job> lockPaymentJob(@Param("id") Long id);
+    /** Auto-cancel candidates in one market: paid, CONFIRMED, never started, booked start already passed. */
+    @Query("""
+            select j.jobId from Job j where j.marketId = :marketId and j.jobStatus = 'CONFIRMED'
+            and j.actualStartDatetime is null and j.startDatetime <= :localNow and j.startDatetime >= :localFrom
+            and ((j.paymentMethod = 'CARD' and j.paymentStatus = 'PAID')
+                 or (j.paymentMethod = 'WALLET' and j.paymentStatus = 'RESERVED'))
+            and exists (select r.requestId from BookingRequest r where r.jobId = j.jobId and r.status = 'CONFIRMED')
+            order by j.startDatetime asc
+            """)
+    List<Long> findAutoCancelCandidates(@Param("marketId") Long marketId, @Param("localFrom") LocalDateTime localFrom,
+                                        @Param("localNow") LocalDateTime localNow, org.springframework.data.domain.Pageable page);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select j from Job j where j.jobStatus not in :excluded
