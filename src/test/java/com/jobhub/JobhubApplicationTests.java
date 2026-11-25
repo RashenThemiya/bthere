@@ -61,6 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class JobhubApplicationTests {
+    @MockitoBean private com.jobhub.repository.market.MarketBannerRepository marketBanners;
     @MockitoBean private com.jobhub.repository.job.BookingRequestRepository bookingRequests;
     @MockitoBean private com.jobhub.repository.job.BookingOfferRepository bookingOffers;
     @MockitoBean private com.jobhub.repository.job.BookingRequestPolicyRepository bookingRequestPolicies;

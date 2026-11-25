@@ -66,6 +66,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/payhere/booking-notify").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/profile-photos/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/markets/*/banners").permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/register",

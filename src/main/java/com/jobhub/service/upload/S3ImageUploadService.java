@@ -171,6 +171,23 @@ public class S3ImageUploadService {
         return bucket;
     }
 
+    /** The URL an uploaded image key is served from (same form as the upload response "url"). */
+    public String publicUrl(String key) {
+        return buildUrl(key);
+    }
+
+    /** True when the key exists in the bucket. */
+    public boolean exists(String key) {
+        try {
+            s3Client.headObject(software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
+                    .bucket(requireBucket()).key(key).build());
+            return true;
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception exception) {
+            if (exception.statusCode() == 404) return false;
+            throw exception;
+        }
+    }
+
     private String buildUrl(String key) {
         String encodedKey = URLEncoder.encode(key, StandardCharsets.UTF_8)
                 .replace("%2F", "/");
